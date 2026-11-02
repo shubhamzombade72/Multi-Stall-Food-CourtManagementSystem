@@ -4,9 +4,14 @@ import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
 import { Store, Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
 
+// Seeded demo accounts are offered only in development or an explicitly enabled demo build,
+// never in a staging / pilot / production build.
+const DEMO_LOGIN = import.meta.env.DEV || import.meta.env.VITE_DEMO_LOGIN === 'true';
+const DEMO_PASSWORD = 'password123';
+
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('password123');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -22,11 +27,7 @@ export const LoginPage: React.FC = () => {
       const response = await apiClient.post('/auth/login', { email, password });
       if (response.data.success) {
         login(response.data.data.token, response.data.data.user);
-        if (response.data.data.user.role === 'cashier') {
-          navigate('/pos');
-        } else {
-          navigate('/dashboard');
-        }
+        navigate('/');
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Login failed. Please verify your credentials.');
@@ -37,7 +38,7 @@ export const LoginPage: React.FC = () => {
 
   const setQuickUser = (userEmail: string) => {
     setEmail(userEmail);
-    setPassword('password123');
+    setPassword(DEMO_PASSWORD);
     setError(null);
   };
 
@@ -102,9 +103,10 @@ export const LoginPage: React.FC = () => {
           </button>
         </form>
 
+        {DEMO_LOGIN && (
         <div className="mt-8 pt-6 border-t border-slate-100">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider text-center mb-3">
-            Quick 1-Click Role Login
+            Quick 1-Click Role Login (demo data)
           </p>
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -133,6 +135,7 @@ export const LoginPage: React.FC = () => {
             </button>
           </div>
         </div>
+        )}
 
         <div className="mt-6 flex items-center justify-center space-x-1.5 text-xs text-slate-400">
           <ShieldCheck className="w-4 h-4 text-emerald-500" />

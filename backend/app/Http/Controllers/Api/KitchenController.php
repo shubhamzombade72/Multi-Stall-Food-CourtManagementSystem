@@ -51,8 +51,9 @@ class KitchenController extends Controller
 
         $ticket = StallKitchenTicket::with('order.kitchenTickets', 'ticketItems')->findOrFail($ticketId);
 
-        // Strict security: ensure kitchen staff belongs to this stall
-        if (!$user->isOwner() && ($user->stall_id != $ticket->stall_id)) {
+        // Strict security: only this stall's kitchen staff / manager (or the owner) may move its tickets
+        $isOwnStallKitchen = ($user->isKitchenStaff() || $user->isStallManager()) && $user->stall_id == $ticket->stall_id;
+        if (!$user->isOwner() && !$isOwnStallKitchen) {
             return response()->json(['success' => false, 'message' => 'Unauthorized to update another stall\'s ticket'], 403);
         }
 
@@ -61,6 +62,16 @@ class KitchenController extends Controller
         ]);
 
         $newStatus = $validated['status'];
+
+        // Tickets only move forward: pending -> accepted -> preparing -> ready -> picked_up
+        $sequence = ['pending', 'accepted', 'preparing', 'ready', 'picked_up'];
+        $currentRank = array_search($ticket->status, $sequence, true);
+        if ($currentRank === false || array_search($newStatus, $sequence, true) <= $currentRank) {
+            return response()->json([
+                'success' => false,
+                'message' => "Ticket cannot move from '{$ticket->status}' to '{$newStatus}'.",
+            ], 422);
+        }
 
         DB::transaction(function () use ($ticket, $newStatus) {
             $updates = ['status' => $newStatus];
@@ -78,8 +89,11 @@ class KitchenController extends Controller
             // Update item statuses inside this ticket
             $ticket->ticketItems()->update(['status' => $newStatus]);
 
-            // Update Parent Order status dynamically
+            // Update Parent Order status dynamically (a settled or cancelled order keeps its status)
             $parentOrder = $ticket->order;
+            if (in_array($parentOrder->status, ['completed', 'cancelled'], true)) {
+                return;
+            }
             $allTickets = $parentOrder->kitchenTickets()->get();
 
             $totalTickets = $allTickets->count();
@@ -92,6 +106,15 @@ class KitchenController extends Controller
                 $parentOrder->update(['status' => 'partially_ready']);
             }
         });
+
+        try {
+            event(new \App\Events\TicketStatusUpdatedEvent($ticket));
+            if ($newStatus === 'ready') {
+                event(new \App\Events\TicketReadyEvent($ticket));
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Broadcast Ticket event failed: ' . $e->getMessage());
+        }
 
         return response()->json([
             'success' => true,

@@ -19,6 +19,11 @@ class DiningTable extends Model
         'is_active',
     ];
 
+    // The QR token is the table's ordering secret; only the owner may see it (via makeVisible)
+    protected $hidden = [
+        'qr_token',
+    ];
+
     protected $casts = [
         'capacity' => 'integer',
         'is_active' => 'boolean',

@@ -16,6 +16,9 @@ class ReportController extends Controller
     public function dashboardStats(Request $request)
     {
         $user = $request->user();
+        if (!$user->isOwner()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Owner access required.'], 403);
+        }
 
         $today = now()->toDateString();
 
@@ -63,6 +66,15 @@ class ReportController extends Controller
 
     public function stallSalesReport(Request $request)
     {
+        if (!$request->user()->isOwner()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Owner access required.'], 403);
+        }
+
+        $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+        ]);
+
         $startDate = $request->query('start_date', now()->subDays(7)->toDateString());
         $endDate = $request->query('end_date', now()->toDateString());
 

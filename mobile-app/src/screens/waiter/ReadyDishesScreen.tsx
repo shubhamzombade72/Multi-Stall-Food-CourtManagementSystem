@@ -10,9 +10,9 @@ import {
 } from 'react-native';
 import { getApiClient } from '../../api/client';
 
+// One card per ready stall ticket: serving is confirmed per ticket (POST /waiter/tickets/{id}/served)
 interface ReadyItem {
-  id: number;
-  ticket_item_id: number;
+  ticket_item_id: number; // stall kitchen ticket id
   item_name: string;
   quantity: number;
   stall_name: string;
@@ -20,6 +20,18 @@ interface ReadyItem {
   order_number: string;
   ready_at: string;
 }
+
+const toReadyItem = (t: any): ReadyItem => ({
+  ticket_item_id: t.id,
+  item_name: (t.ticket_items || [])
+    .map((ti: any) => `${ti.quantity}x ${ti.order_item?.item_name ?? 'Item'}`)
+    .join(', '),
+  quantity: (t.ticket_items || []).reduce((sum: number, ti: any) => sum + (ti.quantity || 0), 0),
+  stall_name: t.stall?.name ?? 'Stall',
+  table_number: t.order?.table?.table_number ?? null,
+  order_number: t.order?.order_number ?? String(t.order_id),
+  ready_at: t.ready_at,
+});
 
 interface Props {
   onBack: () => void;
@@ -39,9 +51,9 @@ export const ReadyDishesScreen: React.FC<Props> = ({ onBack }) => {
   const fetchReadyDishes = async () => {
     try {
       const client = await getApiClient();
-      const res = await client.get('/waiter/ready-items');
+      const res = await client.get('/waiter/ready-tickets');
       if (res.data.success) {
-        setReadyItems(res.data.data);
+        setReadyItems((res.data.data as any[]).map(toReadyItem));
       }
     } catch {
       // Offline: keep existing items
@@ -54,7 +66,7 @@ export const ReadyDishesScreen: React.FC<Props> = ({ onBack }) => {
     setServingId(ticketItemId);
     try {
       const client = await getApiClient();
-      const res = await client.post(`/waiter/items/${ticketItemId}/served`);
+      const res = await client.post(`/waiter/tickets/${ticketItemId}/served`);
       if (res.data.success) {
         setReadyItems((prev) => prev.filter((i) => i.ticket_item_id !== ticketItemId));
         Alert.alert('Delivered', 'Item marked as served to table.');
@@ -107,9 +119,7 @@ export const ReadyDishesScreen: React.FC<Props> = ({ onBack }) => {
 
               <View style={styles.dishRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.dishName}>
-                    {item.quantity}x {item.item_name}
-                  </Text>
+                  <Text style={styles.dishName}>{item.item_name}</Text>
                   <Text style={styles.stallName}>From: {item.stall_name}</Text>
                 </View>
 

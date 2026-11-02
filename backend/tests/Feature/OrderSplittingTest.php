@@ -28,6 +28,7 @@ class OrderSplittingTest extends TestCase
 
         $orderPayload = [
             'table_id' => $table->id,
+            'qr_token' => $table->qr_token,
             'order_type' => 'dine_in',
             'order_channel' => 'qr_customer',
             'customer_name' => 'Aditya Sharma',
@@ -51,7 +52,7 @@ class OrderSplittingTest extends TestCase
         $response->assertStatus(201);
         $response->assertJsonPath('success', true);
 
-        $orderId = $response->json('data.id');
+        $orderId = Order::where('order_number', $response->json('data.order_number'))->value('id');
         $order = Order::with(['kitchenTickets', 'items'])->find($orderId);
 
         $this->assertNotNull($order);

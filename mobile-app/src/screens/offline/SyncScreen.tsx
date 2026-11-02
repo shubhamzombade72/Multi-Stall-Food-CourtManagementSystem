@@ -52,21 +52,29 @@ export const SyncScreen: React.FC<Props> = ({ onBack }) => {
 
     Alert.alert(
       'Sync Complete',
-      `Successfully synced: ${result.successCount} orders.\nFailures: ${result.failureCount}`
+      `Sent to server: ${result.synced}\nStill waiting for connection: ${result.failed}\nRejected by server: ${result.rejected}`
     );
   };
 
-  const handleClearQueue = () => {
+  // Only orders the server explicitly rejected may be discarded; unsent orders are never deleted
+  const handleClearRejected = () => {
+    const rejected = queue.filter((q) => q.sync_status === 'rejected');
+    if (rejected.length === 0) {
+      Alert.alert('Nothing to Discard', 'Only orders rejected by the server can be discarded.');
+      return;
+    }
     Alert.alert(
-      'Clear Offline Orders?',
-      'Are you sure you want to delete unsynced local orders? This cannot be undone.',
+      'Discard Rejected Orders?',
+      `${rejected.length} order(s) were refused by the server (see the reason on each card). Tell the customer, then discard.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Clear All',
+          text: 'Discard Rejected',
           style: 'destructive',
           onPress: async () => {
-            await offlineStore.clearQueue();
+            for (const r of rejected) {
+              await offlineStore.removeQueueItem(r.id);
+            }
             await checkOfflineQueue();
             await loadQueue();
           },
@@ -83,8 +91,8 @@ export const SyncScreen: React.FC<Props> = ({ onBack }) => {
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.topBarTitle}>Offline Order Queue</Text>
-        <TouchableOpacity onPress={handleClearQueue}>
-          <Text style={styles.clearBtnText}>Clear</Text>
+        <TouchableOpacity onPress={handleClearRejected}>
+          <Text style={styles.clearBtnText}>Discard Rejected</Text>
         </TouchableOpacity>
       </View>
 
@@ -148,6 +156,7 @@ export const SyncScreen: React.FC<Props> = ({ onBack }) => {
                   style={[
                     styles.syncStatusBadge,
                     item.sync_status === 'failed' && { backgroundColor: '#7f1d1d' },
+                    item.sync_status === 'rejected' && { backgroundColor: '#581c87' },
                     item.sync_status === 'syncing' && { backgroundColor: '#1e3a8a' },
                     item.sync_status === 'pending' && { backgroundColor: '#78350f' },
                   ]}

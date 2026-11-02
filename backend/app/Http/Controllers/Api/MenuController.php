@@ -45,8 +45,8 @@ class MenuController extends Controller
             'image_url' => 'nullable|string',
         ]);
 
-        if (!$user->isOwner() && ($user->stall_id != $validated['stall_id'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized to modify another stall\'s menu'], 403);
+        if (!$user->isOwner() && !($user->isStallManager() && $user->stall_id == $validated['stall_id'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Only Stall Manager or Owner can create menu items.'], 403);
         }
 
         $item = MenuItem::create($validated);
@@ -63,8 +63,8 @@ class MenuController extends Controller
         $user = $request->user();
         $item = MenuItem::findOrFail($id);
 
-        if (!$user->isOwner() && ($user->stall_id != $item->stall_id)) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized to modify another stall\'s menu'], 403);
+        if (!$user->isOwner() && !($user->isStallManager() && $user->stall_id == $item->stall_id)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Only Stall Manager or Owner can update menu items.'], 403);
         }
 
         $validated = $request->validate([
@@ -92,8 +92,8 @@ class MenuController extends Controller
         $user = $request->user();
         $item = MenuItem::findOrFail($id);
 
-        if (!$user->isOwner() && ($user->stall_id != $item->stall_id)) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        if (!$user->isOwner() && !($user->isStallManager() && $user->stall_id == $item->stall_id)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Only Stall Manager or Owner can toggle dish availability.'], 403);
         }
 
         $item->is_available = !$item->is_available;

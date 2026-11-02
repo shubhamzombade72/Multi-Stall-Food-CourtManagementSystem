@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { Search, Eye } from 'lucide-react';
 
 export const OrdersPage: React.FC = () => {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -203,6 +205,15 @@ export const OrdersPage: React.FC = () => {
                 <span className="text-brand-600">₹{selectedOrder.total_amount}</span>
               </div>
             </div>
+
+            {selectedOrder.payment_status === 'unpaid' && selectedOrder.status !== 'cancelled' && (
+              <button
+                onClick={() => navigate('/pos')}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center space-x-1"
+              >
+                <span>Settle Payment at POS ➔</span>
+              </button>
+            )}
 
             <button
               onClick={() => setSelectedOrder(null)}

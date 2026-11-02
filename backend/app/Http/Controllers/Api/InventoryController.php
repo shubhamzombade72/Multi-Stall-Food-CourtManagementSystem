@@ -50,7 +50,7 @@ class InventoryController extends Controller
             'unit_cost' => 'required|numeric|min:0',
         ]);
 
-        if (!$user->isOwner() && ($user->stall_id != $validated['stall_id'])) {
+        if (!$this->canManageStock($user, $validated['stall_id'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -68,7 +68,7 @@ class InventoryController extends Controller
         $user = $request->user();
         $item = InventoryItem::findOrFail($id);
 
-        if (!$user->isOwner() && ($user->stall_id != $item->stall_id)) {
+        if (!$this->canManageStock($user, $item->stall_id)) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -79,6 +79,8 @@ class InventoryController extends Controller
         ]);
 
         DB::transaction(function () use ($item, $validated, $user) {
+            // Lock the row so a concurrent goods receipt cannot be lost between read and write
+            $item = InventoryItem::where('id', $item->id)->lockForUpdate()->first();
             $prevStock = $item->current_stock;
             $newStock = $validated['new_stock'];
             $delta = bcsub((string) $newStock, (string) $prevStock, 3);
@@ -102,6 +104,14 @@ class InventoryController extends Controller
             'message' => 'Stock adjusted successfully',
             'data' => $item->fresh('stall'),
         ]);
+    }
+
+    private function canManageStock($user, $stallId): bool
+    {
+        if ($user->isOwner()) {
+            return true;
+        }
+        return ($user->isStallManager() || $user->isStoreStaff()) && $user->stall_id == $stallId;
     }
 
     public function movements(Request $request)

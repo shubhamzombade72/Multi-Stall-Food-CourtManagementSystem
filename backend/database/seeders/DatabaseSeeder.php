@@ -17,6 +17,11 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        // Demo staff accounts share a known password: development, testing and staging only
+        if (app()->environment('production')) {
+            throw new \RuntimeException('DatabaseSeeder creates demo accounts with a shared password and must not run in production.');
+        }
+
         $defaultPassword = Hash::make('password123');
 
         // 1. Central Owner / Admin

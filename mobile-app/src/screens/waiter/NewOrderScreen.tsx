@@ -10,8 +10,9 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { DiningTable, MenuItem, Stall, OrderItemInput } from '../../types';
-import { getApiClient } from '../../api/client';
+import { DiningTable, MenuItem, Stall, OrderItemInput, OfflineQueuedOrder } from '../../types';
+import { getApiClient, postOrder } from '../../api/client';
+import { classifyStatus, newIdempotencyKey } from '../../offline/syncEngine';
 import { offlineStore } from '../../storage/offlineStore';
 import { useAuth } from '../../context/AuthContext';
 
@@ -41,7 +42,7 @@ export const NewOrderScreen: React.FC<Props> = ({ table, onBack, onOrderPlaced }
       const client = await getApiClient();
       const [stallsRes, menuRes] = await Promise.all([
         client.get('/stalls'),
-        client.get('/menu-items'),
+        client.get('/menu', { params: { available_only: 1 } }),
       ]);
 
       if (stallsRes.data.success && menuRes.data.success) {
@@ -102,8 +103,13 @@ export const NewOrderScreen: React.FC<Props> = ({ table, onBack, onOrderPlaced }
 
     setIsSubmitting(true);
 
-    const payload = {
-      order_type: 'dine_in' as const,
+    // One key per order for its whole life: the online attempt and every offline retry share it
+    const order: OfflineQueuedOrder = {
+      id: newIdempotencyKey('waiter'),
+      client_timestamp: Date.now(),
+      sync_status: 'pending',
+      order_type: 'dine_in',
+      order_channel: 'waiter_app',
       table_id: table ? table.id : null,
       customer_name: customerName || (table ? `Table ${table.table_number}` : 'Guest Customer'),
       notes: notes,
@@ -116,31 +122,43 @@ export const NewOrderScreen: React.FC<Props> = ({ table, onBack, onOrderPlaced }
     };
 
     try {
-      const client = await getApiClient();
-      const res = await client.post('/orders', payload);
+      const res = await postOrder(order);
+      const verdict = classifyStatus(res.status);
 
-      if (res.data.success) {
+      if (verdict === 'ok') {
         Alert.alert(
           'Order Dispatched!',
           `Order #${res.data.data.order_number} created and split into stall kitchen tickets.`,
           [{ text: 'OK', onPress: onOrderPlaced }]
         );
+      } else if (verdict === 'reject') {
+        // The server refused the order (e.g. item out of stock): queueing it would not help
+        Alert.alert('Order Not Accepted', res.data?.message || `Server rejected the order (HTTP ${res.status}).`);
       } else {
-        throw new Error(res.data.message || 'Server returned error');
+        await queueForSync(order, res.data?.message);
       }
     } catch (err: any) {
-      // Network offline or edge server unreachable: Enqueue locally for offline sync
-      await offlineStore.enqueueOrder(payload);
-      await checkOfflineQueue();
-
-      Alert.alert(
-        'Offline Mode: Order Queued',
-        'Device is offline or server unreachable. Order saved locally in offline queue and will automatically sync when network returns.',
-        [{ text: 'OK', onPress: onOrderPlaced }]
-      );
+      // No response: offline, or the response was lost after the server committed
+      await queueForSync(order, err?.message);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const queueForSync = async (order: OfflineQueuedOrder, reason?: string) => {
+    await offlineStore.enqueueOrder({
+      ...order,
+      retry_count: 1,
+      last_attempt_at: Date.now(),
+      error_message: reason,
+    });
+    await checkOfflineQueue();
+
+    Alert.alert(
+      'Saved Offline: Order Queued',
+      'The local server could not be reached. The order is saved on this device and will be sent automatically when the connection returns. Do NOT re-enter it.',
+      [{ text: 'OK', onPress: onOrderPlaced }]
+    );
   };
 
   const filteredItems = menuItems.filter((item) =>

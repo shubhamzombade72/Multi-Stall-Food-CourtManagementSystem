@@ -34,7 +34,7 @@ export const TableListScreen: React.FC<Props> = ({
   const loadTables = async () => {
     try {
       const client = await getApiClient();
-      const res = await client.get('/public/tables');
+      const res = await client.get('/waiter/tables');
       if (res.data.success) {
         setTables(res.data.data);
       }

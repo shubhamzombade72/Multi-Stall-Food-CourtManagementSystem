@@ -7,11 +7,61 @@ use App\Models\InventoryItem;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\StockMovement;
+use App\Models\Supplier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class PurchaseController extends Controller
 {
+    public function suppliers(Request $request)
+    {
+        $user = $request->user();
+        $query = Supplier::with('stall:id,name,code')->where('is_active', true);
+
+        if (!$user->isOwner()) {
+            if (!$user->stall_id) {
+                return response()->json(['success' => false, 'message' => 'No stall assigned'], 403);
+            }
+            $query->where('stall_id', $user->stall_id);
+        } elseif ($request->has('stall_id')) {
+            $query->where('stall_id', $request->query('stall_id'));
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $query->orderBy('name')->get(),
+        ]);
+    }
+
+    public function storeSupplier(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$request->has('stall_id') && $user->stall_id) {
+            $request->merge(['stall_id' => $user->stall_id]);
+        }
+
+        $validated = $request->validate([
+            'stall_id' => 'required|exists:stalls,id',
+            'name' => 'required|string|max:255',
+            'contact_person' => 'nullable|string|max:100',
+            'phone' => 'nullable|string|max:20',
+            'email' => 'nullable|email|max:100',
+            'address' => 'nullable|string',
+        ]);
+
+        if (!$user->isOwner() && !($user->isStallManager() && $user->stall_id == $validated['stall_id'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized to add supplier for this stall'], 403);
+        }
+
+        $supplier = Supplier::create($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Supplier added successfully',
+            'data' => $supplier->load('stall'),
+        ], 201);
+    }
     public function index(Request $request)
     {
         $user = $request->user();
@@ -50,8 +100,19 @@ class PurchaseController extends Controller
             'items.*.unit_price' => 'required|numeric|min:0',
         ]);
 
-        if (!$user->isOwner() && ($user->stall_id != $validated['stall_id'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized to create purchase for another stall'], 403);
+        if (!$user->isOwner() && !($user->isStallManager() && $user->stall_id == $validated['stall_id'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Only Stall Manager or Owner can create purchase orders.'], 403);
+        }
+
+        // Stall isolation: the supplier and every stock item must belong to the purchasing stall
+        $supplierMatches = Supplier::where('id', $validated['supplier_id'])->where('stall_id', $validated['stall_id'])->exists();
+        $itemIds = array_unique(array_column($validated['items'], 'inventory_item_id'));
+        $foreignItems = InventoryItem::whereIn('id', $itemIds)->where('stall_id', '!=', $validated['stall_id'])->exists();
+        if (!$supplierMatches || $foreignItems) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Supplier and inventory items must belong to the purchasing stall.',
+            ], 422);
         }
 
         return DB::transaction(function () use ($validated, $user) {
@@ -97,15 +158,17 @@ class PurchaseController extends Controller
         $user = $request->user();
         $purchaseOrder = PurchaseOrder::with('items')->findOrFail($id);
 
-        if (!$user->isOwner() && ($user->stall_id != $purchaseOrder->stall_id)) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        if (!$user->isOwner() && !($user->isStallManager() && $user->stall_id == $purchaseOrder->stall_id)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Only Stall Manager or Owner can receive purchases.'], 403);
         }
 
-        if ($purchaseOrder->status === 'received') {
-            return response()->json(['success' => false, 'message' => 'Purchase order has already been received into stock.'], 422);
-        }
+        $received = DB::transaction(function () use ($purchaseOrder, $user) {
+            // Lock the PO so two simultaneous "receive" clicks cannot both add stock
+            $locked = PurchaseOrder::where('id', $purchaseOrder->id)->lockForUpdate()->first();
+            if ($locked->status !== 'ordered') {
+                return false;
+            }
 
-        DB::transaction(function () use ($purchaseOrder, $user) {
             $purchaseOrder->update(['status' => 'received']);
 
             // Auto-increment inventory stock and log stock movements
@@ -132,7 +195,13 @@ class PurchaseController extends Controller
                     'reason' => "PO Inward Receipt #{$purchaseOrder->purchase_number}",
                 ]);
             }
+
+            return true;
         });
+
+        if (!$received) {
+            return response()->json(['success' => false, 'message' => 'Purchase order has already been received into stock.'], 422);
+        }
 
         return response()->json([
             'success' => true,

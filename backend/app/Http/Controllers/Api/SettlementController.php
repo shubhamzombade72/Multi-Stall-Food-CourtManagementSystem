@@ -137,13 +137,14 @@ class SettlementController extends Controller
                 $stallGross = $stallItems->sum('subtotal');
                 $itemCount = $stallItems->count();
 
-                // Settlement amount defaults to stall gross sales until owner configures a specific contractual formula
+                // The settlement formula is an UNRESOLVED owner decision: no payable amount is derived here.
+                // Gross sales are recorded as fact; the owner enters the amount actually paid (recordSettlementPayment).
                 StallSettlementRecord::create([
                     'closing_id' => $closing->id,
                     'stall_id' => $stall->id,
                     'stall_gross_sales' => $stallGross,
                     'stall_item_count' => $itemCount,
-                    'settlement_amount' => $stallGross,
+                    'settlement_amount' => 0,
                     'settlement_status' => 'calculated',
                 ]);
             }
@@ -163,21 +164,32 @@ class SettlementController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
-        $record = StallSettlementRecord::with('stall')->findOrFail($recordId);
-
         $validated = $request->validate([
+            'amount_paid' => 'required|decimal:0,2|min:0|max:9999999999.99',
             'paid_to_representative' => 'required|string|max:100',
-            'payment_method' => 'required|string|max:50', // cash, bank_transfer, upi
+            'payment_method' => 'required|in:cash,bank_transfer,upi',
             'notes' => 'nullable|string',
         ]);
 
-        $record->update([
-            'settlement_status' => 'paid',
-            'paid_to_representative' => $validated['paid_to_representative'],
-            'payment_method' => $validated['payment_method'],
-            'paid_at' => now(),
-            'notes' => $validated['notes'] ?? null,
-        ]);
+        $record = DB::transaction(function () use ($recordId, $validated) {
+            $record = StallSettlementRecord::with('stall')->where('id', $recordId)->lockForUpdate()->firstOrFail();
+
+            // A recorded settlement payment is history; it must never be silently overwritten
+            if ($record->settlement_status === 'paid') {
+                abort(422, 'This stall settlement has already been recorded as paid.');
+            }
+
+            $record->update([
+                'settlement_amount' => $validated['amount_paid'],
+                'settlement_status' => 'paid',
+                'paid_to_representative' => $validated['paid_to_representative'],
+                'payment_method' => $validated['payment_method'],
+                'paid_at' => now(),
+                'notes' => $validated['notes'] ?? null,
+            ]);
+
+            return $record;
+        });
 
         return response()->json([
             'success' => true,

@@ -7,6 +7,7 @@ export const SettlementsPage: React.FC = () => {
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
   const [repName, setRepName] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [amountPaid, setAmountPaid] = useState('');
   const [notes, setNotes] = useState('');
 
   const fetchSummary = async () => {
@@ -49,6 +50,7 @@ export const SettlementsPage: React.FC = () => {
 
     try {
       const res = await apiClient.post(`/settlements/${selectedRecord.id}/pay`, {
+        amount_paid: amountPaid,
         paid_to_representative: repName,
         payment_method: paymentMethod,
         notes,
@@ -57,6 +59,7 @@ export const SettlementsPage: React.FC = () => {
       if (res.data.success) {
         setSelectedRecord(null);
         setRepName('');
+        setAmountPaid('');
         setNotes('');
         fetchSummary();
       }
@@ -131,7 +134,7 @@ export const SettlementsPage: React.FC = () => {
               <th className="py-3 px-6">Stall Name</th>
               <th className="py-3 px-6">Dishes Sold</th>
               <th className="py-3 px-6">Stall Gross Sales</th>
-              <th className="py-3 px-6">Settlement Payable</th>
+              <th className="py-3 px-6">Amount Paid</th>
               <th className="py-3 px-6">Payment Status</th>
               <th className="py-3 px-6 text-right">Action</th>
             </tr>
@@ -146,7 +149,9 @@ export const SettlementsPage: React.FC = () => {
                   </td>
                   <td className="py-4 px-6 text-slate-700 font-medium">{record.stall_item_count} items</td>
                   <td className="py-4 px-6 font-bold text-slate-900">₹{Number(record.stall_gross_sales).toFixed(2)}</td>
-                  <td className="py-4 px-6 font-extrabold text-brand-600 text-base">₹{Number(record.settlement_amount).toFixed(2)}</td>
+                  <td className="py-4 px-6 font-extrabold text-brand-600 text-base">
+                    {record.settlement_status === 'paid' ? `₹${Number(record.settlement_amount).toFixed(2)}` : '—'}
+                  </td>
                   <td className="py-4 px-6">
                     <span
                       className={`text-xs px-2.5 py-1 rounded-full font-bold ${
@@ -193,8 +198,22 @@ export const SettlementsPage: React.FC = () => {
           <form onSubmit={handlePaySettlement} className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <h3 className="font-bold text-slate-900 text-lg">Record Payout to {selectedRecord.stall?.name}</h3>
             <div className="bg-slate-50 p-3 rounded-xl flex justify-between items-center text-xs font-mono">
-              <span>Settlement Amount:</span>
-              <span className="text-base font-extrabold text-brand-600">₹{selectedRecord.settlement_amount}</span>
+              <span>Stall Gross Sales (reference only):</span>
+              <span className="text-base font-extrabold text-slate-700">₹{Number(selectedRecord.stall_gross_sales).toFixed(2)}</span>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Amount Paid to Stall (₹):</label>
+              <input
+                type="number"
+                required
+                min="0"
+                step="0.01"
+                value={amountPaid}
+                onChange={(e) => setAmountPaid(e.target.value)}
+                placeholder="Enter the amount actually handed over"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-semibold"
+              />
             </div>
 
             <div>

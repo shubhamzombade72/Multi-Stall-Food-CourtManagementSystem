@@ -21,6 +21,7 @@ class BillingPaymentTest extends TestCase
         // Create an order
         $orderResponse = $this->postJson('/api/public/orders', [
             'table_id' => $table->id,
+            'qr_token' => $table->qr_token,
             'order_type' => 'dine_in',
             'order_channel' => 'qr_customer',
             'items' => [
@@ -28,7 +29,7 @@ class BillingPaymentTest extends TestCase
             ]
         ])->assertStatus(201);
 
-        $orderId = $orderResponse->json('data.id');
+        $orderId = Order::where('order_number', $orderResponse->json('data.order_number'))->value('id');
         $totalAmount = $orderResponse->json('data.total_amount');
 
         // Cashier records payment

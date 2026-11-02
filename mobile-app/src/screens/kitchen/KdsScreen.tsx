@@ -9,7 +9,7 @@ import {
   Alert,
   RefreshControl,
 } from 'react-native';
-import { StallKitchenTicket } from '../../types';
+import { ApiKitchenTicket, StallKitchenTicket, normalizeTicket } from '../../types';
 import { getApiClient } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 
@@ -32,7 +32,7 @@ export const KdsScreen: React.FC = () => {
       const client = await getApiClient();
       const res = await client.get('/kitchen/tickets');
       if (res.data.success) {
-        setTickets(res.data.data);
+        setTickets((res.data.data as ApiKitchenTicket[]).map(normalizeTicket));
       }
     } catch (e) {
       // Ignore network errors on polling
@@ -42,10 +42,7 @@ export const KdsScreen: React.FC = () => {
     }
   };
 
-  const handleUpdateTicketStatus = async (
-    ticketId: number,
-    status: 'preparing' | 'ready' | 'served'
-  ) => {
+  const handleUpdateTicketStatus = async (ticketId: number, status: 'preparing' | 'ready') => {
     setActionLoadingId(ticketId);
     try {
       const client = await getApiClient();
@@ -62,23 +59,11 @@ export const KdsScreen: React.FC = () => {
     }
   };
 
-  const handleUpdateItemStatus = async (
-    ticketItemId: number,
-    status: 'preparing' | 'ready'
-  ) => {
-    try {
-      const client = await getApiClient();
-      await client.put(`/kitchen/items/${ticketItemId}/status`, { status });
-      fetchTickets();
-    } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to update item status');
-    }
-  };
+  const ACTIVE = ['pending', 'accepted', 'preparing'];
+  const DONE = ['ready', 'picked_up'];
 
   const displayedTickets = tickets.filter((t) =>
-    filterStatus === 'active'
-      ? ['pending', 'preparing'].includes(t.status)
-      : ['ready', 'served'].includes(t.status)
+    filterStatus === 'active' ? ACTIVE.includes(t.status) : DONE.includes(t.status)
   );
 
   return (
@@ -109,7 +94,7 @@ export const KdsScreen: React.FC = () => {
             style={[styles.tabText, filterStatus === 'active' && styles.tabTextActive]}
           >
             🔥 Active Cooking (
-            {tickets.filter((t) => ['pending', 'preparing'].includes(t.status)).length}
+            {tickets.filter((t) => ACTIVE.includes(t.status)).length}
             )
           </Text>
         </TouchableOpacity>
@@ -122,7 +107,7 @@ export const KdsScreen: React.FC = () => {
             style={[styles.tabText, filterStatus === 'completed' && styles.tabTextActive]}
           >
             ✓ Ready / Served (
-            {tickets.filter((t) => ['ready', 'served'].includes(t.status)).length}
+            {tickets.filter((t) => DONE.includes(t.status)).length}
             )
           </Text>
         </TouchableOpacity>
@@ -157,7 +142,7 @@ export const KdsScreen: React.FC = () => {
             />
           }
           renderItem={({ item }) => {
-            const isPending = item.status === 'pending';
+            const isPending = item.status === 'pending' || item.status === 'accepted';
             const isPreparing = item.status === 'preparing';
             const isReady = item.status === 'ready';
 
@@ -217,15 +202,7 @@ export const KdsScreen: React.FC = () => {
                         )}
                       </View>
 
-                      {/* Item level ready check */}
-                      {subItem.status !== 'ready' && subItem.status !== 'served' && (
-                        <TouchableOpacity
-                          style={styles.itemReadyBtn}
-                          onPress={() => handleUpdateItemStatus(subItem.id, 'ready')}
-                        >
-                          <Text style={styles.itemReadyBtnText}>Mark Ready</Text>
-                        </TouchableOpacity>
-                      )}
+                      {/* Readiness is tracked per stall ticket; the API has no per-item status endpoint */}
                       {subItem.status === 'ready' && (
                         <Text style={styles.itemReadyBadge}>Ready ✓</Text>
                       )}
@@ -256,13 +233,9 @@ export const KdsScreen: React.FC = () => {
                   )}
 
                   {isReady && (
-                    <TouchableOpacity
-                      style={styles.servedBtn}
-                      onPress={() => handleUpdateTicketStatus(item.id, 'served')}
-                      disabled={actionLoadingId === item.id}
-                    >
-                      <Text style={styles.servedBtnText}>Dispatched to Waiter</Text>
-                    </TouchableOpacity>
+                    <View style={styles.servedBtn}>
+                      <Text style={styles.servedBtnText}>Waiting for waiter pickup</Text>
+                    </View>
                   )}
                 </View>
               </View>

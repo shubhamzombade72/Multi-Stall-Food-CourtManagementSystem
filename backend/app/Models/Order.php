@@ -13,6 +13,8 @@ class Order extends Model
     protected $fillable = [
         'uuid',
         'order_number',
+        'tracking_token',
+        'idempotency_key',
         'table_id',
         'order_type',
         'order_channel',
@@ -45,6 +47,9 @@ class Order extends Model
             }
             if (empty($model->order_number)) {
                 $model->order_number = 'ORD-' . date('Ymd') . '-' . strtoupper(Str::random(5));
+            }
+            if (empty($model->tracking_token)) {
+                $model->tracking_token = 'trk_' . Str::random(36);
             }
         });
     }

@@ -12,7 +12,9 @@ const STORAGE_KEYS = {
   SERVER_URL: '@foodcourt_server_url',
 };
 
-export const DEFAULT_SERVER_URL = 'http://10.0.2.2:8000/api'; // Android Emulator default; LAN IP configurable
+// Edge server API used until the user saves one on the login screen. Set EXPO_PUBLIC_API_URL when
+// starting Metro / building (e.g. http://192.168.1.50:8000/api); falls back to the Android emulator host.
+export const DEFAULT_SERVER_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000/api';
 
 export const offlineStore = {
   // Server URL Configuration (for local foodcourt LAN edge server)
@@ -80,13 +82,22 @@ export const offlineStore = {
   },
 
   // Offline Order Queue
-  async enqueueOrder(order: Omit<OfflineQueuedOrder, 'id' | 'client_timestamp' | 'sync_status'>): Promise<OfflineQueuedOrder> {
+  // `id` MUST be the idempotency key already used for the online attempt (if any): the server may
+  // have committed that attempt even though the device never received the response.
+  async enqueueOrder(
+    order: Omit<OfflineQueuedOrder, 'client_timestamp' | 'sync_status'>
+  ): Promise<OfflineQueuedOrder> {
     const queue = await this.getQueue();
+    const existing = queue.find((q) => q.id === order.id);
+    if (existing) {
+      return existing;
+    }
     const queuedOrder: OfflineQueuedOrder = {
       ...order,
-      id: 'local_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      order_channel: 'waiter_app',
       client_timestamp: Date.now(),
       sync_status: 'pending',
+      retry_count: order.retry_count ?? 0,
     };
     queue.push(queuedOrder);
     await AsyncStorage.setItem(STORAGE_KEYS.OFFLINE_QUEUE, JSON.stringify(queue));

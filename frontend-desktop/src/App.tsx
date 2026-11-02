@@ -12,6 +12,7 @@ import { MenuPage } from './pages/MenuPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { SettlementsPage } from './pages/SettlementsPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { PurchasesPage } from './pages/PurchasesPage';
 
 const ProtectedLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
@@ -35,13 +36,30 @@ const ProtectedLayout: React.FC = () => {
         <Sidebar />
         <main className="flex-1 overflow-y-auto">
           <Routes>
-            <Route path="/" element={<Navigate to={user.role === 'cashier' ? '/pos' : '/dashboard'} replace />} />
+            <Route
+              path="/"
+              element={
+                <Navigate
+                  to={
+                    user.role === 'owner'
+                      ? '/dashboard'
+                      : user.role === 'cashier'
+                        ? '/pos'
+                        : user.role === 'stall_manager'
+                          ? '/menu'
+                          : '/inventory'
+                  }
+                  replace
+                />
+              }
+            />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/pos" element={<PosPage />} />
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/stalls" element={<StallsPage />} />
             <Route path="/menu" element={<MenuPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
+            <Route path="/purchases" element={<PurchasesPage />} />
             <Route path="/settlements" element={<SettlementsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

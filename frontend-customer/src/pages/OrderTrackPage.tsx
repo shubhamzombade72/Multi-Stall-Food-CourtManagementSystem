@@ -8,18 +8,20 @@ import {
 } from 'lucide-react';
 
 export const OrderTrackPage: React.FC = () => {
-  const { orderId } = useParams<{ orderId: string }>();
+  const { trackingToken, orderId } = useParams<{ trackingToken?: string; orderId?: string }>();
+  const activeToken = trackingToken || orderId;
   const [order, setOrder] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchOrder = async () => {
+    if (!activeToken) return;
     try {
-      const res = await apiClient.get(`/public/orders/${orderId}`);
+      const res = await apiClient.get(`/public/orders/track/${activeToken}`);
       if (res.data.success) {
         setOrder(res.data.data);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Failed to fetch tracking data', err);
     } finally {
       setIsLoading(false);
     }
@@ -29,7 +31,7 @@ export const OrderTrackPage: React.FC = () => {
     fetchOrder();
     const timer = setInterval(fetchOrder, 4000); // 4s polling for live kitchen progress
     return () => clearInterval(timer);
-  }, [orderId]);
+  }, [activeToken]);
 
   if (isLoading) {
     return (

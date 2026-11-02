@@ -13,11 +13,28 @@ class BillingController extends Controller
 {
     public function getPendingBills(Request $request)
     {
-        $orders = Order::with(['table', 'items.stall:id,name,code', 'payments'])
+        $user = $request->user();
+        if (!$user->isOwner() && !$user->isCashier()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Only Cashier or Owner can view pending bills.'], 403);
+        }
+
+        $query = Order::with(['table', 'items.stall:id,name,code', 'kitchenTickets.stall:id,name,code', 'payments'])
             ->where('payment_status', 'unpaid')
-            ->where('status', '!=', 'cancelled')
-            ->orderByDesc('id')
-            ->get();
+            ->where('status', '!=', 'cancelled');
+
+        if ($request->filled('search')) {
+            $search = $request->query('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('order_number', 'ilike', "%{$search}%")
+                  ->orWhere('customer_name', 'ilike', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('table_id')) {
+            $query->where('table_id', $request->query('table_id'));
+        }
+
+        $orders = $query->orderByDesc('id')->get();
 
         return response()->json([
             'success' => true,
@@ -28,6 +45,9 @@ class BillingController extends Controller
     public function processPayment(Request $request)
     {
         $cashier = $request->user();
+        if (!$cashier->isOwner() && !$cashier->isCashier()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Cashier or Owner privileges required to process payments.'], 403);
+        }
 
         $validated = $request->validate([
             'order_id' => 'required|exists:orders,id',
@@ -37,25 +57,31 @@ class BillingController extends Controller
             'transaction_reference' => 'nullable|string|max:100',
         ]);
 
-        $order = Order::with('items.stall')->findOrFail($validated['order_id']);
+        return DB::transaction(function () use ($validated, $cashier) {
+            $order = Order::where('id', $validated['order_id'])->lockForUpdate()->firstOrFail();
 
-        if ($order->payment_status === 'paid') {
-            return response()->json([
-                'success' => false,
-                'message' => 'This order has already been paid in full.',
-            ], 422);
-        }
+            if ($order->payment_status === 'paid') {
+                abort(422, 'This order has already been paid in full.');
+            }
 
-        return DB::transaction(function () use ($validated, $order, $cashier) {
-            $amount = $validated['amount'];
-            $cashTendered = $validated['cash_tendered'] ?? $amount;
-            $changeReturned = 0;
+            if ($order->status === 'cancelled') {
+                abort(422, 'Cannot take payment for a cancelled order.');
+            }
+
+            // A single payment settles the whole bill, so it must equal the server-side total exactly
+            $amount = bcadd((string) $validated['amount'], '0', 2);
+            if (bccomp($amount, (string) $order->total_amount, 2) !== 0) {
+                abort(422, "Payment amount {$amount} does not match the bill total {$order->total_amount}.");
+            }
+
+            $cashTendered = bcadd((string) ($validated['cash_tendered'] ?? $amount), '0', 2);
+            $changeReturned = '0.00';
 
             if ($validated['payment_method'] === 'cash') {
-                if ($cashTendered < $amount) {
+                if (bccomp($cashTendered, $amount, 2) < 0) {
                     abort(422, 'Cash tendered is less than the total bill amount.');
                 }
-                $changeReturned = bcsub((string) $cashTendered, (string) $amount, 2);
+                $changeReturned = bcsub($cashTendered, $amount, 2);
             }
 
             $payment = Payment::create([
@@ -80,6 +106,12 @@ class BillingController extends Controller
                 DiningTable::where('id', $order->table_id)->update(['status' => 'available']);
             }
 
+            try {
+                event(new \App\Events\PaymentCompletedEvent($payment));
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Broadcast PaymentCompletedEvent failed: ' . $e->getMessage());
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Payment recorded successfully. Bill settled.',
@@ -92,8 +124,13 @@ class BillingController extends Controller
         });
     }
 
-    public function getOrderReceipt($orderId)
+    public function getOrderReceipt(Request $request, $orderId)
     {
+        $user = $request->user();
+        if (!$user->isOwner() && !$user->isCashier()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Only Cashier or Owner can view receipts.'], 403);
+        }
+
         $order = Order::with([
             'table',
             'items.stall:id,name,code',

@@ -7,6 +7,7 @@ import {
   Store,
   UtensilsCrossed,
   Package,
+  Truck,
   CalendarCheck,
   BarChart3,
   Receipt
@@ -18,10 +19,11 @@ export const Sidebar: React.FC = () => {
   const navLinks = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, show: isOwner },
     { to: '/pos', label: 'Cashier POS', icon: ShoppingCart, show: isCashier },
-    { to: '/orders', label: 'Orders & Receipts', icon: Receipt, show: true },
+    { to: '/orders', label: 'Orders & Receipts', icon: Receipt, show: isOwner || isCashier },
     { to: '/stalls', label: 'Stall Directory', icon: Store, show: isOwner },
     { to: '/menu', label: 'Menu Catalog', icon: UtensilsCrossed, show: isOwner || user?.role === 'stall_manager' },
     { to: '/inventory', label: 'Stall Inventory', icon: Package, show: isOwner || user?.role === 'stall_manager' || user?.role === 'store_staff' },
+    { to: '/purchases', label: 'Purchases & Vendors', icon: Truck, show: isOwner || user?.role === 'stall_manager' },
     { to: '/settlements', label: 'EOD & Settlements', icon: CalendarCheck, show: isOwner },
     { to: '/reports', label: 'Analytics & Audit', icon: BarChart3, show: isOwner },
   ];

@@ -1,4 +1,4 @@
-export type UserRole = 'owner' | 'cashier' | 'waiter' | 'stall_manager' | 'kitchen_staff';
+export type UserRole = 'owner' | 'cashier' | 'waiter' | 'stall_manager' | 'kitchen_staff' | 'store_staff';
 
 export interface User {
   id: number;
@@ -22,7 +22,6 @@ export interface Stall {
 export interface DiningTable {
   id: number;
   table_number: string;
-  qr_token: string;
   capacity: number;
   status: 'available' | 'occupied' | 'reserved';
 }
@@ -51,21 +50,39 @@ export interface OrderItemInput {
 
 export interface StallTicketItem {
   id: number;
-  kitchen_ticket_id: number;
-  menu_item_id: number;
   item_name: string;
   quantity: number;
-  status: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled';
+  status: string;
   special_instructions?: string | null;
-  prepared_at?: string | null;
 }
+
+// Shape returned by GET /kitchen/tickets and GET /waiter/ready-tickets
+export interface ApiKitchenTicket extends Omit<StallKitchenTicket, 'items'> {
+  ticket_items?: {
+    id: number;
+    quantity: number;
+    status: string;
+    order_item?: { item_name: string; special_instructions?: string | null } | null;
+  }[];
+}
+
+export const normalizeTicket = (t: ApiKitchenTicket): StallKitchenTicket => ({
+  ...t,
+  items: (t.ticket_items || []).map((ti) => ({
+    id: ti.id,
+    item_name: ti.order_item?.item_name || 'Item',
+    quantity: ti.quantity,
+    status: ti.status,
+    special_instructions: ti.order_item?.special_instructions ?? null,
+  })),
+});
 
 export interface StallKitchenTicket {
   id: number;
   order_id: number;
   stall_id: number;
   ticket_number: string;
-  status: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled';
+  status: 'pending' | 'accepted' | 'preparing' | 'ready' | 'picked_up' | 'cancelled';
   notes?: string | null;
   created_at: string;
   order?: {
@@ -94,13 +111,16 @@ export interface ReadyItemAlert {
 }
 
 export interface OfflineQueuedOrder {
-  id: string; // client UUID
+  id: string; // client UUID / idempotency_key
   client_timestamp: number;
   order_type: 'dine_in' | 'takeaway';
+  order_channel: 'waiter_app';
   table_id: number | null;
   customer_name?: string;
   customer_phone?: string;
   notes?: string;
+  retry_count?: number;
+  last_attempt_at?: number;
   items: {
     menu_item_id: number;
     quantity: number;
@@ -108,7 +128,7 @@ export interface OfflineQueuedOrder {
     name: string;
     unit_price: number;
   }[];
-  sync_status: 'pending' | 'syncing' | 'failed' | 'synced';
+  sync_status: 'pending' | 'syncing' | 'failed' | 'rejected' | 'synced';
   error_message?: string;
 }
 

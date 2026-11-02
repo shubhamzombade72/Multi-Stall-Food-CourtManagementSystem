@@ -9,7 +9,7 @@ export const App: React.FC = () => {
       <Routes>
         <Route path="/" element={<QrMenuPage />} />
         <Route path="/table/:qrToken" element={<QrMenuPage />} />
-        <Route path="/order/:orderId" element={<OrderTrackPage />} />
+        <Route path="/order/:trackingToken" element={<OrderTrackPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

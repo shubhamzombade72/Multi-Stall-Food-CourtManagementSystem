@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-export const API_BASE_URL = 'http://localhost:8000/api';
+// Set VITE_API_BASE_URL at build time (e.g. http://192.168.1.50:8000/api), or serve from the API's origin.
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,

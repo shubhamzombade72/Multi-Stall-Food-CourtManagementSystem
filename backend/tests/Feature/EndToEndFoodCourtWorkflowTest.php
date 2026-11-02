@@ -42,6 +42,7 @@ class EndToEndFoodCourtWorkflowTest extends TestCase
         // -------------------------------------------------------------
         $orderPayload = [
             'table_id' => $table->id,
+            'qr_token' => $table->qr_token,
             'order_type' => 'dine_in',
             'order_channel' => 'qr_customer',
             'customer_name' => 'Vikram Malhotra',
@@ -62,7 +63,7 @@ class EndToEndFoodCourtWorkflowTest extends TestCase
 
         $orderResponse = $this->postJson('/api/public/orders', $orderPayload);
         $orderResponse->assertStatus(201);
-        $orderId = $orderResponse->json('data.id');
+        $orderId = Order::where('order_number', $orderResponse->json('data.order_number'))->value('id');
         $this->assertNotNull($orderId);
 
         $order = Order::with(['kitchenTickets'])->find($orderId);

@@ -20,15 +20,15 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 Route::prefix('auth')->group(function () {
-    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
 });
 
 Route::prefix('public')->group(function () {
     Route::get('/stalls', [StallController::class, 'index']);
     Route::get('/tables', [DiningTableController::class, 'index']);
     Route::get('/qr/{qrToken}', [DiningTableController::class, 'showByQrToken']);
-    Route::post('/orders', [OrderController::class, 'createOrder']);
-    Route::get('/orders/{id}', [OrderController::class, 'show']);
+    Route::post('/orders', [OrderController::class, 'createOrder'])->middleware('throttle:public-orders');
+    Route::get('/orders/track/{trackingToken}', [OrderController::class, 'trackOrder'])->middleware('throttle:60,1');
 });
 
 /*
@@ -36,7 +36,7 @@ Route::prefix('public')->group(function () {
 | Authenticated Routes (Sanctum)
 |--------------------------------------------------------------------------
 */
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'active'])->group(function () {
     // Auth & Profile
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
@@ -83,6 +83,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/purchases', [PurchaseController::class, 'index']);
     Route::post('/purchases', [PurchaseController::class, 'store']);
     Route::post('/purchases/{id}/receive', [PurchaseController::class, 'receive']);
+    Route::get('/suppliers', [PurchaseController::class, 'suppliers']);
+    Route::post('/suppliers', [PurchaseController::class, 'storeSupplier']);
 
     // Stall Inventory & Stock Ledger
     Route::get('/inventory', [InventoryController::class, 'index']);

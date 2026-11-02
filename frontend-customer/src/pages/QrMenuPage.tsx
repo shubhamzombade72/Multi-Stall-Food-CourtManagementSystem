@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
+import { createCheckoutSession, PostOrderFn } from '../lib/checkoutSession';
 import {
   Store,
   ShoppingBag,
@@ -43,6 +44,9 @@ export const QrMenuPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  // Duplicate-order guard: one in-flight submission, one idempotency key per checkout (see checkoutSession.ts)
+  const checkoutRef = useRef(createCheckoutSession());
 
   useEffect(() => {
     loadMenu();
@@ -52,22 +56,19 @@ export const QrMenuPage: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      // If no token in URL, fetch first table for demonstration
-      let tokenToUse = qrToken;
-      if (!tokenToUse) {
-        const tablesRes = await apiClient.get('/public/tables');
-        if (tablesRes.data.data.length > 0) {
-          tokenToUse = tablesRes.data.data[0].qr_token;
-        }
+      if (!qrToken) {
+        setError('Please scan the official QR code on your dining table to view the menu and place orders.');
+        setIsLoading(false);
+        return;
       }
 
-      const res = await apiClient.get(`/public/qr/${tokenToUse}`);
+      const res = await apiClient.get(`/public/qr/${qrToken}`);
       if (res.data.success) {
         setTable(res.data.data.table);
         setStalls(res.data.data.stalls);
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Unable to load menu. Please scan table QR again.');
+      setError(err.response?.data?.message || 'Unable to verify table QR code. Please scan an authentic table code.');
     } finally {
       setIsLoading(false);
     }
@@ -104,33 +105,43 @@ export const QrMenuPage: React.FC = () => {
   const total = subtotal + tax;
   const totalItemCount = cart.reduce((sum, ci) => sum + ci.quantity, 0);
 
+  // Reports the HTTP status for any server reply; throws only when no reply arrived (offline / timeout)
+  const postOrder: PostOrderFn = async (body) => {
+    try {
+      const res = await apiClient.post('/public/orders', body, { timeout: 15000 });
+      return { status: res.status, data: res.data };
+    } catch (err: any) {
+      if (err.response) {
+        return { status: err.response.status, data: err.response.data };
+      }
+      throw err;
+    }
+  };
+
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (cart.length === 0 || !table) return;
+    if (cart.length === 0 || !table || !qrToken) return;
 
+    setSubmitError(null);
     setIsSubmitting(true);
-    try {
-      const payload = {
-        table_id: table.id,
+    const result = await checkoutRef.current.submit(
+      {
+        qr_token: qrToken, // the validated table secret; the server derives the table from it
         order_type: 'dine_in',
-        order_channel: 'qr_customer',
         customer_name: customerName || 'Dine-in Customer',
         customer_phone: customerPhone || null,
-        items: cart.map((ci) => ({
-          menu_item_id: ci.item.id,
-          quantity: ci.quantity,
-        })),
-      };
+        items: cart.map((ci) => ({ menu_item_id: ci.item.id, quantity: ci.quantity })),
+      },
+      postOrder
+    );
+    setIsSubmitting(false);
 
-      const res = await apiClient.post('/public/orders', payload);
-      if (res.data.success) {
-        const orderId = res.data.data.id;
-        navigate(`/order/${orderId}`);
-      }
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to submit order');
-    } finally {
-      setIsSubmitting(false);
+    if (result.kind === 'success') {
+      setCart([]);
+      setIsCartOpen(false);
+      navigate(`/order/${result.trackingToken}`);
+    } else {
+      setSubmitError(result.message);
     }
   };
 
@@ -195,8 +206,8 @@ export const QrMenuPage: React.FC = () => {
           <button
             onClick={() => setSelectedStallId('all')}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${selectedStallId === 'all'
-                ? 'bg-brand-500 text-white shadow-sm'
-                : 'bg-slate-800 text-slate-400'
+              ? 'bg-brand-500 text-white shadow-sm'
+              : 'bg-slate-800 text-slate-400'
               }`}
           >
             All Stalls
@@ -206,8 +217,8 @@ export const QrMenuPage: React.FC = () => {
               key={s.id}
               onClick={() => setSelectedStallId(s.id)}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${selectedStallId === s.id
-                  ? 'bg-brand-500 text-white shadow-sm'
-                  : 'bg-slate-800 text-slate-400'
+                ? 'bg-brand-500 text-white shadow-sm'
+                : 'bg-slate-800 text-slate-400'
                 }`}
             >
               {s.name}
@@ -251,8 +262,8 @@ export const QrMenuPage: React.FC = () => {
                               <div className="flex items-center space-x-1.5 mb-1">
                                 <span
                                   className={`w-2.5 h-2.5 rounded-sm border ${dish.is_veg
-                                      ? 'border-emerald-600 bg-emerald-500'
-                                      : 'border-rose-600 bg-rose-500'
+                                    ? 'border-emerald-600 bg-emerald-500'
+                                    : 'border-rose-600 bg-rose-500'
                                     }`}
                                 />
                                 <span className="text-[10px] font-bold text-slate-400 uppercase">
@@ -429,9 +440,16 @@ export const QrMenuPage: React.FC = () => {
                 </div>
               </div>
 
+              {submitError && (
+                <div role="alert" className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                  {submitError}
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={isSubmitting}
+                aria-busy={isSubmitting}
                 className="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-brand-500/30 flex items-center justify-center space-x-2 transition disabled:opacity-50"
               >
                 <span>{isSubmitting ? 'Placing Order...' : 'Confirm & Send to Kitchens'}</span>

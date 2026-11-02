@@ -14,10 +14,12 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { offlineStore } from '../storage/offlineStore';
 
+const DEMO_PASSWORD = 'password123'; // DatabaseSeeder default, dev builds only
+
 export const LoginScreen: React.FC = () => {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('password');
+  const [password, setPassword] = useState('');
   const [serverUrl, setServerUrl] = useState('');
   const [showConfig, setShowConfig] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -72,7 +74,7 @@ export const LoginScreen: React.FC = () => {
           <Text style={styles.label}>Email Address</Text>
           <TextInput
             style={styles.input}
-            placeholder="e.g. waiter1@foodcourt.local"
+            placeholder="e.g. waiter1@foodcourt.com"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -100,15 +102,16 @@ export const LoginScreen: React.FC = () => {
             )}
           </TouchableOpacity>
 
-          {/* Quick Demo Logins for Fast Access */}
+          {/* Seeded demo accounts: development builds only, never in a release APK */}
+          {__DEV__ && (<>
           <Text style={styles.demoSectionTitle}>One-Tap Staff Logins (Demo)</Text>
           <View style={styles.demoGrid}>
             <TouchableOpacity
               style={styles.demoButton}
               onPress={() => {
-                setEmail('waiter1@foodcourt.local');
-                setPassword('password');
-                handleLogin('waiter1@foodcourt.local', 'password');
+                setEmail('waiter1@foodcourt.com');
+                setPassword(DEMO_PASSWORD);
+                handleLogin('waiter1@foodcourt.com', DEMO_PASSWORD);
               }}
             >
               <Text style={styles.demoButtonRole}>Waiter</Text>
@@ -118,9 +121,9 @@ export const LoginScreen: React.FC = () => {
             <TouchableOpacity
               style={styles.demoButton}
               onPress={() => {
-                setEmail('waiter2@foodcourt.local');
-                setPassword('password');
-                handleLogin('waiter2@foodcourt.local', 'password');
+                setEmail('waiter2@foodcourt.com');
+                setPassword(DEMO_PASSWORD);
+                handleLogin('waiter2@foodcourt.com', DEMO_PASSWORD);
               }}
             >
               <Text style={styles.demoButtonRole}>Waiter</Text>
@@ -130,9 +133,9 @@ export const LoginScreen: React.FC = () => {
             <TouchableOpacity
               style={[styles.demoButton, styles.demoButtonKitchen]}
               onPress={() => {
-                setEmail('kitchen.pizza@foodcourt.local');
-                setPassword('password');
-                handleLogin('kitchen.pizza@foodcourt.local', 'password');
+                setEmail('kitchen.pizza@foodcourt.com');
+                setPassword(DEMO_PASSWORD);
+                handleLogin('kitchen.pizza@foodcourt.com', DEMO_PASSWORD);
               }}
             >
               <Text style={styles.demoButtonRoleKitchen}>Kitchen KDS</Text>
@@ -142,15 +145,16 @@ export const LoginScreen: React.FC = () => {
             <TouchableOpacity
               style={[styles.demoButton, styles.demoButtonKitchen]}
               onPress={() => {
-                setEmail('kitchen.burger@foodcourt.local');
-                setPassword('password');
-                handleLogin('kitchen.burger@foodcourt.local', 'password');
+                setEmail('kitchen.burger@foodcourt.com');
+                setPassword(DEMO_PASSWORD);
+                handleLogin('kitchen.burger@foodcourt.com', DEMO_PASSWORD);
               }}
             >
               <Text style={styles.demoButtonRoleKitchen}>Kitchen KDS</Text>
               <Text style={styles.demoButtonName}>Burger Stall</Text>
             </TouchableOpacity>
           </View>
+          </>)}
         </View>
 
         {/* Server IP Config Toggle */}

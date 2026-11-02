@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\DiningTable;
 use App\Models\MenuItem;
 use App\Models\Stall;
 use App\Models\User;
@@ -22,6 +23,7 @@ class KitchenKdsTest extends TestCase
         $burgerItem = MenuItem::where('stall_id', $burgerKitchenUser->stall_id)->first();
 
         $this->postJson('/api/public/orders', [
+            'qr_token' => DiningTable::first()->qr_token,
             'order_type' => 'takeaway',
             'order_channel' => 'qr_customer',
             'items' => [

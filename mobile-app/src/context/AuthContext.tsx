@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
 import { offlineStore } from '../storage/offlineStore';
-import { getApiClient } from '../api/client';
+import { getApiClient, syncOfflineOrders } from '../api/client';
 
 interface AuthContextType {
   user: User | null;
@@ -28,6 +28,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth();
   }, []);
 
+  // Background auto-sync for waiters: retries queued orders (with per-order backoff) every 20s
+  useEffect(() => {
+    if (!token || user?.role !== 'waiter') return;
+    const tick = async () => {
+      const queue = await offlineStore.getQueue();
+      if (queue.length === 0) return;
+      try {
+        const result = await syncOfflineOrders(undefined, false);
+        setIsOnline(result.failed === 0);
+      } finally {
+        await checkOfflineQueue();
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 20000);
+    return () => clearInterval(interval);
+  }, [token, user?.role]);
+
   const initAuth = async () => {
     try {
       const auth = await offlineStore.getAuth();
@@ -52,8 +70,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const client = await getApiClient();
       const [tablesRes, menuRes, stallsRes] = await Promise.all([
-        client.get('/public/tables'),
-        client.get('/menu-items'),
+        client.get('/tables'),
+        client.get('/menu', { params: { available_only: 1 } }),
         client.get('/stalls'),
       ]);
 

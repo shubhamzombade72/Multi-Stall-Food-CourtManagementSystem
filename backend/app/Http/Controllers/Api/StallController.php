@@ -20,9 +20,14 @@ class StallController extends Controller
         ]);
     }
 
-    public function show($id)
+    public function show(Request $request, $id)
     {
-        $stall = Stall::with(['categories.menuItems', 'users', 'suppliers'])->findOrFail($id);
+        $user = $request->user();
+        if (!$user->isOwner() && !($user->isStallManager() && $user->stall_id == $id)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $stall = Stall::with(['categories.menuItems', 'users:id,name,role,stall_id,is_active', 'suppliers'])->findOrFail($id);
 
         return response()->json([
             'success' => true,
@@ -57,8 +62,13 @@ class StallController extends Controller
     public function update(Request $request, $id)
     {
         $user = $request->user();
-        if (!$user->isOwner() && ($user->stall_id != $id)) {
+        if (!$user->isOwner() && !($user->isStallManager() && $user->stall_id == $id)) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        // Only the owner can activate / deactivate a stall
+        if ($request->has('is_active') && !$user->isOwner()) {
+            return response()->json(['success' => false, 'message' => 'Only the owner can activate or deactivate a stall'], 403);
         }
 
         $stall = Stall::findOrFail($id);
@@ -67,7 +77,7 @@ class StallController extends Controller
             'name' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
             'contact_phone' => 'nullable|string|max:20',
-            'logo_url' => 'nullable|string',
+            'logo_url' => 'nullable|url|max:500',
             'is_active' => 'sometimes|boolean',
         ]);
 

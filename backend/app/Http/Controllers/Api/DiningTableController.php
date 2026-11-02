@@ -9,9 +9,14 @@ use Illuminate\Http\Request;
 
 class DiningTableController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $tables = DiningTable::where('is_active', true)->orderBy('table_number')->get();
+
+        // Only the owner may read QR secrets (needed to print table QR codes)
+        if ($request->user('sanctum')?->isOwner()) {
+            $tables->each->makeVisible('qr_token');
+        }
 
         return response()->json([
             'success' => true,
@@ -74,6 +79,11 @@ class DiningTableController extends Controller
 
     public function updateStatus(Request $request, $id)
     {
+        $user = $request->user();
+        if (!$user->isOwner() && !$user->isCashier() && !$user->isWaiter()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
         $table = DiningTable::findOrFail($id);
 
         $validated = $request->validate([

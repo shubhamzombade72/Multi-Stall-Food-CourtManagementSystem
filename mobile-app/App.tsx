@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  SafeAreaView,
-  StatusBar,
   StyleSheet,
   View,
   Text,
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { TableListScreen } from './src/screens/waiter/TableListScreen';
@@ -32,7 +32,7 @@ const AppNavigator: React.FC = () => {
       const checkReadyDishes = async () => {
         try {
           const client = await getApiClient();
-          const res = await client.get('/waiter/ready-items');
+          const res = await client.get('/waiter/ready-tickets');
           if (res.data.success) {
             setReadyCount(res.data.data.length);
           }
@@ -60,16 +60,29 @@ const AppNavigator: React.FC = () => {
     return <LoginScreen />;
   }
 
-  // Kitchen Staff Role -> Enforce stall-isolated KDS
-  if (user.role === 'kitchen_staff') {
+  // Kitchen Staff / Stall Manager -> stall-isolated KDS (the server scopes tickets to their stall)
+  if (user.role === 'kitchen_staff' || user.role === 'stall_manager') {
     return <KdsScreen />;
+  }
+
+  // Roles without a mobile interface yet (cashier, store staff) use the desktop application
+  if (user.role !== 'waiter' && user.role !== 'owner') {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.waiterName}>{user.name}</Text>
+        <Text style={[styles.statusLabel, { marginVertical: 12, textAlign: 'center', paddingHorizontal: 24 }]}>
+          The "{user.role}" role is not available in the mobile app yet. Please use the desktop application.
+        </Text>
+        <TouchableOpacity onPress={logout}>
+          <Text style={[styles.statusLabel, { color: '#38bdf8', fontWeight: '700' }]}>Log Out</Text>
+        </TouchableOpacity>
+      </View>
+    );
   }
 
   // Waiter Role -> Waiter Terminal with Offline Support
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
-
+    <View style={styles.safeArea}>
       {/* Waiter Navigation Bar */}
       <View style={styles.waiterHeader}>
         <View>
@@ -213,15 +226,21 @@ const AppNavigator: React.FC = () => {
           </Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
+// Android draws edge-to-edge (SDK 57 / RN 0.86): every screen sits inside the device's safe area
 export default function App() {
   return (
-    <AuthProvider>
-      <AppNavigator />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
+        <StatusBar style="light" />
+        <AuthProvider>
+          <AppNavigator />
+        </AuthProvider>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
