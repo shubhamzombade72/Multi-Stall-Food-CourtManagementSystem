@@ -51,7 +51,8 @@ class BillingController extends Controller
 
         $validated = $request->validate([
             'order_id' => 'required|exists:orders,id',
-            'payment_method' => 'required|in:cash,upi_qr,card,split',
+            // Only the methods the owner has enabled in Settings (all supported methods by default)
+            'payment_method' => 'required|in:' . implode(',', SettingsController::enabledPaymentMethods()),
             'amount' => 'required|numeric|min:0.01',
             'cash_tendered' => 'nullable|numeric|min:0',
             'transaction_reference' => 'nullable|string|max:100',
@@ -122,6 +123,32 @@ class BillingController extends Controller
                 ]
             ]);
         });
+    }
+
+    /** Payment history for the cashier counter / owner, newest first, filterable by date and method. */
+    public function paymentHistory(Request $request)
+    {
+        $user = $request->user();
+        if (!$user->isOwner() && !$user->isCashier()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Only Cashier or Owner can view payments.'], 403);
+        }
+
+        $request->validate([
+            'date' => 'nullable|date',
+            'payment_method' => 'nullable|in:cash,upi_qr,card,split',
+            'per_page' => 'nullable|integer|min:1|max:200',
+        ]);
+
+        $query = Payment::with(['order:id,order_number,table_id,order_channel,total_amount', 'order.table:id,table_number', 'cashier:id,name'])
+            ->orderByDesc('id');
+        if ($request->filled('date')) {
+            $query->whereDate('created_at', $request->query('date'));
+        }
+        if ($request->filled('payment_method')) {
+            $query->where('payment_method', $request->query('payment_method'));
+        }
+
+        return response()->json(['success' => true, 'data' => $query->paginate($request->integer('per_page', 50))]);
     }
 
     public function getOrderReceipt(Request $request, $orderId)

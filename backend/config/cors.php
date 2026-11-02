@@ -15,7 +15,8 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    // 'up' is the health check the desktop app polls to show server connectivity
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'up'],
 
     'allowed_methods' => ['*'],
 

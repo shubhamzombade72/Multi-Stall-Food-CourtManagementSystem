@@ -1,0 +1,131 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Bell } from 'lucide-react';
+import { apiClient } from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import { timeOnly } from '../lib/format';
+
+interface Notice {
+  id: string;
+  type: string;
+  level: 'info' | 'success' | 'warning';
+  title: string;
+  message: string;
+  at: string;
+  link: string;
+}
+
+const POLL_MS = 15000;
+const levelDot: Record<string, string> = { info: 'bg-sky-500', success: 'bg-emerald-500', warning: 'bg-amber-500' };
+
+const seenKey = (userId?: number) => `foodcourt.notifications.seen.${userId ?? 'anon'}`;
+const readSeen = (userId?: number): number => {
+  try {
+    return Number(localStorage.getItem(seenKey(userId)) || 0);
+  } catch {
+    return 0;
+  }
+};
+
+/**
+ * Operational notifications for the signed-in role (new orders, kitchen tickets, ready dishes, payments,
+ * low stock, goods received). Polled every 15 s; "read" is remembered per user on this computer.
+ */
+export const NotificationBell: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [items, setItems] = useState<Notice[]>([]);
+  const [open, setOpen] = useState(false);
+  const [seenAt, setSeenAt] = useState(() => readSeen(user?.id));
+  const [failed, setFailed] = useState(false);
+  const panel = useRef<HTMLDivElement>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await apiClient.get('/notifications');
+      setItems(res.data.data.items);
+      setFailed(false);
+    } catch {
+      setFailed(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    setSeenAt(readSeen(user?.id));
+    load();
+    const t = setInterval(load, POLL_MS);
+    return () => clearInterval(t);
+  }, [load, user?.id]);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (panel.current && !panel.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  const unread = items.filter((n) => new Date(n.at).getTime() > seenAt).length;
+
+  const markAllRead = () => {
+    const now = Date.now();
+    setSeenAt(now);
+    try {
+      localStorage.setItem(seenKey(user?.id), String(now));
+    } catch {
+      // per-device convenience only
+    }
+  };
+
+  return (
+    <div className="relative" ref={panel}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`}
+        className="relative p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+      >
+        <Bell className="w-5 h-5" />
+        {unread > 0 && (
+          <span data-testid="notification-count" className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center">
+            {unread > 99 ? '99+' : unread}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-2 w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden" role="dialog" aria-label="Notifications">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+            <span className="font-bold text-sm text-slate-900">Notifications</span>
+            <button onClick={markAllRead} className="text-xs font-bold text-brand-600">
+              Mark all read
+            </button>
+          </div>
+          <div className="max-h-[420px] overflow-y-auto divide-y divide-slate-100">
+            {failed && <p className="p-4 text-xs text-rose-600">Could not load notifications (server unreachable).</p>}
+            {!failed && items.length === 0 && <p className="p-6 text-center text-xs text-slate-400">Nothing new in the last 12 hours.</p>}
+            {items.map((n) => {
+              const isNew = new Date(n.at).getTime() > seenAt;
+              return (
+                <button
+                  key={n.id}
+                  onClick={() => {
+                    setOpen(false);
+                    navigate(n.link);
+                  }}
+                  className={`w-full text-left px-4 py-3 hover:bg-slate-50 flex items-start space-x-3 ${isNew ? 'bg-sky-50/40' : ''}`}
+                >
+                  <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${levelDot[n.level] || levelDot.info}`} />
+                  <span className="flex-1 min-w-0">
+                    <span className={`block text-sm ${isNew ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>{n.title}</span>
+                    <span className="block text-xs text-slate-500 truncate">{n.message}</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400 shrink-0">{timeOnly(n.at)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

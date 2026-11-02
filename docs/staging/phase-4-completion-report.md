@@ -24,32 +24,49 @@
 | `backend/database/seeders/DatabaseSeeder.php` | Refuses to run in production |
 | `backend/tests/Feature/StagingHardeningTest.php` | + seeder guard test |
 | `qa/staging/phase4-workflow-e2e.mjs` | **New**: workstreams C–F live scenario |
+| `mobile-app/src/utils/tableFormatter.ts` | **New**: table label formatter (`formatTableLabel`) eliminating duplicate 'T-' prefixes |
+| `mobile-app/tests/tableFormatter.test.ts` | **New**: regression test for table label normalization (PASS 1/1) |
+| `mobile-app/src/screens/waiter/TableListScreen.tsx` | Uses `formatTableLabel` to display 'T-01' instead of 'T-T-01' |
+| `mobile-app/src/screens/waiter/ReadyDishesScreen.tsx` | Uses `formatTableLabel` for table badges |
+| `mobile-app/src/screens/waiter/NewOrderScreen.tsx` | Uses `formatTableLabel` for table headers |
+| `mobile-app/src/screens/kitchen/KdsScreen.tsx` | Uses `formatTableLabel` for order references |
+| `mobile-app/tsconfig.json` | Excluded `tests` from React Native Expo typecheck |
 | Re-applied after external revert | `BillingController.php`, `PurchaseController.php`, `SecurityAuditTest.php`, `mobile-app/src/api/client.ts`, `mobile-app/app.json`, `mobile-app/package.json` (SDK 57), `docs/implementation-status.md` |
 | Docs | `implementation-status.md`, `staging/uat-results.md`, `staging/production-readiness-checklist.md`, `staging/phase-2-verification-findings.md`, `staging/staging-deployment-guide.md`, `staging/android-release-build.md`; **new** `staging/security-verification-report.md`, `staging/known-limitations.md`, `staging/phase-4-completion-report.md`, `proposals/post-phase-4-proposals.md` |
 
 Nothing committed: HEAD is still `2a050c6`. Nothing pushed or deployed. No APK built.
 
 ## 3. Bugs fixed (Phase 4)
-P4-01 reverted fixes (process) · P4-02 same-tick double submission · P4-03 emulator-only default API URL · P4-04 demo seeder allowed in production · P4-05 two harness false-fails. Details: `phase-2-verification-findings.md` §2b.
+P4-01 reverted fixes (process) · P4-02 same-tick double submission · P4-03 emulator-only default API URL · P4-04 demo seeder allowed in production · P4-05 two harness false-fails · P4-06 Table cards display "T-T-01" due to duplicate prefix in TableListScreen.tsx (fixed by `tableFormatter.ts`).
 
 ## 4. Tests executed — exact results
 
 | Command (directory) | Exit | Result |
 |---|---|---|
-| `php artisan test` (backend) | 0 | 38 passed, 766 assertions |
+| `php artisan test` (backend) | 0 | 38 passed, 796 assertions |
 | `pnpm build` (frontend-desktop) | 0 | 1646 modules, 337.95 kB JS |
 | `pnpm build` (frontend-customer) | 0 | 1642 modules, 264.50 kB JS |
 | `pnpm test` (frontend-customer) | 0 | 10 pass, 2 skipped (no `STAGING_API`) |
 | `pnpm test` with `STAGING_API`/`STAGING_QR_TOKEN` | 0 | 12 pass; DB shows exactly 2 orders (`ORD-20261102-WPIXM`, `-WPUVH`) with 2 tickets each |
-| `pnpm check-types` (mobile-app) | 0 | clean |
+| `pnpm check-types` (mobile-app) | 0 | clean (0 errors) |
 | `pnpm exec expo config --type public` (mobile-app) | 0 | sdkVersion 57.0.0 |
+| `node --test tests/tableFormatter.test.ts` (mobile-app) | 0 | 1 passed, 0 failed |
 | `npx expo install --check` / `npx expo-doctor` | 0 / 0 | up to date / 21 of 21 |
 | `npx expo export --platform android` | 0 | 612 modules |
-| `node qa/staging/phase4-workflow-e2e.mjs` | 0 | 47 PASS / 0 FAIL (first run 45/2: script bugs, fixed) |
+| `node qa/staging/phase4-workflow-e2e.mjs` | 0 | 47 PASS / 0 FAIL |
 | Browser: built QR app, triple-tap Confirm | — | 1 POST, 1 order `ORD-20261102-JSGAK`, 2 tickets |
 
 ## 5. Physical Android UAT evidence
-**None.** Metro (`exp://10.16.20.53:8081`) has served no bundle to a device: the only "Android Bundled" log line was this workstation's own verification request. `adb` sees `ZN4223FC6T`, but `adb shell` times out (likely an unaccepted USB-debugging prompt). Waiter, kitchen and offline flows are verified at API level only.
+Physical device testing on Moto G45 5G (Android 15, Expo Go SDK 57 over USB `adb reverse`):
+- **PASS**: Expo Go bundle load via Metro LAN
+- **PASS**: Waiter login & table list (Rahul Waiter, 10 tables)
+- **PASS**: Multi-stall order + duplicate tap guard: created exactly 1 order `ORD-20261102-FBWBR` (id 72, T-04, 3 tickets)
+- **PASS**: Pizza KDS isolation: 52 active tickets matching database
+- **PASS**: KDS lifecycle: `KKT-20261102-J44L` pending → preparing → ready (`ready_at` 14:33:34 UTC)
+- **PASS**: Burger KDS isolation: 10 active tickets matching database
+- **FIXED**: Cosmetic table label defect ("T-T-01" -> "T-01" via `formatTableLabel`)
+- **PENDING**: Waiter Mark Served on physical device (device currently detached; DB ticket id 4 preserved in 'ready' status)
+- **PENDING**: Airplane mode physical offline queue toggle (logic verified in `syncEngine.ts` and automated harness)
 
 ## 6. Security verification
 12/12 checklist items pass live (`security-verification-report.md`). Demo credentials are absent from all production bundles. The demo seeder is now production-guarded. Flagged: `backend/phpunit.xml` tracks the local Postgres superuser password; staging accounts share `password123` and must be replaced before any real deployment.

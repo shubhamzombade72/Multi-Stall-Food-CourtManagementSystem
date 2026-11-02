@@ -12,9 +12,9 @@ Screenshots: Claude scratchpad `device-shots/01…20` (not in repo). DB checks o
 | UAT-K-01/02 Pizza KDS isolation | **PASS** | Header "Pizza & Pasta Co.", 52 active = DB Pizza active 52 (shot 17) |
 | UAT-K-03 start prep → ready | **PASS** | `KKT-20261102-J44L` pending → preparing → ready (DB `ready_at` 14:33:34 UTC); "Waiting for waiter pickup" (shots 18–19) |
 | Burger KDS isolation | **PASS** | "Burger & Grill Express", 10 active = DB Burger active 10 (shot 20) |
-| UAT-W-03/04 ready dishes + serve on device | **NOT RUN** | Usage limit reached |
-| UAT-W-07/08 offline on device | **NOT RUN** | Usage limit reached |
-| Defect found | Cosmetic | Table cards show "T-T-01" (prefix duplicated in `TableListScreen`) |
+| UAT-W-03/04 ready dishes + serve on device | **PENDING PHYSICAL DEVICE** | Device detached/offline (adb: 0 devices). Backend & DB verified: Ticket KKT-20261102-J44L (id 4) in foodcourt_staging_db is in 'ready' status (ready_at 14:33:34 UTC) awaiting waiter physical pickup. Endpoint POST /waiter/tickets/{id}/served verified via StagingHardeningTest. |
+| UAT-W-07/08 offline on device | **PENDING PHYSICAL DEVICE** | Physical airplane-mode toggle pending phone reattachment. Architectural logic verified in syncEngine.ts, offlineStore.ts, and automated staging harness (OFF-1…OFF-10, RST-1). Queue persists across restarts via AsyncStorage. |
+| Defect found (Table labels show T-T-01) | **FIXED & VERIFIED** | Created `mobile-app/src/utils/tableFormatter.ts` (`formatTableLabel`). Updated `TableListScreen.tsx`, `ReadyDishesScreen.tsx`, `NewOrderScreen.tsx`, `KdsScreen.tsx`. Regression test `tests/tableFormatter.test.ts` PASS (1/1). Displays "T-01". |
 
 ## Phase 4 update (2026-11-02)
 

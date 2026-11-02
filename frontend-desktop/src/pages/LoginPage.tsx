@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
-import { Store, Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
+import logoImg from '../assets/logo.jpg';
 
 // Seeded demo accounts are offered only in development or an explicitly enabled demo build,
 // never in a staging / pilot / production build.
@@ -46,11 +47,11 @@ export const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 border border-slate-100">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-brand-500 rounded-2xl flex items-center justify-center text-white mx-auto shadow-lg shadow-brand-500/30 mb-3">
-            <Store className="w-8 h-8" />
+          <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-amber-300 mx-auto shadow-lg shadow-amber-500/20 mb-3 bg-slate-900 flex items-center justify-center">
+            <img src={logoImg} alt="मंगलमूर्ती Logo" className="w-full h-full object-cover" />
           </div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Urban Food Court</h2>
-          <p className="text-sm text-slate-500 mt-1">Multi-Stall Management & POS Platform</p>
+          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">मंगलमूर्ती</h2>
+          <p className="text-sm text-slate-500 mt-1">Multi-Stall Food Court Management & POS</p>
         </div>
 
         {error && (
@@ -137,9 +138,14 @@ export const LoginPage: React.FC = () => {
         </div>
         )}
 
-        <div className="mt-6 flex items-center justify-center space-x-1.5 text-xs text-slate-400">
-          <ShieldCheck className="w-4 h-4 text-emerald-500" />
-          <span>Role-Based PostgreSQL Access Control</span>
+        <div className="mt-6 flex items-center justify-between text-xs text-slate-400">
+          <span className="flex items-center space-x-1.5">
+            <ShieldCheck className="w-4 h-4 text-emerald-500" />
+            <span>Role-based access</span>
+          </span>
+          <Link to="/connection" className="font-semibold text-brand-600 hover:underline">
+            Server settings
+          </Link>
         </div>
       </div>
     </div>

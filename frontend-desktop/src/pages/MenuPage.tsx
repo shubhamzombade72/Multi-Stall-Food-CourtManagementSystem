@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { apiClient } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { apiError } from '../lib/format';
+import { Field, inputClass, Modal } from '../components/ui';
 import {
   CheckCircle2,
   XCircle,
@@ -43,11 +45,12 @@ export const MenuPage: React.FC = () => {
       setItems(itemsRes.data.data);
       setCategories(catRes.data.data);
 
+      // Defaults only: a reload (e.g. after adding a category) must not overwrite what the user selected
       if (stallsRes.data.data.length > 0) {
-        setStallId(user?.stall_id || stallsRes.data.data[0].id);
+        setStallId((cur) => cur || user?.stall_id || stallsRes.data.data[0].id);
       }
       if (catRes.data.data.length > 0) {
-        setCategoryId(catRes.data.data[0].id);
+        setCategoryId((cur) => cur || catRes.data.data[0].id);
       }
     } catch (err) {
       console.error('Failed to load menu data', err);
@@ -58,10 +61,46 @@ export const MenuPage: React.FC = () => {
     fetchData();
   }, []);
 
+  // window.prompt() is not available in Electron, so categories are added through a modal
+  const [catForm, setCatForm] = useState<{ stall_id: number | ''; name: string } | null>(null);
+  const [catError, setCatError] = useState<string | null>(null);
+
+  const addCategory = () => {
+    setCatError(null);
+    setCatForm({ stall_id: user?.stall_id || (selectedStall !== 'all' ? Number(selectedStall) : stalls[0]?.id ?? ''), name: '' });
+  };
+
+  const submitCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!catForm) return;
+    try {
+      await apiClient.post('/menu-categories', { stall_id: catForm.stall_id, name: catForm.name.trim() });
+      setCatForm(null);
+      fetchData();
+    } catch (err) {
+      setCatError(apiError(err, 'Failed to add category'));
+    }
+  };
+
+  const uploadImage = async (file: File | undefined) => {
+    if (!file || !editingItem) return;
+    const form = new FormData();
+    form.append('image', file);
+    try {
+      const res = await apiClient.post(`/menu/${editingItem.id}/image`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setEditingItem(res.data.data);
+      fetchData();
+    } catch (err: any) {
+      const errors = err.response?.data?.errors;
+      alert(errors ? Object.values(errors).flat().join(' ') : err.response?.data?.message || 'Image upload failed');
+    }
+  };
+
   const openCreateModal = () => {
     setEditingItem(null);
-    setStallId(user?.stall_id || (stalls[0]?.id ?? ''));
-    setCategoryId(categories[0]?.id ?? '');
+    const initialStall = user?.stall_id || (stalls[0]?.id ?? '');
+    setStallId(initialStall);
+    setCategoryId(categories.find((c) => c.stall_id === initialStall)?.id ?? '');
     setName('');
     setDescription('');
     setPrice('');
@@ -155,13 +194,21 @@ export const MenuPage: React.FC = () => {
         </div>
 
         {canManage && (
-          <button
-            onClick={openCreateModal}
-            className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add New Dish</span>
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={addCategory}
+              className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl transition"
+            >
+              + Category
+            </button>
+            <button
+              onClick={openCreateModal}
+              className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add New Dish</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -285,8 +332,13 @@ export const MenuPage: React.FC = () => {
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Stall</label>
                     <select
+                      aria-label="Dish stall"
                       value={stallId}
-                      onChange={(e) => setStallId(Number(e.target.value))}
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        setStallId(next);
+                        setCategoryId(categories.find((c) => c.stall_id === next)?.id ?? '');
+                      }}
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium"
                       required
                     >
@@ -302,19 +354,37 @@ export const MenuPage: React.FC = () => {
                 <div className={!isOwner ? 'col-span-2' : ''}>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Category</label>
                   <select
+                    aria-label="Dish category"
                     value={categoryId}
                     onChange={(e) => setCategoryId(Number(e.target.value))}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium"
                     required
                   >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
+                    <option value="">Select category</option>
+                    {categories
+                      .filter((c) => c.stall_id === stallId)
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
                   </select>
                 </div>
               </div>
+
+              {editingItem && (
+                <div className="flex items-center space-x-3">
+                  {editingItem.image_url ? (
+                    <img src={editingItem.image_url} alt="" className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-lg bg-slate-100 border border-slate-200" />
+                  )}
+                  <label className="text-xs font-bold text-brand-600 cursor-pointer">
+                    Upload photo (JPG/PNG/WebP, max 2 MB)
+                    <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => uploadImage(e.target.files?.[0])} />
+                  </label>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Dish Name</label>
@@ -407,6 +477,27 @@ export const MenuPage: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {catForm && (
+        <Modal title="New menu category" onClose={() => setCatForm(null)} onSubmit={submitCategory} submitLabel="Add category" error={catError}>
+          {isOwner ? (
+            <Field label="Stall">
+              <select aria-label="Category stall" required value={catForm.stall_id} onChange={(e) => setCatForm((f) => (f ? { ...f, stall_id: Number(e.target.value) } : f))} className={inputClass}>
+                {stalls.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : (
+            <p className="text-sm text-slate-600">Stall: {stalls.find((s) => s.id === catForm.stall_id)?.name}</p>
+          )}
+          <Field label="Category name">
+            <input required autoFocus maxLength={100} aria-label="Category name" value={catForm.name} onChange={(e) => setCatForm((f) => (f ? { ...f, name: e.target.value } : f))} className={inputClass} />
+          </Field>
+        </Modal>
       )}
     </div>
   );

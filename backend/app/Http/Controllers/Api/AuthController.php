@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\AuditService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -20,12 +21,18 @@ class AuthController extends Controller
         $user = User::with('stall')->where('email', $validated['email'])->first();
 
         if (!$user || !Hash::check($validated['password'], $user->password)) {
+            // Login history: failed attempts are kept (the password never is)
+            AuditService::log('login_failed', 'User', $user?->id ?? '-', $user?->stall_id, null, [
+                'email' => mb_substr($validated['email'], 0, 100),
+                'reason' => $user ? 'wrong_password' : 'unknown_email',
+            ], $user?->id);
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials do not match our records.'],
             ]);
         }
 
         if (!$user->is_active) {
+            AuditService::log('login_blocked_inactive', 'User', $user->id, $user->stall_id, null, null, $user->id);
             return response()->json([
                 'success' => false,
                 'message' => 'Your account has been deactivated. Please contact the administrator.',
@@ -36,6 +43,9 @@ class AuthController extends Controller
         $user->tokens()->delete();
 
         $token = $user->createToken('auth-token', [$user->role])->plainTextToken;
+        AuditService::log('login_success', 'User', $user->id, $user->stall_id, null, [
+            'user_agent' => mb_substr((string) $request->userAgent(), 0, 200),
+        ], $user->id);
 
         return response()->json([
             'success' => true,
@@ -85,6 +95,7 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
+        AuditService::log('logout', 'User', $request->user()->id, $request->user()->stall_id, null, null, $request->user()->id);
 
         return response()->json([
             'success' => true,

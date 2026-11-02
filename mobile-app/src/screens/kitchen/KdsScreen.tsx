@@ -12,6 +12,7 @@ import {
 import { ApiKitchenTicket, StallKitchenTicket, normalizeTicket } from '../../types';
 import { getApiClient } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { formatTableLabel } from '../../utils/tableFormatter';
 
 export const KdsScreen: React.FC = () => {
   const { user, logout } = useAuth();
@@ -162,7 +163,7 @@ export const KdsScreen: React.FC = () => {
                     <Text style={styles.orderRef}>
                       Order #{item.order?.order_number || item.order_id} •{' '}
                       {item.order?.table
-                        ? `Table ${item.order.table.table_number}`
+                        ? `Table ${formatTableLabel(item.order.table.table_number)}`
                         : 'Takeaway'}
                     </Text>
                   </View>

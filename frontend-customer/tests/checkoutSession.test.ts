@@ -164,7 +164,9 @@ test('the QR table token is sent unchanged with every attempt', async () => {
 
 // ---------------------------------------------------------------- live staging backend
 const API = process.env.STAGING_API;
-const live = API ? test : test.skip;
+// Live tests need a running staging backend; without one they are reported as skipped with the reason
+const live = (name: string, fn: () => Promise<void>) =>
+  test(name, { skip: API ? false : 'needs STAGING_API and STAGING_QR_TOKEN (live staging backend)' }, fn);
 
 const livePost =
   (opts: { loseResponse?: boolean } = {}): PostOrderFn =>

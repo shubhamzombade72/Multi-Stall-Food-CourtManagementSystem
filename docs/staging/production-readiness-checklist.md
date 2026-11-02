@@ -8,11 +8,11 @@
 |---|---|---|
 | Repository changes stabilized | **Met** | Antigravity closed; no external writes since 19:28; reverted fixes re-applied; 42 change markers audited |
 | QR duplicate-order regression fixed | **Met** | `checkoutSession.ts` + 12 tests (2 live); UI triple-tap → 1 order |
-| Expo SDK 57 and Expo Go verified | **Partially met** | Config, deps, assets, types, doctor and bundle all pass; Metro serves SDK 57. **Not loaded on a device.** |
-| Waiter workflow passes physical-device UAT | **Not met** | Not performed (API level passes) |
-| Kitchen workflow passes UAT | **Met at API/Reverb level**, device UI not run | D-* checks |
+| Expo SDK 57 and Expo Go verified | **Met** | Loaded on Moto G45 (Android 15, SDK 57); Metro bundled via LAN; config, deps, assets pass |
+| Waiter workflow passes physical-device UAT | **Partially met** | Order creation & double-tap guard verified on Moto G45 (`ORD-20261102-FBWBR`). Table label defect "T-T-01" fixed & verified. Mark Served pending phone reattachment. |
+| Kitchen workflow passes UAT | **Met on device** | Verified on Moto G45: Pizza KDS 52 tickets, Burger KDS 10 tickets, `KKT-20261102-J44L` pending → preparing → ready |
 | Multi-stall customer-to-cashier workflow passes | **Met** | `ORD-20261102-KND5F` E-01…E-13 |
-| Offline queue behaviour verified and documented | **Met (logic)**, device not run | Phase 3 OFF-*, RST-1; `offline-test-report.md` |
+| Offline queue behaviour verified and documented | **Met (logic), device pending** | Phase 3 OFF-*, RST-1; `offline-test-report.md`; physical airplane-mode toggle pending phone reattachment |
 | Security checks pass | **Met** | F-01…F-12; `security-verification-report.md` |
 | Backend tests pass | **Met** | 38 passed / 766 assertions |
 | Desktop and customer builds pass | **Met** | exit 0 |

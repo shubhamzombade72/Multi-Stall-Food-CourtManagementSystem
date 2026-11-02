@@ -10,6 +10,9 @@ class Order extends Model
 {
     use HasFactory;
 
+    /** Set by OrderController::cancelOrder so the audit entry records why (not a database column). */
+    public ?string $cancellationReason = null;
+
     protected $fillable = [
         'uuid',
         'order_number',

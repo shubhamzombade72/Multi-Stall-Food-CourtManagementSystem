@@ -23,6 +23,8 @@ build/
 .expo/
 *.apk
 *.aab
+# electron-builder output (installer, unpacked app)
+frontend-desktop/release/
 
 # IDE & OS
 .vscode/

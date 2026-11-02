@@ -11,6 +11,7 @@ import {
 import { DiningTable } from '../../types';
 import { getApiClient } from '../../api/client';
 import { offlineStore } from '../../storage/offlineStore';
+import { formatTableLabel } from '../../utils/tableFormatter';
 
 interface Props {
   onSelectTable: (table: DiningTable) => void;
@@ -59,7 +60,7 @@ export const TableListScreen: React.FC<Props> = ({
         onPress={() => onSelectTable(item)}
       >
         <View style={styles.tableHeader}>
-          <Text style={styles.tableNumber}>T-{item.table_number}</Text>
+          <Text style={styles.tableNumber}>{formatTableLabel(item.table_number)}</Text>
           <View
             style={[
               styles.statusDot,

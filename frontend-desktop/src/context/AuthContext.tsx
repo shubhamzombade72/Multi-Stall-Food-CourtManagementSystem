@@ -64,7 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem('fc_auth_user');
       setToken(null);
       setUser(null);
-      window.location.href = '/login';
+      window.location.hash = '#/login';
     }
   };
 

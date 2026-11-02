@@ -30,14 +30,24 @@ class KitchenController extends Controller
             $query->where('stall_id', $request->query('stall_id'));
         }
 
+        $request->validate([
+            'status' => 'nullable|string|max:30',
+            'date' => 'nullable|date',
+        ]);
+
         // Active tickets for KDS screen: pending, accepted, preparing, ready
         if ($request->has('status')) {
             $query->where('status', $request->query('status'));
-        } else {
+        } elseif (!$request->filled('date')) {
             $query->whereIn('status', ['pending', 'accepted', 'preparing', 'ready']);
         }
 
-        $tickets = $query->orderBy('created_at')->get();
+        // Ticket history: every ticket created on a given day (newest first, capped)
+        if ($request->filled('date')) {
+            $tickets = $query->whereDate('created_at', $request->query('date'))->orderByDesc('created_at')->limit(300)->get();
+        } else {
+            $tickets = $query->orderBy('created_at')->get();
+        }
 
         return response()->json([
             'success' => true,

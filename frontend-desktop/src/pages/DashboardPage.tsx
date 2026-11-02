@@ -117,6 +117,99 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Operations: every figure below is read from the server; nothing is estimated */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Link to="/pos" className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-brand-300">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Pending Bills</span>
+          <div className="text-2xl font-bold text-rose-600 mt-1">{data?.pending_bills?.count ?? 0}</div>
+          <p className="text-xs text-slate-500 mt-1">₹{Number(data?.pending_bills?.amount || 0).toFixed(2)} awaiting payment</p>
+        </Link>
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Completed Orders Today</span>
+          <div className="text-2xl font-bold text-emerald-600 mt-1">{data?.completed_orders_count ?? 0}</div>
+          <p className="text-xs text-slate-500 mt-1">Purchases today: {data?.purchases_today?.count ?? 0} (₹{Number(data?.purchases_today?.total || 0).toFixed(2)})</p>
+        </div>
+        <Link to="/settlements" className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-brand-300">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Daily Closing</span>
+          <div className={`text-lg font-bold mt-1 ${data?.closing_today ? 'text-emerald-600' : 'text-amber-600'}`}>
+            {data?.closing_today ? 'Closed' : 'Open'}
+          </div>
+          <p className="text-xs text-slate-500 mt-1">{data?.closing_today ? `Closed at ${new Date(data.closing_today.created_at).toLocaleTimeString()}` : 'Not yet closed today'}</p>
+        </Link>
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Payments Today</span>
+          {(data?.payment_methods_today || []).length === 0 ? (
+            <p className="text-sm text-slate-400 mt-2">No payments yet</p>
+          ) : (
+            <ul className="text-xs mt-2 space-y-1">
+              {data.payment_methods_today.map((p: any) => (
+                <li key={p.payment_method} className="flex justify-between">
+                  <span className="uppercase font-semibold">{p.payment_method}</span>
+                  <span>
+                    {p.count} · ₹{Number(p.total).toFixed(2)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-slate-900">Low-Stock Alerts</h3>
+            <Link to="/inventory" className="text-xs font-semibold text-brand-600">Inventory</Link>
+          </div>
+          {(data?.low_stock_items || []).length === 0 ? (
+            <p className="text-sm text-slate-400">All items above their alert level.</p>
+          ) : (
+            <ul className="text-sm space-y-1.5 max-h-56 overflow-y-auto">
+              {data.low_stock_items.map((i: any) => (
+                <li key={i.id} className="flex justify-between">
+                  <span>
+                    {i.name} <span className="text-xs text-slate-400">({i.stall?.name})</span>
+                  </span>
+                  <span className="font-bold text-rose-600">
+                    {Number(i.current_stock)} / {Number(i.minimum_alert_stock)} {i.unit}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-slate-900">Staff</h3>
+            <Link to="/staff" className="text-xs font-semibold text-brand-600">Manage</Link>
+          </div>
+          <ul className="text-sm space-y-1">
+            {(data?.staff_by_role || []).map((r: any) => (
+              <li key={r.role} className="flex justify-between">
+                <span className="capitalize">{String(r.role).replace('_', ' ')}</span>
+                <span className="text-slate-600">
+                  {r.active} active / {r.total}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-slate-900">Recent Activity</h3>
+            <Link to="/reports" className="text-xs font-semibold text-brand-600">Audit log</Link>
+          </div>
+          <ul className="text-xs space-y-1.5 max-h-56 overflow-y-auto">
+            {(data?.recent_activity || []).map((a: any) => (
+              <li key={a.id}>
+                <span className="text-slate-400">{new Date(a.created_at).toLocaleTimeString()}</span>{' '}
+                <span className="font-semibold">{a.user?.name || 'System'}</span> {String(a.action).replace(/_/g, ' ')}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
       {/* Stall Sales Breakdown */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <div className="flex items-center justify-between mb-6">

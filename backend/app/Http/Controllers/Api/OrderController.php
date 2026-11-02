@@ -22,26 +22,49 @@ class OrderController extends Controller
             return $denied;
         }
 
+        $request->validate([
+            'search' => 'nullable|string|max:100',
+            'status' => 'nullable|string|max:30',
+            'payment_status' => 'nullable|in:unpaid,paid,refunded',
+            'order_channel' => 'nullable|in:qr_customer,waiter_app,cashier_pos',
+            'order_type' => 'nullable|in:dine_in,takeaway',
+            'table_id' => 'nullable|integer',
+            'stall_id' => 'nullable|integer',
+            'date' => 'nullable|date',
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
+            'per_page' => 'nullable|integer|min:1|max:200',
+        ]);
+
         $query = Order::with(['table', 'items.stall', 'kitchenTickets.stall', 'payments', 'waiter:id,name', 'cashier:id,name']);
 
-        if ($request->has('status')) {
-            $query->where('status', $request->query('status'));
+        foreach (['status', 'payment_status', 'order_channel', 'order_type', 'table_id'] as $field) {
+            if ($request->filled($field)) {
+                $query->where($field, $request->query($field));
+            }
         }
 
-        if ($request->has('payment_status')) {
-            $query->where('payment_status', $request->query('payment_status'));
+        if ($request->filled('search')) {
+            $term = '%' . addcslashes($request->query('search'), '%_\\') . '%';
+            $query->where(function ($q) use ($term) {
+                $q->where('order_number', 'ilike', $term)
+                    ->orWhere('customer_name', 'ilike', $term)
+                    ->orWhere('customer_phone', 'ilike', $term);
+            });
         }
 
-        if ($request->has('order_channel')) {
-            $query->where('order_channel', $request->query('order_channel'));
+        if ($request->filled('stall_id')) {
+            $query->whereHas('items', fn ($q) => $q->where('stall_id', $request->query('stall_id')));
         }
 
-        if ($request->has('table_id')) {
-            $query->where('table_id', $request->query('table_id'));
-        }
-
-        if ($request->has('date')) {
+        if ($request->filled('date')) {
             $query->whereDate('created_at', $request->query('date'));
+        }
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->query('date_from'));
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->query('date_to'));
         }
 
         $orders = $query->orderByDesc('id')->paginate($request->integer('per_page', 20));
@@ -205,7 +228,8 @@ class OrderController extends Controller
                 'order_channel' => $orderChannel,
                 'idempotency_key' => $validated['idempotency_key'] ?? null,
                 'customer_name' => $validated['customer_name'] ?? null,
-                'customer_phone' => $validated['customer_phone'] ?? null,
+                // Same format as the customer directory so order history matches by phone
+                'customer_phone' => CustomerController::normalizePhone($validated['customer_phone'] ?? null),
                 'waiter_id' => $waiterId,
                 'cashier_id' => $cashierId,
                 'status' => 'confirmed',
@@ -355,41 +379,57 @@ class OrderController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized. Only Cashier or Owner can cancel orders.'], 403);
         }
 
-        $order = Order::with('kitchenTickets')->findOrFail($id);
+        $validated = $request->validate([
+            'reason' => 'required|string|min:3|max:255',
+        ]);
 
-        if ($order->payment_status === 'paid') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot cancel an order that has already been paid in full. Contact management for refund.',
-            ], 422);
-        }
+        // The order row is locked so a payment and a cancellation can never both succeed
+        $error = DB::transaction(function () use ($id, $user, $validated) {
+            $order = Order::where('id', $id)->lockForUpdate()->firstOrFail();
 
-        // Check if any ticket is already preparing
-        $hasActivePreparation = $order->kitchenTickets->contains(function ($ticket) {
-            return in_array($ticket->status, ['preparing', 'ready', 'picked_up']);
-        });
+            if ($order->status === 'cancelled') {
+                return 'This order is already cancelled.';
+            }
+            if ($order->payment_status === 'paid') {
+                return 'Cannot cancel an order that has already been paid in full. Contact management for refund.';
+            }
 
-        if ($hasActivePreparation) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot cancel order. Food preparation has already started at one or more stalls.',
-            ], 422);
-        }
+            // Check if any ticket is already preparing
+            $hasActivePreparation = $order->kitchenTickets()->whereIn('status', ['preparing', 'ready', 'picked_up'])->exists();
+            if ($hasActivePreparation) {
+                return 'Cannot cancel order. Food preparation has already started at one or more stalls.';
+            }
 
-        DB::transaction(function () use ($order) {
-            $order->update(['status' => 'cancelled']);
+            $order->cancellationReason = $validated['reason'];
+            $order->update([
+                'status' => 'cancelled',
+                'notes' => trim(($order->notes ? $order->notes . "\n" : '') . "Cancelled by {$user->name}: {$validated['reason']}"),
+            ]);
             $order->kitchenTickets()->update(['status' => 'cancelled']);
             $order->items()->update(['status' => 'cancelled']);
 
+            // Release the table only if no other open order is still using it
             if ($order->table_id) {
-                DiningTable::where('id', $order->table_id)->update(['status' => 'available']);
+                $tableBusy = Order::where('table_id', $order->table_id)
+                    ->where('id', '!=', $order->id)
+                    ->whereNotIn('status', ['completed', 'cancelled'])
+                    ->exists();
+                if (!$tableBusy) {
+                    DiningTable::where('id', $order->table_id)->update(['status' => 'available']);
+                }
             }
+
+            return null;
         });
+
+        if ($error) {
+            return response()->json(['success' => false, 'message' => $error], 422);
+        }
 
         return response()->json([
             'success' => true,
             'message' => 'Order cancelled successfully',
-            'data' => $order->fresh(),
+            'data' => Order::with('kitchenTickets')->find($id),
         ]);
     }
 }

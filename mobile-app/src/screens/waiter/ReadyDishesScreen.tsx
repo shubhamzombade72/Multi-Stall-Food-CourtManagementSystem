@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { getApiClient } from '../../api/client';
+import { formatTableLabel } from '../../utils/tableFormatter';
 
 // One card per ready stall ticket: serving is confirmed per ticket (POST /waiter/tickets/{id}/served)
 interface ReadyItem {
@@ -111,7 +112,7 @@ export const ReadyDishesScreen: React.FC<Props> = ({ onBack }) => {
               <View style={styles.cardHeader}>
                 <View style={styles.tableBadge}>
                   <Text style={styles.tableBadgeText}>
-                    {item.table_number ? `TABLE ${item.table_number}` : 'TAKEAWAY'}
+                    {item.table_number ? `TABLE ${formatTableLabel(item.table_number)}` : 'TAKEAWAY'}
                   </Text>
                 </View>
                 <Text style={styles.orderNumber}>#{item.order_number}</Text>

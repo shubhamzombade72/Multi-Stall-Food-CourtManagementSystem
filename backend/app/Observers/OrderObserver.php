@@ -37,7 +37,7 @@ class OrderObserver
                 entityId: $order->id,
                 stallId: null,
                 oldValues: ['status' => $order->getOriginal('status')],
-                newValues: ['status' => $order->status]
+                newValues: array_filter(['status' => $order->status, 'reason' => $order->cancellationReason])
             );
         }
 

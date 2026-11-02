@@ -1,228 +1,328 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ClipboardList, Eye, Search } from 'lucide-react';
 import { apiClient } from '../api/client';
-import { Search, Eye } from 'lucide-react';
+import { PrintReceiptButton } from '../components/Receipt';
+import { apiError, dateTime, humanize, isoDate, money } from '../lib/format';
+import { Badge, buttonClass, Card, EmptyState, ErrorBanner, Field, inputClass, Loading, Modal, PageHeader, Pagination, statusTone } from '../components/ui';
 
+const STATUSES = ['confirmed', 'partially_ready', 'ready', 'served', 'completed', 'cancelled'];
+const CHANNELS = [
+  ['cashier_pos', 'Cashier POS'],
+  ['waiter_app', 'Waiter'],
+  ['qr_customer', 'Customer QR'],
+];
+
+interface Filters {
+  search: string;
+  status: string;
+  payment_status: string;
+  order_channel: string;
+  stall_id: string;
+  date_from: string;
+  date_to: string;
+}
+
+/** Order management: server-side search, filters and pagination; detail with tickets, payments and cancellation. */
 export const OrdersPage: React.FC = () => {
   const navigate = useNavigate();
-  const [orders, setOrders] = useState<any[]>([]);
-  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState<Filters>({ search: '', status: '', payment_status: '', order_channel: '', stall_id: '', date_from: isoDate(), date_to: isoDate() });
+  const [applied, setApplied] = useState<Filters>(filters);
+  const [orders, setOrders] = useState<any[] | null>(null);
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState({ last_page: 1, total: 0 });
+  const [stalls, setStalls] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<any | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [showCancel, setShowCancel] = useState(false);
 
-  const fetchOrders = async () => {
+  useEffect(() => {
+    apiClient.get('/stalls').then((r) => setStalls(r.data.data)).catch(() => undefined);
+  }, []);
+
+  const load = useCallback(async () => {
     try {
-      const res = await apiClient.get('/orders');
-      if (res.data.success) {
-        setOrders(res.data.data.data);
-      }
+      const params = Object.fromEntries(Object.entries(applied).filter(([, v]) => v !== ''));
+      const res = await apiClient.get('/orders', { params: { ...params, page, per_page: 25 } });
+      setOrders(res.data.data.data);
+      setMeta({ last_page: res.data.data.last_page, total: res.data.data.total });
+      setError(null);
     } catch (err) {
-      console.error('Failed to load orders', err);
+      setError(apiError(err, 'Could not load orders'));
+    }
+  }, [applied, page]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const openDetail = async (id: number) => {
+    try {
+      const res = await apiClient.get(`/orders/${id}`);
+      setDetail(res.data.data);
+      setShowCancel(false);
+      setCancelReason('');
+      setCancelError(null);
+    } catch (err) {
+      setError(apiError(err));
     }
   };
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
+  const cancelOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!detail) return;
+    setCancelling(true);
+    setCancelError(null);
+    try {
+      await apiClient.post(`/orders/${detail.id}/cancel`, { reason: cancelReason.trim() });
+      await Promise.all([openDetail(detail.id), load()]);
+    } catch (err) {
+      setCancelError(apiError(err));
+    } finally {
+      setCancelling(false);
+    }
+  };
 
-  const filteredOrders = orders.filter((ord) => {
-    const matchesStatus = filterStatus === 'all' || ord.status === filterStatus;
-    const matchesSearch =
-      ord.order_number.toLowerCase().includes(search.toLowerCase()) ||
-      (ord.customer_name && ord.customer_name.toLowerCase().includes(search.toLowerCase()));
-    return matchesStatus && matchesSearch;
-  });
+  const set = (k: keyof Filters) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setFilters((f) => ({ ...f, [k]: e.target.value }));
+  const canCancel = detail && detail.status !== 'cancelled' && detail.payment_status !== 'paid' && !detail.kitchen_tickets?.some((t: any) => ['preparing', 'ready', 'picked_up'].includes(t.status));
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Order Central Monitoring</h2>
-          <p className="text-sm text-slate-500 mt-1">Multi-stall parent orders and itemized ticket lifecycles</p>
-        </div>
-      </div>
+      <PageHeader title="Orders & Receipts" icon={ClipboardList} subtitle="Parent orders from every channel with their stall kitchen tickets" />
 
-      <div className="flex items-center space-x-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-          <input
-            type="text"
-            placeholder="Search by order # or customer name..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-          />
-        </div>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="py-2 px-3 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-brand-500"
+      <Card className="p-4">
+        <form
+          className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 items-end"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setPage(1);
+            setApplied(filters);
+          }}
         >
-          <option value="all">All Statuses</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="partially_ready">Partially Ready</option>
-          <option value="ready">Ready</option>
-          <option value="served">Served</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-      </div>
+          <div className="col-span-2">
+            <Field label="Search">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input aria-label="Search orders" placeholder="Order #, customer, phone" value={filters.search} onChange={set('search')} className={`${inputClass} pl-9`} />
+              </div>
+            </Field>
+          </div>
+          <Field label="Status">
+            <select aria-label="Order status" value={filters.status} onChange={set('status')} className={inputClass}>
+              <option value="">All</option>
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {humanize(s)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Payment">
+            <select aria-label="Payment status" value={filters.payment_status} onChange={set('payment_status')} className={inputClass}>
+              <option value="">All</option>
+              <option value="unpaid">Unpaid</option>
+              <option value="paid">Paid</option>
+            </select>
+          </Field>
+          <Field label="Channel">
+            <select aria-label="Order channel" value={filters.order_channel} onChange={set('order_channel')} className={inputClass}>
+              <option value="">All</option>
+              {CHANNELS.map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Stall">
+            <select aria-label="Stall" value={filters.stall_id} onChange={set('stall_id')} className={inputClass}>
+              <option value="">All</option>
+              {stalls.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="From">
+            <input type="date" aria-label="From date" value={filters.date_from} onChange={set('date_from')} className={inputClass} />
+          </Field>
+          <Field label="To">
+            <input type="date" aria-label="To date" value={filters.date_to} onChange={set('date_to')} className={inputClass} />
+          </Field>
+          <div className="col-span-2 md:col-span-4 xl:col-span-8 flex gap-2">
+            <button type="submit" className={buttonClass.primary}>
+              Apply filters
+            </button>
+            <button
+              type="button"
+              className={buttonClass.secondary}
+              onClick={() => {
+                const cleared = { search: '', status: '', payment_status: '', order_channel: '', stall_id: '', date_from: '', date_to: '' };
+                setFilters(cleared);
+                setApplied(cleared);
+                setPage(1);
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        </form>
+      </Card>
+      <ErrorBanner message={error} onRetry={load} />
 
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
-            <tr>
-              <th className="py-3 px-6">Order Number</th>
-              <th className="py-3 px-6">Time</th>
-              <th className="py-3 px-6">Table / Type</th>
-              <th className="py-3 px-6">Channel</th>
-              <th className="py-3 px-6">Stall Tickets</th>
-              <th className="py-3 px-6">Total Amount</th>
-              <th className="py-3 px-6">Status</th>
-              <th className="py-3 px-6 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {filteredOrders.length > 0 ? (
-              filteredOrders.map((ord) => (
-                <tr key={ord.id} className="hover:bg-slate-50 transition">
-                  <td className="py-3.5 px-6 font-mono font-semibold text-slate-900">{ord.order_number}</td>
-                  <td className="py-3.5 px-6 text-xs text-slate-500">{new Date(ord.created_at).toLocaleTimeString()}</td>
-                  <td className="py-3.5 px-6">
-                    {ord.table ? <span className="font-bold text-slate-800">{ord.table.table_number}</span> : 'Takeaway'}
+      <Card className="overflow-hidden">
+        {orders === null ? (
+          <Loading />
+        ) : orders.length === 0 ? (
+          <EmptyState title="No orders match these filters" />
+        ) : (
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+              <tr>
+                <th className="py-3 px-4">Order</th>
+                <th className="py-3 px-4">Time</th>
+                <th className="py-3 px-4">Table / Type</th>
+                <th className="py-3 px-4">Customer</th>
+                <th className="py-3 px-4">Channel</th>
+                <th className="py-3 px-4">Stall tickets</th>
+                <th className="py-3 px-4 text-right">Total</th>
+                <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {orders.map((o) => (
+                <tr key={o.id} className="hover:bg-slate-50">
+                  <td className="py-3 px-4 font-mono font-semibold text-slate-900">{o.order_number}</td>
+                  <td className="py-3 px-4 text-xs text-slate-500">{dateTime(o.created_at)}</td>
+                  <td className="py-3 px-4">{o.table ? <span className="font-bold">{o.table.table_number}</span> : 'Takeaway'}</td>
+                  <td className="py-3 px-4 text-xs">{o.customer_name || '—'}</td>
+                  <td className="py-3 px-4">
+                    <Badge>{CHANNELS.find(([v]) => v === o.order_channel)?.[1] || o.order_channel}</Badge>
                   </td>
-                  <td className="py-3.5 px-6">
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">
-                      {ord.order_channel}
-                    </span>
-                  </td>
-                  <td className="py-3.5 px-6">
+                  <td className="py-3 px-4">
                     <div className="flex flex-wrap gap-1">
-                      {ord.kitchen_tickets?.map((t: any) => (
-                        <span key={t.id} className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium border border-slate-200">
-                          {t.stall?.code || 'STALL'}: {t.status}
+                      {o.kitchen_tickets?.map((t: any) => (
+                        <span key={t.id} className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
+                          {t.stall?.code}: {humanize(t.status)}
                         </span>
                       ))}
                     </div>
                   </td>
-                  <td className="py-3.5 px-6 font-bold text-slate-900">₹{ord.total_amount}</td>
-                  <td className="py-3.5 px-6">
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
-                      ord.status === 'ready' || ord.status === 'completed'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-amber-100 text-amber-700'
-                    }`}>
-                      {ord.status}
-                    </span>
+                  <td className="py-3 px-4 font-bold text-right">{money(o.total_amount)}</td>
+                  <td className="py-3 px-4 space-y-1">
+                    <Badge tone={statusTone(o.status)}>{humanize(o.status)}</Badge>{' '}
+                    <Badge tone={statusTone(o.payment_status)}>{humanize(o.payment_status)}</Badge>
                   </td>
-                  <td className="py-3.5 px-6 text-right">
-                    <button
-                      onClick={() => setSelectedOrder(ord)}
-                      className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 transition"
-                      title="Inspect Order Details"
-                    >
+                  <td className="py-3 px-4 text-right">
+                    <button onClick={() => openDetail(o.id)} aria-label={`Open ${o.order_number}`} className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600">
                       <Eye className="w-4 h-4" />
                     </button>
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={8} className="py-8 text-center text-slate-400">
-                  No orders matching the criteria.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <Pagination page={page} lastPage={meta.last_page} total={meta.total} onPage={setPage} />
+      </Card>
 
-      {/* Inspect Order Modal */}
-      {selectedOrder && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="font-bold text-slate-900 text-lg">Order #{selectedOrder.order_number}</h3>
-                <p className="text-xs text-slate-400">Created: {new Date(selectedOrder.created_at).toLocaleString()}</p>
-              </div>
-              <button
-                onClick={() => setSelectedOrder(null)}
-                className="text-slate-400 hover:text-slate-600 text-lg font-bold"
-              >
-                ✕
-              </button>
+      {detail && (
+        <Modal title={`Order ${detail.order_number}`} onClose={() => setDetail(null)} wide>
+          <div className="grid grid-cols-4 gap-3 text-xs">
+            <div className="bg-slate-50 rounded-lg p-2">
+              <p className="text-slate-500">Created</p>
+              <p className="font-semibold">{dateTime(detail.created_at)}</p>
             </div>
-
-            {/* Split Kitchen Tickets Section */}
-            <div>
-              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                Stall Kitchen Tickets (Dispatched)
-              </h4>
-              <div className="space-y-2">
-                {selectedOrder.kitchen_tickets?.map((t: any) => (
-                  <div key={t.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex justify-between items-center text-xs">
-                    <div>
-                      <span className="font-bold text-slate-900 block">{t.stall?.name}</span>
-                      <span className="text-slate-500 font-mono">Ticket #{t.ticket_number}</span>
-                    </div>
-                    <span className="px-2 py-0.5 rounded-full font-semibold uppercase bg-brand-100 text-brand-800 text-[10px]">
-                      {t.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
+            <div className="bg-slate-50 rounded-lg p-2">
+              <p className="text-slate-500">Table / type</p>
+              <p className="font-semibold">{detail.table ? detail.table.table_number : 'Takeaway'}</p>
             </div>
-
-            {/* Itemized Order List */}
-            <div>
-              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Item Breakdown</h4>
-              <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden">
-                {selectedOrder.items?.map((item: any) => (
-                  <div key={item.id} className="p-3 flex justify-between items-center text-xs bg-white">
-                    <div>
-                      <span className="font-bold text-slate-900">{item.item_name}</span>
-                      <span className="text-slate-400 block">{item.stall?.name} × {item.quantity}</span>
-                    </div>
-                    <span className="font-bold text-slate-800">₹{item.subtotal}</span>
-                  </div>
-                ))}
-              </div>
+            <div className="bg-slate-50 rounded-lg p-2">
+              <p className="text-slate-500">Customer</p>
+              <p className="font-semibold">{detail.customer_name || '—'} {detail.customer_phone ? `· ${detail.customer_phone}` : ''}</p>
             </div>
-
-            {/* Financial Summary */}
-            <div className="bg-slate-50 p-4 rounded-xl space-y-1.5 text-xs">
-              <div className="flex justify-between">
-                <span>Subtotal:</span>
-                <span className="font-medium">₹{selectedOrder.subtotal}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Tax (GST 5%):</span>
-                <span className="font-medium">₹{selectedOrder.tax_amount}</span>
-              </div>
-              <div className="flex justify-between text-sm font-bold text-slate-900 pt-1 border-t border-slate-200">
-                <span>Total Amount:</span>
-                <span className="text-brand-600">₹{selectedOrder.total_amount}</span>
-              </div>
+            <div className="bg-slate-50 rounded-lg p-2">
+              <p className="text-slate-500">Staff</p>
+              <p className="font-semibold">{detail.waiter?.name || detail.cashier?.name || '—'}</p>
             </div>
-
-            {selectedOrder.payment_status === 'unpaid' && selectedOrder.status !== 'cancelled' && (
-              <button
-                onClick={() => navigate('/pos')}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center space-x-1"
-              >
-                <span>Settle Payment at POS ➔</span>
-              </button>
-            )}
-
-            <button
-              onClick={() => setSelectedOrder(null)}
-              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl"
-            >
-              Close
-            </button>
           </div>
-        </div>
+
+          <div className="space-y-2">
+            <h4 className="text-xs font-bold text-slate-500 uppercase">Stall kitchen tickets</h4>
+            {detail.kitchen_tickets?.map((t: any) => (
+              <div key={t.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs flex justify-between">
+                <div>
+                  <span className="font-bold text-slate-900 block">{t.stall?.name}</span>
+                  <span className="text-slate-500 font-mono">{t.ticket_number}</span>
+                  <span className="text-slate-500 block">{t.ticket_items?.map((ti: any) => `${ti.quantity}× ${ti.order_item?.item_name}`).join(', ')}</span>
+                </div>
+                <Badge tone={statusTone(t.status)}>{humanize(t.status)}</Badge>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-slate-50 p-4 rounded-xl space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span>Subtotal</span>
+              <span>{money(detail.subtotal)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Tax</span>
+              <span>{money(detail.tax_amount)}</span>
+            </div>
+            <div className="flex justify-between font-bold border-t border-slate-200 pt-1">
+              <span>Total</span>
+              <span>{money(detail.total_amount)}</span>
+            </div>
+            {detail.payments?.map((p: any) => (
+              <div key={p.id} className="flex justify-between text-xs text-emerald-800">
+                <span>
+                  Paid {humanize(p.payment_method)} · {p.payment_number} · {p.cashier?.name}
+                </span>
+                <span>{money(p.amount)}</span>
+              </div>
+            ))}
+          </div>
+          {detail.notes && <p className="text-xs whitespace-pre-line bg-amber-50 border border-amber-100 rounded-lg p-2">{detail.notes}</p>}
+
+          <div className="flex flex-wrap gap-2">
+            <PrintReceiptButton orderId={detail.id} className={buttonClass.secondary} label={detail.payment_status === 'paid' ? 'Print receipt' : 'Print bill'} />
+            {detail.payment_status === 'unpaid' && detail.status !== 'cancelled' && (
+              <button onClick={() => navigate('/pos')} className={buttonClass.primary}>
+                Settle at POS
+              </button>
+            )}
+            {canCancel && !showCancel && (
+              <button onClick={() => setShowCancel(true)} className={buttonClass.danger}>
+                Cancel order
+              </button>
+            )}
+          </div>
+          {showCancel && (
+            <form onSubmit={cancelOrder} className="border border-rose-200 bg-rose-50 rounded-xl p-3 space-y-2">
+              <Field label="Reason for cancellation (recorded in the audit log)">
+                <input required minLength={3} maxLength={255} value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} className={inputClass} />
+              </Field>
+              {cancelError && <p className="text-xs text-rose-700">{cancelError}</p>}
+              <div className="flex gap-2">
+                <button type="submit" disabled={cancelling} className={buttonClass.danger}>
+                  {cancelling ? 'Cancelling…' : 'Confirm cancellation'}
+                </button>
+                <button type="button" onClick={() => setShowCancel(false)} className={buttonClass.secondary}>
+                  Keep order
+                </button>
+              </div>
+            </form>
+          )}
+          {detail.status !== 'cancelled' && detail.payment_status !== 'paid' && !canCancel && (
+            <p className="text-xs text-slate-500">This order can no longer be cancelled: a kitchen has started preparing it.</p>
+          )}
+        </Modal>
       )}
     </div>
   );

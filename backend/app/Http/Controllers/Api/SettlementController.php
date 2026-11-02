@@ -78,6 +78,20 @@ class SettlementController extends Controller
         ]);
     }
 
+    /** Historical daily closings with their stall settlement records (owner only). */
+    public function closings(Request $request)
+    {
+        if (!$request->user()->isOwner()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Owner access required.'], 403);
+        }
+
+        $closings = DailyClosing::with(['settlements.stall:id,name,code'])
+            ->orderByDesc('closing_date')
+            ->paginate($request->integer('per_page', 30));
+
+        return response()->json(['success' => true, 'data' => $closings]);
+    }
+
     public function closeDay(Request $request)
     {
         $user = $request->user();

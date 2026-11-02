@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { apiClient } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { SuppliersPanel } from '../components/SuppliersPanel';
 import {
   Truck,
   Plus,
   Building,
-  Phone,
-  Mail,
   Loader2,
 } from 'lucide-react';
 
@@ -20,6 +19,7 @@ export const PurchasesPage: React.FC = () => {
   const [stalls, setStalls] = useState<any[]>([]);
   const [inventoryItems, setInventoryItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [supplierVersion, setSupplierVersion] = useState(0);
 
   // Modals
   const [showPoModal, setShowPoModal] = useState(false);
@@ -173,6 +173,7 @@ export const PurchasesPage: React.FC = () => {
         setSupPhone('');
         setSupEmail('');
         setSupAddress('');
+        setSupplierVersion((v) => v + 1);
         fetchInitialData();
       }
     } catch (err: any) {
@@ -327,44 +328,11 @@ export const PurchasesPage: React.FC = () => {
 
       {/* TAB 2: SUPPLIERS DIRECTORY */}
       {activeTab === 'suppliers' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {suppliers.length === 0 ? (
-            <div className="col-span-3 bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-400 text-xs">
-              No suppliers found. Click "Add Supplier" to register vendors.
-            </div>
-          ) : (
-            suppliers.map((sup) => (
-              <div
-                key={sup.id}
-                className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-slate-900 text-sm">{sup.name}</h4>
-                  <span className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-slate-100 text-slate-600">
-                    {sup.stall?.name}
-                  </span>
-                </div>
-
-                <div className="text-xs text-slate-500 space-y-1.5">
-                  {sup.contact_person && <p>Contact: {sup.contact_person}</p>}
-                  {sup.phone && (
-                    <p className="flex items-center">
-                      <Phone className="w-3.5 h-3.5 mr-1 text-slate-400" />
-                      {sup.phone}
-                    </p>
-                  )}
-                  {sup.email && (
-                    <p className="flex items-center">
-                      <Mail className="w-3.5 h-3.5 mr-1 text-slate-400" />
-                      {sup.email}
-                    </p>
-                  )}
-                  {sup.address && <p className="text-[11px] text-slate-400">{sup.address}</p>}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+        <SuppliersPanel
+          stalls={isOwner ? stalls : stalls.filter((s) => s.id === user?.stall_id)}
+          version={supplierVersion}
+          canManage={isOwner || user?.role === 'stall_manager'}
+        />
       )}
         </>
       )}

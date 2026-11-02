@@ -106,6 +106,58 @@ class InventoryController extends Controller
         ]);
     }
 
+    /**
+     * Stock outward (consumption issued to the kitchen, or waste/spoilage) by quantity.
+     * Locked read-modify-write; stock can never go below zero.
+     */
+    public function stockOut(Request $request, $id)
+    {
+        $user = $request->user();
+        $item = InventoryItem::findOrFail($id);
+
+        if (!$this->canManageStock($user, $item->stall_id)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate([
+            'quantity' => 'required|numeric|min:0.001|max:999999',
+            'movement_type' => 'required|in:consumption,waste_loss',
+            'reason' => 'required|string|max:255',
+        ]);
+
+        $result = DB::transaction(function () use ($item, $validated, $user) {
+            $locked = InventoryItem::where('id', $item->id)->lockForUpdate()->first();
+            $qty = bcadd((string) $validated['quantity'], '0', 3);
+            $prev = bcadd((string) $locked->current_stock, '0', 3);
+
+            if (bccomp($qty, $prev, 3) > 0) {
+                return null;
+            }
+
+            $new = bcsub($prev, $qty, 3);
+            $locked->update(['current_stock' => $new]);
+
+            StockMovement::create([
+                'stall_id' => $locked->stall_id,
+                'inventory_item_id' => $locked->id,
+                'movement_type' => $validated['movement_type'],
+                'quantity' => '-' . $qty,
+                'previous_stock' => $prev,
+                'new_stock' => $new,
+                'performed_by_user_id' => $user->id,
+                'reason' => $validated['reason'],
+            ]);
+
+            return $locked->fresh('stall');
+        });
+
+        if (!$result) {
+            return response()->json(['success' => false, 'message' => 'Quantity exceeds the current stock.'], 422);
+        }
+
+        return response()->json(['success' => true, 'message' => 'Stock issued', 'data' => $result]);
+    }
+
     private function canManageStock($user, $stallId): bool
     {
         if ($user->isOwner()) {
@@ -127,6 +179,25 @@ class InventoryController extends Controller
             $query->where('stall_id', $user->stall_id);
         } elseif ($request->has('stall_id')) {
             $query->where('stall_id', $request->query('stall_id'));
+        }
+
+        $request->validate([
+            'movement_type' => 'nullable|string|max:30',
+            'inventory_item_id' => 'nullable|integer',
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
+            'per_page' => 'nullable|integer|min:1|max:200',
+        ]);
+        foreach (['movement_type', 'inventory_item_id'] as $field) {
+            if ($request->filled($field)) {
+                $query->where($field, $request->query($field));
+            }
+        }
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->query('date_from'));
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->query('date_to'));
         }
 
         $movements = $query->orderByDesc('id')->paginate($request->integer('per_page', 25));

@@ -26,7 +26,8 @@ export const SettlementsPage: React.FC = () => {
   }, []);
 
   const handleCloseDay = async () => {
-    if (!confirm('Execute formal End-of-Day closing for today? This will lock day transactions and generate stall settlement registers.')) {
+    // Closing does NOT lock the day: payments taken afterwards are accepted but not in this closing (OPEN-01, owner decision)
+    if (!confirm('Execute End-of-Day closing for today? This records the day\'s totals and stall settlement registers. Payments taken after closing will not be included in it.')) {
       return;
     }
 

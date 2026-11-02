@@ -9,6 +9,54 @@
   }
 }
 
+/* Receipt printing: only the #print-root receipt is printed, sized for 80 mm thermal paper */
+#print-root {
+  display: none;
+}
+@media print {
+  /* Named page: receipts use 80 mm thermal paper, reports keep the printer's default size */
+  @page receipt {
+    size: 80mm auto;
+    margin: 4mm;
+  }
+  #print-root[data-paper='receipt'] {
+    page: receipt;
+  }
+  body * {
+    visibility: hidden !important;
+  }
+  #print-root,
+  #print-root * {
+    visibility: visible !important;
+  }
+  #print-root {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 72mm;
+    color: #000;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+  }
+  /* Reports print full width on regular paper */
+  #print-root[data-paper='a4'] {
+    width: 100%;
+    font-family: Arial, sans-serif;
+    font-size: 11px;
+  }
+  #print-root[data-paper='a4'] table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  #print-root[data-paper='a4'] th,
+  #print-root[data-paper='a4'] td {
+    border: 1px solid #999;
+    padding: 3px 5px;
+    text-align: left;
+  }
+}
+
 /* Custom smooth scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

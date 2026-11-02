@@ -15,6 +15,7 @@ import { getApiClient, postOrder } from '../../api/client';
 import { classifyStatus, newIdempotencyKey } from '../../offline/syncEngine';
 import { offlineStore } from '../../storage/offlineStore';
 import { useAuth } from '../../context/AuthContext';
+import { formatTableLabel } from '../../utils/tableFormatter';
 
 interface Props {
   table: DiningTable | null;
@@ -111,7 +112,7 @@ export const NewOrderScreen: React.FC<Props> = ({ table, onBack, onOrderPlaced }
       order_type: 'dine_in',
       order_channel: 'waiter_app',
       table_id: table ? table.id : null,
-      customer_name: customerName || (table ? `Table ${table.table_number}` : 'Guest Customer'),
+      customer_name: customerName || (table ? `Table ${formatTableLabel(table.table_number)}` : 'Guest Customer'),
       notes: notes,
       items: cartList.map((item) => ({
         menu_item_id: item.menu_item_id,
@@ -173,7 +174,7 @@ export const NewOrderScreen: React.FC<Props> = ({ table, onBack, onOrderPlaced }
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.topBarTitle}>
-          {table ? `Table ${table.table_number}` : 'Walk-in Order'}
+          {table ? `Table ${formatTableLabel(table.table_number)}` : 'Walk-in Order'}
         </Text>
         <View style={styles.badgePlaceholder} />
       </View>

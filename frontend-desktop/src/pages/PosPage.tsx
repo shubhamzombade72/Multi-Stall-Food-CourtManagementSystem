@@ -1,5 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
+import { PrintReceiptButton } from '../components/Receipt';
+import { useSettings } from '../context/SettingsContext';
+import { apiError } from '../lib/format';
+import { Modal, Field, inputClass } from '../components/ui';
 import {
   Search,
   Plus,
@@ -7,13 +11,13 @@ import {
   CheckCircle2,
   Receipt,
   Store,
-  Printer,
   Clock,
   ArrowRight,
   RefreshCw,
   CreditCard,
   QrCode,
-  Banknote
+  Banknote,
+  Wallet
 } from 'lucide-react';
 
 interface MenuItem {
@@ -32,8 +36,34 @@ interface CartItem {
   quantity: number;
 }
 
+const newOrderKey = () => 'cashier_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+
+const METHOD_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
+  cash: { label: 'Cash', icon: Banknote, color: 'text-emerald-600' },
+  upi_qr: { label: 'UPI QR', icon: QrCode, color: 'text-indigo-600' },
+  card: { label: 'Card POS', icon: CreditCard, color: 'text-blue-600' },
+  split: { label: 'Split', icon: Wallet, color: 'text-slate-600' },
+};
+
 export const PosPage: React.FC = () => {
+  const { settings } = useSettings();
+  const enabledMethods = settings.payment_methods.enabled;
+  const taxRate = Number(settings.tax.rate_percent) / 100;
   const [posMode, setPosMode] = useState<'new_order' | 'pending_bills'>('new_order');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerHint, setCustomerHint] = useState<string | null>(null);
+  const [saveCustomer, setSaveCustomer] = useState(false);
+  const [orderNotes, setOrderNotes] = useState('');
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [isPaying, setIsPaying] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
+  const [cancelBill, setCancelBill] = useState<any | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  // One key per cart: a retry after a timeout replays the same order instead of creating a second one
+  const orderKey = useRef(newOrderKey());
+  const searchInput = useRef<HTMLInputElement>(null);
   const [stalls, setStalls] = useState<any[]>([]);
   const [tables, setTables] = useState<any[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -51,7 +81,7 @@ export const PosPage: React.FC = () => {
 
   // Payment Modal States
   const [activePaymentOrder, setActivePaymentOrder] = useState<any | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi_qr' | 'card'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<string>('cash');
   const [cashTendered, setCashTendered] = useState<number>(0);
   const [settledReceipt, setSettledReceipt] = useState<any | null>(null);
 
@@ -122,30 +152,63 @@ export const PosPage: React.FC = () => {
 
   const clearCart = () => setCart([]);
 
-  // Financial Calculations for New Order Cart
+  // A changed order is a different order: new key. An unchanged retry keeps the key (no duplicate).
+  useEffect(() => {
+    orderKey.current = newOrderKey();
+  }, [cart, orderType, selectedTableId, customerName, customerPhone, orderNotes]);
+
+  // Display estimate only: the server prices the order with the configured tax rule
   const subtotal = cart.reduce(
     (sum, item) => sum + Number(item.menuItem.price) * item.quantity,
     0
   );
-  const tax = subtotal * 0.05;
+  const tax = subtotal * taxRate;
   const total = subtotal + tax;
 
+  /** Fill the customer name from the directory when a known phone number is entered. */
+  const lookupCustomer = async () => {
+    setCustomerHint(null);
+    if (customerPhone.replace(/\D/g, '').length < 6) return;
+    try {
+      const res = await apiClient.get('/customers/lookup', { params: { phone: customerPhone } });
+      const found = res.data.data;
+      if (found) {
+        setCustomerName(found.name);
+        setCustomerHint(`Returning customer: ${found.name}`);
+        setSaveCustomer(false);
+      } else {
+        setCustomerHint('New customer');
+      }
+    } catch {
+      // lookup is a convenience; ordering still works
+    }
+  };
+
+  const openPayment = (order: any) => {
+    setPayError(null);
+    setPaymentMethod((enabledMethods[0] as any) || 'cash');
+    setCashTendered(Number(order.total_amount));
+    setActivePaymentOrder(order);
+  };
+
   const handleCreateOrder = async (autoPay: boolean = false) => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || isSubmitting) return;
     if (orderType === 'dine_in' && !selectedTableId) {
-      alert('Please select a dining table for Dine-In orders.');
+      setNotice({ ok: false, text: 'Select a dining table for a dine-in order.' });
       return;
     }
 
     setIsSubmitting(true);
+    setNotice(null);
     try {
       const payload = {
         table_id: orderType === 'dine_in' ? selectedTableId : null,
         order_type: orderType,
         order_channel: 'cashier_pos',
-        customer_name: 'Walk-in Cashier Order',
-        customer_phone: null,
-        idempotency_key: 'cashier_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        customer_name: customerName.trim() || null,
+        customer_phone: customerPhone.trim() || null,
+        notes: orderNotes.trim() || null,
+        idempotency_key: orderKey.current,
         items: cart.map((ci) => ({
           menu_item_id: ci.menuItem.id,
           quantity: ci.quantity,
@@ -155,26 +218,36 @@ export const PosPage: React.FC = () => {
       const res = await apiClient.post('/orders', payload);
       if (res.data.success) {
         const createdOrder = res.data.data;
+        if (saveCustomer && customerName.trim() && customerPhone.trim()) {
+          await apiClient.post('/customers', { name: customerName.trim(), phone: customerPhone.trim() }).catch(() => undefined);
+        }
         clearCart();
+        setCustomerName('');
+        setCustomerPhone('');
+        setCustomerHint(null);
+        setSaveCustomer(false);
+        setOrderNotes('');
         loadData();
         loadPendingBills();
 
         if (autoPay) {
-          setActivePaymentOrder(createdOrder);
-          setCashTendered(Number(createdOrder.total_amount));
+          openPayment(createdOrder);
         } else {
-          alert(`Order #${createdOrder.order_number} confirmed and split to stall kitchens!`);
+          setNotice({ ok: true, text: `Order ${createdOrder.order_number} sent to ${createdOrder.kitchen_tickets?.length ?? 0} stall kitchen(s).` });
         }
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to place order.');
+      // The cart keeps its idempotency key, so pressing the button again cannot duplicate the order
+      setNotice({ ok: false, text: apiError(err, 'Failed to place order. Retrying is safe.') });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleConfirmPayment = async () => {
-    if (!activePaymentOrder) return;
+    if (!activePaymentOrder || isPaying) return;
+    setIsPaying(true);
+    setPayError(null);
     try {
       const res = await apiClient.post('/billing/pay', {
         order_id: activePaymentOrder.id,
@@ -190,9 +263,59 @@ export const PosPage: React.FC = () => {
         loadPendingBills();
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Payment processing failed.');
+      setPayError(apiError(err, 'Payment processing failed.'));
+      loadPendingBills();
+    } finally {
+      setIsPaying(false);
     }
   };
+
+  const submitCancel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cancelBill) return;
+    setCancelError(null);
+    try {
+      await apiClient.post(`/orders/${cancelBill.id}/cancel`, { reason: cancelReason.trim() });
+      setNotice({ ok: true, text: `Order ${cancelBill.order_number} cancelled.` });
+      setCancelBill(null);
+      setCancelReason('');
+      loadPendingBills();
+      loadData();
+    } catch (err) {
+      setCancelError(apiError(err));
+    }
+  };
+
+  // Keyboard shortcuts: F2 search, F4 send to kitchen, F8 send & pay, F9 toggle pending bills, Esc close dialogs
+  const shortcuts = useRef<(e: KeyboardEvent) => void>(() => undefined);
+  shortcuts.current = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      if (activePaymentOrder && !isPaying) setActivePaymentOrder(null);
+      else if (settledReceipt) setSettledReceipt(null);
+      else if (cancelBill) setCancelBill(null);
+      return;
+    }
+    if (activePaymentOrder || settledReceipt || cancelBill) return;
+    if (e.key === 'F2') {
+      e.preventDefault();
+      setPosMode('new_order');
+      setTimeout(() => searchInput.current?.focus(), 0);
+    } else if (e.key === 'F4' && posMode === 'new_order') {
+      e.preventDefault();
+      handleCreateOrder(false);
+    } else if (e.key === 'F8' && posMode === 'new_order') {
+      e.preventDefault();
+      handleCreateOrder(true);
+    } else if (e.key === 'F9') {
+      e.preventDefault();
+      setPosMode((m) => (m === 'new_order' ? 'pending_bills' : 'new_order'));
+    }
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => shortcuts.current(e);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const filteredItems = menuItems.filter((item) => {
     const matchesStall = selectedStallId === 'all' || item.stall_id === selectedStallId;
@@ -353,16 +476,28 @@ export const PosPage: React.FC = () => {
                       <span className="text-lg font-black text-slate-900">₹{Number(bill.total_amount).toFixed(2)}</span>
                     </div>
 
-                    <button
-                      onClick={() => {
-                        setActivePaymentOrder(bill);
-                        setCashTendered(Number(bill.total_amount));
-                      }}
-                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold shadow-sm flex items-center space-x-1.5 transition"
-                    >
-                      <span>Settle Bill</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {!bill.kitchen_tickets?.some((t: any) => ['preparing', 'ready', 'picked_up'].includes(t.status)) && (
+                        <button
+                          onClick={() => {
+                            setCancelError(null);
+                            setCancelReason('');
+                            setCancelBill(bill);
+                          }}
+                          className="px-3 py-2.5 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-bold"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                      <button
+                        onClick={() => openPayment(bill)}
+                        data-settle-order={bill.order_number}
+                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold shadow-sm flex items-center space-x-1.5 transition"
+                      >
+                        <span>Settle Bill</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -380,8 +515,10 @@ export const PosPage: React.FC = () => {
                 <div className="relative flex-1">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   <input
+                    ref={searchInput}
                     type="text"
-                    placeholder="Search food, beverages, or stalls..."
+                    aria-label="Search menu"
+                    placeholder="Search food, beverages, or stalls… (F2)"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -425,6 +562,7 @@ export const PosPage: React.FC = () => {
                   <div
                     key={item.id}
                     onClick={() => addToCart(item)}
+                    data-menu-item={item.name}
                     className="p-3.5 rounded-2xl border border-slate-200/90 hover:border-brand-500 bg-white hover:shadow-md cursor-pointer transition flex flex-col justify-between group"
                   >
                     <div>
@@ -493,6 +631,7 @@ export const PosPage: React.FC = () => {
                     Select Dining Table
                   </label>
                   <select
+                    aria-label="Dining table"
                     value={selectedTableId}
                     onChange={(e) => setSelectedTableId(Number(e.target.value))}
                     className="w-full py-1.5 px-3 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-brand-500"
@@ -505,6 +644,46 @@ export const PosPage: React.FC = () => {
                   </select>
                 </div>
               )}
+
+              {/* Customer (optional): a known phone number fills the name from the customer directory */}
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  aria-label="Customer phone"
+                  placeholder="Customer phone"
+                  value={customerPhone}
+                  maxLength={20}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  onBlur={lookupCustomer}
+                  className="py-1.5 px-3 rounded-xl border border-slate-200 text-xs"
+                />
+                <input
+                  aria-label="Customer name"
+                  placeholder="Customer name"
+                  value={customerName}
+                  maxLength={100}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="py-1.5 px-3 rounded-xl border border-slate-200 text-xs"
+                />
+              </div>
+              {customerHint && (
+                <div className="flex items-center justify-between text-[11px] text-slate-500">
+                  <span>{customerHint}</span>
+                  {customerHint === 'New customer' && (
+                    <label className="flex items-center space-x-1">
+                      <input type="checkbox" checked={saveCustomer} onChange={(e) => setSaveCustomer(e.target.checked)} />
+                      <span>Save to customers</span>
+                    </label>
+                  )}
+                </div>
+              )}
+              <input
+                aria-label="Order notes"
+                placeholder="Order notes (optional)"
+                value={orderNotes}
+                maxLength={500}
+                onChange={(e) => setOrderNotes(e.target.value)}
+                className="w-full py-1.5 px-3 rounded-xl border border-slate-200 text-xs"
+              />
             </div>
 
             {/* Cart Items List */}
@@ -556,7 +735,7 @@ export const PosPage: React.FC = () => {
                   <span className="font-semibold text-slate-800">₹{subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-slate-500">
-                  <span>GST (5%):</span>
+                  <span>GST ({Number(settings.tax.rate_percent)}%, est.):</span>
                   <span className="font-semibold text-slate-800">₹{tax.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm font-extrabold text-slate-900 pt-1.5 border-t border-slate-200">
@@ -565,22 +744,28 @@ export const PosPage: React.FC = () => {
                 </div>
               </div>
 
+              {notice && (
+                <div role={notice.ok ? 'status' : 'alert'} className={`text-[11px] rounded-lg p-2 ${notice.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-700'}`}>
+                  {notice.text}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <button
                   disabled={cart.length === 0 || isSubmitting}
                   onClick={() => handleCreateOrder(false)}
                   className="py-2.5 px-3 rounded-xl border border-slate-300 font-bold text-xs text-slate-700 hover:bg-white transition disabled:opacity-50"
                 >
-                  Send to Kitchen
+                  {isSubmitting ? 'Sending…' : 'Send to Kitchen (F4)'}
                 </button>
                 <button
                   disabled={cart.length === 0 || isSubmitting}
                   onClick={() => handleCreateOrder(true)}
                   className="py-2.5 px-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-extrabold text-xs shadow-md shadow-brand-500/20 transition disabled:opacity-50"
                 >
-                  Instant Pay ➔
+                  Send & Pay (F8) ➔
                 </button>
               </div>
+              <p className="text-[10px] text-slate-400 text-center">F2 search · F9 pending bills · Esc close</p>
 
               {cart.length > 0 && (
                 <button
@@ -628,45 +813,26 @@ export const PosPage: React.FC = () => {
             {/* Payment Method Selector */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-2">Select Tender Method</label>
+              {/* Only the methods the owner enabled in Food Court Settings */}
               <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('cash')}
-                  className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center space-y-1.5 transition ${
-                    paymentMethod === 'cash'
-                      ? 'border-brand-500 bg-brand-50 text-brand-700 shadow-sm'
-                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <Banknote className="w-5 h-5 text-emerald-600" />
-                  <span>Cash</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('upi_qr')}
-                  className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center space-y-1.5 transition ${
-                    paymentMethod === 'upi_qr'
-                      ? 'border-brand-500 bg-brand-50 text-brand-700 shadow-sm'
-                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <QrCode className="w-5 h-5 text-indigo-600" />
-                  <span>UPI QR</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('card')}
-                  className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center space-y-1.5 transition ${
-                    paymentMethod === 'card'
-                      ? 'border-brand-500 bg-brand-50 text-brand-700 shadow-sm'
-                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <CreditCard className="w-5 h-5 text-blue-600" />
-                  <span>Card POS</span>
-                </button>
+                {enabledMethods.map((m) => {
+                  const meta = METHOD_META[m] || METHOD_META.split;
+                  const Icon = meta.icon;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setPaymentMethod(m)}
+                      aria-pressed={paymentMethod === m}
+                      className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center space-y-1.5 transition ${
+                        paymentMethod === m ? 'border-brand-500 bg-brand-50 text-brand-700 shadow-sm' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Icon className={`w-5 h-5 ${meta.color}`} />
+                      <span>{meta.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -694,22 +860,38 @@ export const PosPage: React.FC = () => {
               </div>
             )}
 
+            {payError && (
+              <div role="alert" className="p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs">
+                {payError}
+              </div>
+            )}
             <div className="flex space-x-3 pt-2">
               <button
                 onClick={() => setActivePaymentOrder(null)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                disabled={isPaying}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmPayment}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-md shadow-emerald-600/20"
+                disabled={isPaying || (paymentMethod === 'cash' && cashTendered < Number(activePaymentOrder.total_amount))}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-md shadow-emerald-600/20 disabled:opacity-50"
               >
-                Confirm Payment & Settle
+                {isPaying ? 'Processing…' : 'Confirm Payment & Settle'}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {cancelBill && (
+        <Modal title={`Cancel order ${cancelBill.order_number}`} onClose={() => setCancelBill(null)} onSubmit={submitCancel} submitLabel="Cancel order" error={cancelError}>
+          <p className="text-sm text-slate-600">All stall tickets for this order are cancelled. Orders already being prepared cannot be cancelled.</p>
+          <Field label="Reason (recorded in the audit log)">
+            <input required autoFocus minLength={3} maxLength={255} value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} className={inputClass} />
+          </Field>
+        </Modal>
       )}
 
       {/* ================= SETTLED RECEIPT MODAL ================= */}
@@ -742,13 +924,11 @@ export const PosPage: React.FC = () => {
             </div>
 
             <div className="flex space-x-2 pt-2">
-              <button
-                onClick={() => window.print()}
+              <PrintReceiptButton
+                orderId={settledReceipt.order.id}
+                label="Print Receipt"
                 className="flex-1 py-2.5 px-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 flex items-center justify-center space-x-1 hover:bg-slate-50"
-              >
-                <Printer className="w-4 h-4 mr-1" />
-                <span>Print Bill</span>
-              </button>
+              />
               <button
                 onClick={() => setSettledReceipt(null)}
                 className="flex-1 py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold"

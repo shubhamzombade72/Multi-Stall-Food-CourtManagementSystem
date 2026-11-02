@@ -375,7 +375,7 @@ async function subscribePrivate(conn, channel, token) {
   check('C-03', 'Counter order produced one kitchen ticket per stall (2)', (await ticketsOf(keyC)).length === 2);
   const doublePay = await api('POST', '/billing/pay', { token: cashier.token, body: { order_id: createC.json.data.id, payment_method: 'card', amount: createC.json.data.total_amount } });
   check('C-04', 'Second payment on settled bill rejected', doublePay.status === 422, `-> ${doublePay.status}`);
-  const cancelPaid = await api('POST', `/orders/${createC.json.data.id}/cancel`, { token: cashier.token });
+  const cancelPaid = await api('POST', `/orders/${createC.json.data.id}/cancel`, { token: cashier.token, body: { reason: 'QA paid order' } });
   check('C-05', 'Paid order cannot be cancelled', cancelPaid.status === 422);
 
   // ================================================================ Workflow D: Purchases & inventory

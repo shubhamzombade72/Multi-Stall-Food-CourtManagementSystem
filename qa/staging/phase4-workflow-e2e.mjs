@@ -237,9 +237,9 @@ const waitEvent = async (conn, pred, ms = 5000) => {
   check('F-06', 'Menu price changes need owner / own-stall manager (kitchen 403, other-stall manager 403)', kPrice.status === 403 && otherMgr.status === 403, `${kPrice.status}, ${otherMgr.status}`);
   check('F-07', 'Payment requires cashier/owner (waiter 403)', waiterPay.status === 403);
   const toCancel = await api('POST', '/orders', { token: cashier.token, body: { order_type: 'takeaway', items: [{ menu_item_id: pick('STALL-BEV', 1).id, quantity: 1 }] } });
-  const wCancel = await api('POST', `/orders/${toCancel.json.data.id}/cancel`, { token: waiter.token });
-  const cCancel = await api('POST', `/orders/${toCancel.json.data.id}/cancel`, { token: cashier.token });
-  const paidCancel = await api('POST', `/orders/${order.id}/cancel`, { token: cashier.token });
+  const wCancel = await api('POST', `/orders/${toCancel.json.data.id}/cancel`, { token: waiter.token, body: { reason: 'QA waiter attempt' } });
+  const cCancel = await api('POST', `/orders/${toCancel.json.data.id}/cancel`, { token: cashier.token, body: { reason: 'QA customer changed mind' } });
+  const paidCancel = await api('POST', `/orders/${order.id}/cancel`, { token: cashier.token, body: { reason: 'QA paid order' } });
   check('F-08', 'Cancellation: waiter 403, cashier 200 on unpaid, 422 on paid', wCancel.status === 403 && cCancel.status === 200 && paidCancel.status === 422, `${wCancel.status}, ${cCancel.status}, ${paidCancel.status}`);
   check('F-09', 'Idempotency enforced by backend (unique key → single row)', Number(sql(`SELECT COUNT(*) FROM orders WHERE idempotency_key=${lit(key)}`)) === 1);
   const burgerInv = (await api('GET', `/inventory?stall_id=${stalls['STALL-BURGER'].id}`, { token: owner.token })).json.data[0];

@@ -1,8 +1,9 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
+import { ConnectionBanner } from './components/ConnectionBanner';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { PosPage } from './pages/PosPage';
@@ -13,6 +14,36 @@ import { InventoryPage } from './pages/InventoryPage';
 import { SettlementsPage } from './pages/SettlementsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { PurchasesPage } from './pages/PurchasesPage';
+import { KitchenPage } from './pages/KitchenPage';
+import { StaffPage } from './pages/StaffPage';
+import { PaymentsPage } from './pages/PaymentsPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { FoodCourtSettingsPage } from './pages/FoodCourtSettingsPage';
+import { TablesPage } from './pages/TablesPage';
+import { CustomersPage } from './pages/CustomersPage';
+import { WaiterPage } from './pages/WaiterPage';
+import { CashierClosingPage } from './pages/CashierClosingPage';
+import { SettingsProvider } from './context/SettingsContext';
+
+/** First screen per role (the server still authorizes every request). */
+export const homeFor = (role: string): string => {
+  switch (role) {
+    case 'owner':
+      return '/dashboard';
+    case 'cashier':
+      return '/pos';
+    case 'kitchen_staff':
+      return '/kitchen';
+    case 'stall_manager':
+      return '/kitchen';
+    case 'store_staff':
+      return '/inventory';
+    case 'waiter':
+      return '/waiter';
+    default:
+      return '/settings';
+  }
+};
 
 const ProtectedLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
@@ -30,56 +61,53 @@ const ProtectedLayout: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
-      <Navbar />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 overflow-y-auto">
-          <Routes>
-            <Route
-              path="/"
-              element={
-                <Navigate
-                  to={
-                    user.role === 'owner'
-                      ? '/dashboard'
-                      : user.role === 'cashier'
-                        ? '/pos'
-                        : user.role === 'stall_manager'
-                          ? '/menu'
-                          : '/inventory'
-                  }
-                  replace
-                />
-              }
-            />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/pos" element={<PosPage />} />
-            <Route path="/orders" element={<OrdersPage />} />
-            <Route path="/stalls" element={<StallsPage />} />
-            <Route path="/menu" element={<MenuPage />} />
-            <Route path="/inventory" element={<InventoryPage />} />
-            <Route path="/purchases" element={<PurchasesPage />} />
-            <Route path="/settlements" element={<SettlementsPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
+    <SettingsProvider>
+      <div className="min-h-screen flex flex-col bg-slate-50">
+        <Navbar />
+        <ConnectionBanner />
+        <div className="flex flex-1 overflow-hidden">
+          <Sidebar />
+          <main className="flex-1 overflow-y-auto">
+            <Routes>
+              <Route path="/" element={<Navigate to={homeFor(user.role)} replace />} />
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/pos" element={<PosPage />} />
+              <Route path="/orders" element={<OrdersPage />} />
+              <Route path="/payments" element={<PaymentsPage />} />
+              <Route path="/cashier-closing" element={<CashierClosingPage />} />
+              <Route path="/kitchen" element={<KitchenPage />} />
+              <Route path="/waiter" element={<WaiterPage />} />
+              <Route path="/tables" element={<TablesPage />} />
+              <Route path="/customers" element={<CustomersPage />} />
+              <Route path="/stalls" element={<StallsPage />} />
+              <Route path="/staff" element={<StaffPage />} />
+              <Route path="/menu" element={<MenuPage />} />
+              <Route path="/inventory" element={<InventoryPage />} />
+              <Route path="/purchases" element={<PurchasesPage />} />
+              <Route path="/settlements" element={<SettlementsPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/food-court-settings" element={<FoodCourtSettingsPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </main>
+        </div>
       </div>
-    </div>
+    </SettingsProvider>
   );
 };
 
 export const App: React.FC = () => {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      {/* Hash routing works both from a web server and from file:// inside the Electron app */}
+      <HashRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/connection" element={<SettingsPage standalone />} />
           <Route path="/*" element={<ProtectedLayout />} />
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
     </AuthProvider>
   );
 };
-
