@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "FoodCourt Multi-Stall",
+    "slug": "foodcourt-mobile-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#ea580c"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ea580c"
+      },
+      "package": "com.foodcourt.multistall"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
+
