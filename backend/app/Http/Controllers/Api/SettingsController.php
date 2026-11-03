@@ -36,6 +36,9 @@ class SettingsController extends Controller
         'payment_methods' => [
             'enabled' => self::PAYMENT_METHODS,
         ],
+        'order_tracking' => [
+            'delay_minutes' => 15,
+        ],
     ];
 
     public static function current(string $key): array
@@ -61,6 +64,7 @@ class SettingsController extends Controller
                     'enabled' => self::enabledPaymentMethods(),
                     'available' => self::PAYMENT_METHODS,
                 ],
+                'order_tracking' => self::current('order_tracking'),
                 'tax' => [
                     'rate_percent' => '5.00',
                     'editable' => false,
@@ -95,6 +99,9 @@ class SettingsController extends Controller
             'payment_methods' => [
                 'enabled' => 'required|array|min:1',
                 'enabled.*' => 'distinct|in:' . implode(',', self::PAYMENT_METHODS),
+            ],
+            'order_tracking' => [
+                'delay_minutes' => 'required|integer|min:1|max:120',
             ],
             default => null,
         };

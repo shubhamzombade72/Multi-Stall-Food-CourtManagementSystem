@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { onPrivate, realtimeConfigured } from '../realtime/echo';
 import { columnFor, elapsed, newTicketIds, nextKitchenAction, urgency, type TicketStatus } from '../lib/kds';
 import { isoDate, humanize, timeOnly } from '../lib/format';
+import { statusChip, statusClasses, statusKind } from '../lib/status';
+import { LateBadge } from '../components/ui';
 import { ChefHat, Maximize2, Minimize2, Volume2, VolumeX, RefreshCw, AlertTriangle, History } from 'lucide-react';
 
 interface Ticket {
@@ -137,24 +139,24 @@ export const KitchenPage: React.FC = () => {
   };
 
   if (!isOwner && !user?.stall_id) {
-    return <div className="p-8 text-slate-600">Your account is not assigned to a stall. Ask the owner to assign one.</div>;
+    return <div className="p-4 text-muted">Your account is not assigned to a stall. Ask the owner to assign one.</div>;
   }
 
-  const columns: { key: 'new' | 'preparing' | 'ready'; title: string; tone: string }[] = [
-    { key: 'new', title: 'New', tone: 'border-amber-400' },
-    { key: 'preparing', title: 'Preparing', tone: 'border-sky-400' },
-    { key: 'ready', title: 'Ready for pickup', tone: 'border-emerald-400' },
+  const columns: { key: 'new' | 'preparing' | 'ready'; title: string; tone: string; count: string }[] = [
+    { key: 'new', title: 'New', tone: 'border-l-st-running', count: 'bg-st-running-soft text-st-running-fg' },
+    { key: 'preparing', title: 'Preparing', tone: 'border-l-st-cooking', count: 'bg-st-cooking-soft text-st-cooking-fg' },
+    { key: 'ready', title: 'Ready for pickup', tone: 'border-l-st-ready', count: 'bg-st-ready-soft text-st-ready-fg' },
   ];
   const stallName = isOwner ? stalls.find((s) => s.id === stallId)?.name : user?.stall?.name;
 
   return (
-    <div className="min-h-full bg-slate-950 text-slate-100 p-6 space-y-4">
+    <div className="min-h-full bg-canvas text-fg p-4 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center space-x-3">
-          <ChefHat className="w-7 h-7 text-amber-400" />
+          <ChefHat className="w-7 h-7 text-warning-fg" />
           <div>
             <h2 className="text-xl font-extrabold">Kitchen Display {stallName ? `· ${stallName}` : ''}</h2>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-muted">
               {realtimeConfigured() ? 'Realtime + ' : ''}auto-refresh every {POLL_MS / 1000}s
               {lastSync ? ` · last sync ${lastSync.toLocaleTimeString()}` : ''}
             </p>
@@ -166,7 +168,7 @@ export const KitchenPage: React.FC = () => {
               aria-label="Stall"
               value={stallId ?? ''}
               onChange={(e) => setStallId(Number(e.target.value))}
-              className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm"
+              className="bg-surface text-fg border border-line rounded-lg px-3 py-2 text-sm"
             >
               {stalls.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -177,44 +179,44 @@ export const KitchenPage: React.FC = () => {
           )}
           <button
             onClick={() => setView((v) => (v === 'board' ? 'history' : 'board'))}
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm font-semibold flex items-center"
+            className="px-3 py-2 rounded-lg bg-surface-2 border border-line hover:bg-line text-sm font-semibold flex items-center"
           >
             <History className="w-4 h-4 mr-1" />
             {view === 'board' ? 'Ticket history' : 'Live board'}
           </button>
-          <button onClick={() => load()} className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700" title="Refresh">
+          <button onClick={() => load()} className="p-2 rounded-lg bg-surface-2 border border-line hover:bg-line" title="Refresh">
             <RefreshCw className="w-4 h-4" />
           </button>
-          <button onClick={() => setSound((s) => !s)} className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700" title="New-ticket sound">
+          <button onClick={() => setSound((s) => !s)} className="p-2 rounded-lg bg-surface-2 border border-line hover:bg-line" title="New-ticket sound">
             {sound ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
-          <button onClick={toggleFullscreen} className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700" title="Full screen">
+          <button onClick={toggleFullscreen} className="p-2 rounded-lg bg-surface-2 border border-line hover:bg-line" title="Full screen">
             {fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
         </div>
       </div>
 
       {error && (
-        <div role="alert" className="flex items-center space-x-2 bg-rose-900/60 border border-rose-700 text-rose-100 text-sm rounded-xl px-4 py-2">
+        <div role="alert" className="flex items-center space-x-2 bg-danger/10 border border-danger/30 text-danger-fg text-sm rounded-lg px-4 py-2">
           <AlertTriangle className="w-4 h-4" />
           <span>{error}</span>
         </div>
       )}
 
       {view === 'history' ? (
-        <section className="bg-slate-900 rounded-2xl p-4 space-y-3">
+        <section className="bg-surface border border-line rounded-lg p-4 space-y-3">
           <div className="flex items-center gap-3">
-            <label className="text-sm text-slate-300">Date</label>
-            <input type="date" max={isoDate()} value={historyDate} onChange={(e) => setHistoryDate(e.target.value)} className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-sm" />
-            {history && <span className="text-xs text-slate-400">{history.length} ticket(s)</span>}
+            <label className="text-sm text-muted">Date</label>
+            <input type="date" max={isoDate()} value={historyDate} onChange={(e) => setHistoryDate(e.target.value)} className="bg-surface text-fg border border-line rounded-lg px-3 py-1.5 text-sm" />
+            {history && <span className="text-xs text-muted">{history.length} ticket(s)</span>}
           </div>
           {history === null ? (
-            <p className="text-sm text-slate-400">Loading…</p>
+            <p className="text-sm text-muted">Loading…</p>
           ) : history.length === 0 ? (
-            <p className="text-sm text-slate-400 py-6 text-center">No tickets for this stall on that date.</p>
+            <p className="text-sm text-muted py-6 text-center">No tickets for this stall on that date.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="text-xs uppercase text-slate-400">
+              <thead className="text-xs uppercase text-muted">
                 <tr>
                   <th className="text-left py-2">Ticket</th>
                   <th className="text-left py-2">Table</th>
@@ -225,19 +227,21 @@ export const KitchenPage: React.FC = () => {
                   <th className="text-left py-2">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className="divide-y divide-line">
                 {history.map((t) => (
                   <tr key={t.id}>
                     <td className="py-2 font-mono text-xs">
                       {t.ticket_number}
-                      <span className="block text-slate-500">{t.order?.order_number}</span>
+                      <span className="block text-muted">{t.order?.order_number}</span>
                     </td>
                     <td className="py-2">{t.order?.table ? t.order.table.table_number : 'Takeaway'}</td>
                     <td className="py-2 text-xs">{(t.ticket_items || []).map((ti: any) => `${ti.quantity}× ${ti.order_item?.item_name}`).join(', ')}</td>
-                    <td className="py-2 text-xs">{timeOnly(t.created_at)}</td>
-                    <td className="py-2 text-xs">{timeOnly(t.ready_at)}</td>
-                    <td className="py-2 text-xs">{timeOnly(t.picked_up_at)}</td>
-                    <td className="py-2 text-xs font-semibold">{humanize(t.status)}</td>
+                    <td className="py-2 text-xs tabular-nums whitespace-nowrap">{timeOnly(t.created_at)}</td>
+                    <td className="py-2 text-xs tabular-nums whitespace-nowrap">{timeOnly(t.ready_at)}</td>
+                    <td className="py-2 text-xs tabular-nums whitespace-nowrap">{timeOnly(t.picked_up_at)}</td>
+                    <td className="py-2 text-xs">
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${statusChip(t.status)}`}>{humanize(t.status)}</span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -249,10 +253,10 @@ export const KitchenPage: React.FC = () => {
         {columns.map((col) => {
           const list = tickets.filter((t) => columnFor(t.status) === col.key);
           return (
-            <section key={col.key} className="bg-slate-900 rounded-2xl p-3 space-y-3 min-h-[60vh]">
-              <h3 className="font-bold text-sm uppercase tracking-wider text-slate-300 flex justify-between">
+            <section key={col.key} className="bg-surface border border-line rounded-lg p-3 space-y-3 min-h-[60vh]">
+              <h3 className="font-bold text-sm uppercase tracking-wider text-muted flex justify-between">
                 <span>{col.title}</span>
-                <span className="bg-slate-800 rounded-full px-2">{list.length}</span>
+                <span className={`${col.count} rounded-full px-2 tabular-nums`}>{list.length}</span>
               </h3>
               {list.map((t) => {
                 const u = urgency(t.created_at, now);
@@ -261,25 +265,28 @@ export const KitchenPage: React.FC = () => {
                   <article
                     key={t.id}
                     data-ticket={t.ticket_number}
-                    className={`rounded-xl bg-slate-800 border-l-4 ${col.tone} p-3 space-y-2 ${u === 'late' ? 'ring-2 ring-rose-500' : u === 'warning' ? 'ring-1 ring-amber-500' : ''}`}
+                    className={`rounded-lg bg-surface-2 border border-line border-l-4 ${col.tone} p-3 space-y-2 ${u === 'late' ? 'ring-4 ring-danger' : u === 'warning' ? 'ring-2 ring-offset-2 ring-offset-surface ring-warning' : ''}`}
                   >
                     <div className="flex justify-between items-start">
                       <div>
                         <div className="font-extrabold">{t.order?.table ? `Table ${t.order.table.table_number}` : 'Takeaway'}</div>
-                        <div className="text-[11px] text-slate-400 font-mono">
+                        <div className="text-[11px] text-muted font-mono">
                           {t.ticket_number} · {t.order?.order_number}
                         </div>
                       </div>
-                      <span className={`text-xs font-mono font-bold ${u === 'late' ? 'text-rose-400' : u === 'warning' ? 'text-amber-300' : 'text-slate-300'}`}>
-                        {elapsed(t.created_at, now)}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {u === 'late' && <LateBadge />}
+                        <span className={`text-xs font-mono font-bold tabular-nums ${u === 'late' ? 'text-danger-fg' : u === 'warning' ? 'text-warning-fg' : 'text-muted'}`}>
+                          {elapsed(t.created_at, now)}
+                        </span>
+                      </div>
                     </div>
                     <ul className="text-sm space-y-1">
                       {(t.ticket_items || []).map((ti) => (
                         <li key={ti.id}>
                           <span className="font-bold">{ti.quantity}×</span> {ti.order_item?.item_name}
                           {ti.order_item?.special_instructions && (
-                            <div className="text-xs text-amber-300 italic">Note: {ti.order_item.special_instructions}</div>
+                            <div className="text-xs text-warning-fg italic">Note: {ti.order_item.special_instructions}</div>
                           )}
                         </li>
                       ))}
@@ -288,12 +295,12 @@ export const KitchenPage: React.FC = () => {
                       <button
                         onClick={() => advance(t)}
                         disabled={busyId === t.id}
-                        className="w-full py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-sm disabled:opacity-50"
+                        className={`w-full py-2 rounded-lg border hover:opacity-90 font-extrabold text-sm disabled:opacity-50 ${statusClasses(statusKind(action.to)).soft} ${statusClasses(statusKind(action.to)).border} ${statusClasses(statusKind(action.to)).text}`}
                       >
                         {busyId === t.id ? 'Updating…' : action.label}
                       </button>
                     ) : (
-                      <div className="text-center text-xs text-emerald-300 font-semibold">Waiting for pickup</div>
+                      <div className="text-center text-xs text-success-fg font-semibold">Waiting for pickup</div>
                     )}
                   </article>
                 );
@@ -301,10 +308,10 @@ export const KitchenPage: React.FC = () => {
             </section>
           );
         })}
-        <section className="bg-slate-900 rounded-2xl p-3 space-y-2 min-h-[60vh]">
-          <h3 className="font-bold text-sm uppercase tracking-wider text-slate-300">Served (recent)</h3>
+        <section className="bg-surface border border-line rounded-lg p-3 space-y-2 min-h-[60vh]">
+          <h3 className="font-bold text-sm uppercase tracking-wider text-muted">Served (recent)</h3>
           {served.map((t) => (
-            <div key={t.id} className="rounded-lg bg-slate-800/60 px-3 py-2 text-xs text-slate-400">
+            <div key={t.id} className="rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted">
               <span className="font-mono">{t.ticket_number}</span> · {t.order?.table ? `Table ${t.order.table.table_number}` : 'Takeaway'}
             </div>
           ))}

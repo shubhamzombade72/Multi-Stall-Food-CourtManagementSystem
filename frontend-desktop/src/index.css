@@ -3,9 +3,138 @@
 @tailwind utilities;
 
 @layer base {
+  /* Semantic colour tokens: space-separated RGB channels so Tailwind opacity modifiers work.
+     *-fg on success/warning/danger/info are the AA-safe TEXT variants; the plain swatch is for fills and borders.
+     --c-subtle is for decorative marks / disabled hints only, not for essential text. */
+  :root {
+    --c-canvas: 250 250 250;
+    --c-surface: 255 255 255;
+    --c-surface-2: 245 245 247;
+    --c-sidebar: 252 252 252;
+    --c-fg: 17 24 39;
+    --c-muted: 100 107 121;
+    --c-subtle: 156 163 175;
+    --c-line: 229 231 235;
+    --c-primary: 159 18 57;
+    --c-primary-fg: 255 255 255;
+    --c-success: 34 197 94;
+    --c-success-fg: 21 128 61;
+    --c-warning: 245 158 11;
+    --c-warning-fg: 180 83 9;
+    --c-danger: 239 68 68;
+    --c-danger-fg: 185 28 28;
+    --c-info: 37 99 235;
+    --c-info-fg: 29 78 216;
+    --c-focus: 190 18 60;
+    /* status kinds: solid (indicator/border), soft (chip background), fg (text on soft and on surface) */
+    --c-st-pending: 107 114 128;
+    --c-st-pending-soft: 243 244 246;
+    --c-st-pending-fg: 55 65 81;
+    --c-st-running: 37 99 235;
+    --c-st-running-soft: 219 234 254;
+    --c-st-running-fg: 30 64 175;
+    --c-st-cooking: 220 38 38;
+    --c-st-cooking-soft: 254 226 226;
+    --c-st-cooking-fg: 153 27 27;
+    --c-st-ready: 217 119 6;
+    --c-st-ready-soft: 254 243 199;
+    --c-st-ready-fg: 146 64 14;
+    --c-st-served: 22 163 74;
+    --c-st-served-soft: 220 252 231;
+    --c-st-served-fg: 22 101 52;
+    --c-st-settled: 13 148 136;
+    --c-st-settled-soft: 204 251 241;
+    --c-st-settled-fg: 17 94 89;
+    --c-st-kitchen: 124 58 237;
+    --c-st-kitchen-soft: 237 233 254;
+    --c-st-kitchen-fg: 91 33 182;
+    --c-st-void: 130 130 140;
+    --c-st-void-soft: 244 244 245;
+    --c-st-void-fg: 90 90 100;
+    --c-st-cancelled: 63 63 70;
+    --c-st-cancelled-soft: 200 200 206;
+    --c-st-cancelled-fg: 39 39 42;
+  }
+  :root[data-theme="dark"] {
+    --c-canvas: 11 11 13;
+    --c-surface: 21 21 23;
+    --c-surface-2: 30 30 34;
+    --c-sidebar: 17 17 19;
+    --c-fg: 244 244 245;
+    --c-muted: 156 163 175;
+    --c-subtle: 113 113 122;
+    --c-line: 38 38 42;
+    --c-primary: 251 113 133;
+    --c-primary-fg: 31 10 15;
+    --c-success: 52 211 153;
+    --c-success-fg: 52 211 153;
+    --c-warning: 251 191 36;
+    --c-warning-fg: 251 191 36;
+    --c-danger: 248 113 113;
+    --c-danger-fg: 248 113 113;
+    --c-info: 96 165 250;
+    --c-info-fg: 96 165 250;
+    --c-focus: 251 113 133;
+    --c-st-pending: 156 163 175;
+    --c-st-pending-soft: 39 39 44;
+    --c-st-pending-fg: 209 213 219;
+    --c-st-running: 96 165 250;
+    --c-st-running-soft: 23 37 84;
+    --c-st-running-fg: 191 219 254;
+    --c-st-cooking: 248 113 113;
+    --c-st-cooking-soft: 69 10 10;
+    --c-st-cooking-fg: 254 202 202;
+    --c-st-ready: 251 191 36;
+    --c-st-ready-soft: 69 40 5;
+    --c-st-ready-fg: 253 230 138;
+    --c-st-served: 74 222 128;
+    --c-st-served-soft: 5 46 22;
+    --c-st-served-fg: 187 247 208;
+    --c-st-settled: 45 212 191;
+    --c-st-settled-soft: 4 47 46;
+    --c-st-settled-fg: 153 246 228;
+    --c-st-kitchen: 167 139 250;
+    --c-st-kitchen-soft: 46 16 101;
+    --c-st-kitchen-fg: 221 214 254;
+    --c-st-void: 113 113 122;
+    --c-st-void-soft: 30 30 34;
+    --c-st-void-fg: 161 161 170;
+    --c-st-cancelled: 212 212 216;
+    --c-st-cancelled-soft: 63 63 70;
+    --c-st-cancelled-fg: 244 244 245;
+  }
+  html {
+    color-scheme: light;
+  }
+  html[data-theme="dark"] {
+    color-scheme: dark;
+  }
   body {
-    @apply antialiased bg-slate-50 text-slate-900;
+    @apply antialiased bg-canvas text-fg font-sans;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    /* Fixed-width figures everywhere: money, quantities, times and timers line up in tables and totals */
+    font-variant-numeric: tabular-nums;
+  }
+  /* Native form controls follow the theme; utility classes still override */
+  input,
+  select,
+  textarea {
+    background-color: rgb(var(--c-surface));
+    color: rgb(var(--c-fg));
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--c-focus));
+    outline-offset: 2px;
+  }
+  /* Shown for a moment before React mounts (see index.html) */
+  .boot-splash {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    background: rgb(var(--c-canvas));
+    color: rgb(var(--c-muted));
   }
 }
 
@@ -14,6 +143,13 @@
   display: none;
 }
 @media print {
+  /* Paper is always black on white; Electron prints with printBackground: true, so the dark theme must not leak */
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    color-scheme: light;
+  }
   /* Named page: receipts use 80 mm thermal paper, reports keep the printer's default size */
   @page receipt {
     size: 80mm auto;
@@ -28,6 +164,12 @@
   #print-root,
   #print-root * {
     visibility: visible !important;
+  }
+  /* Theme-proof paper: nothing inside a printout may inherit a dark-theme colour */
+  #print-root * {
+    color: #000 !important;
+    background: transparent !important;
+    border-color: #000 !important;
   }
   #print-root {
     display: block !important;
@@ -63,13 +205,13 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: rgb(var(--c-surface-2));
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: rgb(var(--c-line));
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: rgb(var(--c-subtle));
 }
 

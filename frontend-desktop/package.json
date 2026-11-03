@@ -1,10 +1,10 @@
 {
   "name": "frontend-desktop",
   "productName": "FoodCourt Desktop",
-  "description": "Multi-Stall Food Court Management System - Windows desktop (Owner, Cashier POS, Kitchen Display, Inventory). Runs on one PC with a built-in server.",
+  "description": "Multi-Stall Food Court Management System - Windows desktop (Owner, Cashier POS, Kitchen Display, Inventory). Runs on one PC with its own database, or joins a shared food court host.",
   "author": "Multi-Stall Food Court",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.1.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -80,7 +80,9 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "Multi-Stall Food Court"
+      "shortcutName": "Multi-Stall Food Court",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
     },
     "extraResources": [
       {

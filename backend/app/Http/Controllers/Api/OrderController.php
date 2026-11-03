@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\StallKitchenTicket;
 use App\Models\StallTicketItem;
+use App\Services\FulfillmentService;
 use App\Support\Sql;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
@@ -397,7 +398,12 @@ class OrderController extends Controller
 
             // Check if any ticket is already preparing
             $hasActivePreparation = $order->kitchenTickets()->whereIn('status', ['preparing', 'ready', 'picked_up'])->exists();
-            if ($hasActivePreparation) {
+            // Item-level progress (board / per-item taps) leaves the ticket at its KDS status, so items are
+            // checked too (read under the order lock held above). Legacy picked_up counts as served.
+            $hasItemProgress = StallTicketItem::whereHas('ticket', fn ($q) => $q->where('order_id', $order->id))
+                ->whereIn('status', ['preparing', 'ready', 'served', 'picked_up'])
+                ->exists();
+            if ($hasActivePreparation || $hasItemProgress) {
                 return 'Cannot cancel order. Food preparation has already started at one or more stalls.';
             }
 
@@ -406,8 +412,9 @@ class OrderController extends Controller
                 'status' => 'cancelled',
                 'notes' => trim(($order->notes ? $order->notes . "\n" : '') . "Cancelled by {$user->name}: {$validated['reason']}"),
             ]);
-            $order->kitchenTickets()->update(['status' => 'cancelled']);
-            $order->items()->update(['status' => 'cancelled']);
+            // Tickets, ticket items (versioned + audited) and order_items are cancelled by the single
+            // fulfilment writer, inside this transaction and under the order lock taken above.
+            app(FulfillmentService::class)->cancelOrderItems($order, $user);
 
             // Release the table only if no other open order is still using it
             if ($order->table_id) {

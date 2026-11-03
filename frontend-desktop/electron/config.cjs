@@ -94,4 +94,15 @@ function parseBundledConfig(text) {
   }
 }
 
-module.exports = { normalizeApiUrl, isLoopbackHost, describeApiUrlWarnings, classifyNetworkError, classifyApiProbe, parseBundledConfig };
+/**
+ * Whether an address saved in config.json should still be used. Addresses typed by hand in 1.0.x on "this
+ * computer" (127.0.0.1 / localhost) pointed at servers that were never installed; without a pairing they are
+ * ignored so the PC falls back to its own built-in database instead of a permanent "cannot reach" screen.
+ */
+function shouldUseSavedAddress(url, paired) {
+  const normalized = normalizeApiUrl(url);
+  if (!normalized) return false;
+  return paired || !isLoopbackHost(new URL(normalized).hostname);
+}
+
+module.exports = { shouldUseSavedAddress, normalizeApiUrl, isLoopbackHost, isPrivateLanHost, describeApiUrlWarnings, classifyNetworkError, classifyApiProbe, parseBundledConfig };

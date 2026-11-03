@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\StallKitchenTicket;
+use App\Services\FulfillmentService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class KitchenController extends Controller
 {
@@ -55,11 +55,11 @@ class KitchenController extends Controller
         ]);
     }
 
-    public function updateTicketStatus(Request $request, $ticketId)
+    public function updateTicketStatus(Request $request, FulfillmentService $fulfillment, $ticketId)
     {
         $user = $request->user();
 
-        $ticket = StallKitchenTicket::with('order.kitchenTickets', 'ticketItems')->findOrFail($ticketId);
+        $ticket = StallKitchenTicket::findOrFail($ticketId);
 
         // Strict security: only this stall's kitchen staff / manager (or the owner) may move its tickets
         $isOwnStallKitchen = ($user->isKitchenStaff() || $user->isStallManager()) && $user->stall_id == $ticket->stall_id;
@@ -73,58 +73,9 @@ class KitchenController extends Controller
 
         $newStatus = $validated['status'];
 
-        // Tickets only move forward: pending -> accepted -> preparing -> ready -> picked_up
-        $sequence = ['pending', 'accepted', 'preparing', 'ready', 'picked_up'];
-        $currentRank = array_search($ticket->status, $sequence, true);
-        if ($currentRank === false || array_search($newStatus, $sequence, true) <= $currentRank) {
-            return response()->json([
-                'success' => false,
-                'message' => "Ticket cannot move from '{$ticket->status}' to '{$newStatus}'.",
-            ], 422);
-        }
-
-        DB::transaction(function () use ($ticket, $newStatus) {
-            $updates = ['status' => $newStatus];
-
-            if ($newStatus === 'accepted' && !$ticket->accepted_at) {
-                $updates['accepted_at'] = now();
-            } elseif ($newStatus === 'ready' && !$ticket->ready_at) {
-                $updates['ready_at'] = now();
-            } elseif ($newStatus === 'picked_up' && !$ticket->picked_up_at) {
-                $updates['picked_up_at'] = now();
-            }
-
-            $ticket->update($updates);
-
-            // Update item statuses inside this ticket
-            $ticket->ticketItems()->update(['status' => $newStatus]);
-
-            // Update Parent Order status dynamically (a settled or cancelled order keeps its status)
-            $parentOrder = $ticket->order;
-            if (in_array($parentOrder->status, ['completed', 'cancelled'], true)) {
-                return;
-            }
-            $allTickets = $parentOrder->kitchenTickets()->get();
-
-            $totalTickets = $allTickets->count();
-            $readyOrPickedUp = $allTickets->whereIn('status', ['ready', 'picked_up'])->count();
-            $preparingCount = $allTickets->whereIn('status', ['accepted', 'preparing'])->count();
-
-            if ($readyOrPickedUp === $totalTickets) {
-                $parentOrder->update(['status' => 'ready']);
-            } elseif ($readyOrPickedUp > 0 || $preparingCount > 0) {
-                $parentOrder->update(['status' => 'partially_ready']);
-            }
-        });
-
-        try {
-            event(new \App\Events\TicketStatusUpdatedEvent($ticket));
-            if ($newStatus === 'ready') {
-                event(new \App\Events\TicketReadyEvent($ticket));
-            }
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('Broadcast Ticket event failed: ' . $e->getMessage());
-        }
+        // Forward-only state machine (422 "Ticket cannot move from ..."), item moves, order derivation,
+        // locking and post-commit broadcasts all live in the single fulfilment writer.
+        $ticket = $fulfillment->applyTicketStatus((int) $ticket->id, $newStatus, $user);
 
         return response()->json([
             'success' => true,

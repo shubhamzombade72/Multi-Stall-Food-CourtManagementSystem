@@ -1,0 +1,164 @@
+[
+  {
+    "id": "U-01",
+    "desc": "Opens by itself to the Welcome screen (no server screen, nothing to configure)",
+    "result": "PASS",
+    "evidence": "Starting application > Preparing database > Connecting to food court services"
+  },
+  {
+    "id": "U-02",
+    "desc": "Welcome screen shows no address, port, or server/database product names",
+    "result": "PASS",
+    "evidence": "Welcome Create the owner account for this Food Court. You will use it to sign i"
+  },
+  {
+    "id": "U-03",
+    "desc": "Welcome offers \"connect to an existing food court\" (multi-PC) and \"restore from a backup\" (new PC)",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-14b",
+    "desc": "The scheduled automatic backup ran by itself and was recorded as successful",
+    "result": "PASS",
+    "evidence": "foodcourt-auto-2026-11-03T16-45-11-705Z.sqlite"
+  },
+  {
+    "id": "U-04",
+    "desc": "A weak password is refused with a clear message",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-05",
+    "desc": "Mismatched passwords are refused",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-06",
+    "desc": "The owner is shown a one-time recovery key",
+    "result": "PASS",
+    "evidence": "LEJG********************"
+  },
+  {
+    "id": "U-07",
+    "desc": "Cannot continue until the key is confirmed saved",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-08",
+    "desc": "Owner lands on the dashboard after setup",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-09",
+    "desc": "Device Settings has no server address, port, health-check or \"advanced connection\" fields",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-10",
+    "desc": "Status is shown in plain words",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-11",
+    "desc": "Owner can back up now; the backup is checked and listed",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-12",
+    "desc": "A new recovery key needs the owner password",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-13",
+    "desc": "A replacement recovery key is issued and differs from the first",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-14",
+    "desc": "Administrator support information is available to the owner and reports healthy services",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-15",
+    "desc": "Wrong password: clear message, nothing technical",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-16",
+    "desc": "Correct password signs in even when the email is typed in other capitals",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-17",
+    "desc": "Closing the app stops its built-in server (nothing left running)",
+    "result": "PASS",
+    "evidence": "php processes: 0"
+  },
+  {
+    "id": "U-18",
+    "desc": "Reopening needs no setup and no commands; the data is still there",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-19",
+    "desc": "A replaced (old) recovery key no longer works",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-20",
+    "desc": "The current recovery key resets the owner password and issues a new key",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-21",
+    "desc": "Owner signs in with the recovered password",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-22",
+    "desc": "A damaged database shows \"Service unavailable. Contact your administrator.\" with Try again / Restore / Copy support info",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-23",
+    "desc": "The failure text is plain language and says the data was not changed",
+    "result": "PASS",
+    "evidence": "Food Court Management Service unavailable. Contact your administrator. The database on t"
+  },
+  {
+    "id": "U-24",
+    "desc": "The damaged database file was left exactly as it was",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "U-25",
+    "desc": "A PC whose food court host is switched off is told so in plain words, with Try again",
+    "result": "PASS",
+    "evidence": "Food Court Management Cannot reach the food court This computer cannot reach the food co"
+  },
+  {
+    "id": "U-LOG",
+    "desc": "The support log contains no passwords or tokens",
+    "result": "PASS",
+    "evidence": "8 lines"
+  }
+]

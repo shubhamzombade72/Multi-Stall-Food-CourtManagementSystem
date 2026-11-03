@@ -73,7 +73,7 @@ export const CustomersPage: React.FC = () => {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 max-w-7xl mx-auto space-y-4">
       <PageHeader
         title="Customers"
         icon={Contact}
@@ -95,7 +95,7 @@ export const CustomersPage: React.FC = () => {
         }}
       >
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+          <Search className="w-4 h-4 text-subtle absolute left-3 top-2.5" />
           <input aria-label="Search customers" placeholder="Search name, phone or email" value={search} onChange={(e) => setSearch(e.target.value)} className={`${inputClass} pl-9`} />
         </div>
         <button type="submit" className={buttonClass.secondary}>
@@ -111,33 +111,33 @@ export const CustomersPage: React.FC = () => {
           <EmptyState title={query ? 'No customers match the search' : 'No customers saved yet'} hint="Customers can also be saved from the POS when taking an order." />
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+            <thead className="bg-canvas text-xs uppercase text-muted">
               <tr>
-                <th className="text-left px-4 py-3">Name</th>
-                <th className="text-left px-4 py-3">Phone</th>
-                <th className="text-left px-4 py-3">Email</th>
-                <th className="text-right px-4 py-3">Orders</th>
-                <th className="text-right px-4 py-3">Paid total</th>
-                <th className="text-left px-4 py-3">Last order</th>
-                <th className="text-right px-4 py-3">Actions</th>
+                <th className="text-left px-3 py-1.5">Name</th>
+                <th className="text-left px-3 py-1.5">Phone</th>
+                <th className="text-left px-3 py-1.5">Email</th>
+                <th className="text-right px-3 py-1.5">Orders</th>
+                <th className="text-right px-3 py-1.5">Paid total</th>
+                <th className="text-left px-3 py-1.5">Last order</th>
+                <th className="text-right px-3 py-1.5">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-line">
               {rows.map((c) => (
                 <tr key={c.id}>
-                  <td className="px-4 py-3 font-semibold">{c.name}</td>
-                  <td className="px-4 py-3 font-mono">{c.phone}</td>
-                  <td className="px-4 py-3 text-slate-500">{c.email || '—'}</td>
-                  <td className="px-4 py-3 text-right">{c.orders_count ?? 0}</td>
-                  <td className="px-4 py-3 text-right">{money(c.total_paid)}</td>
-                  <td className="px-4 py-3 text-slate-500">{dateTime(c.last_order_at)}</td>
-                  <td className="px-4 py-3 text-right space-x-3 whitespace-nowrap">
-                    <button onClick={() => openDetail(c)} className="text-xs font-bold text-slate-700">
+                  <td className="px-3 py-1.5 font-semibold">{c.name}</td>
+                  <td className="px-3 py-1.5 font-mono">{c.phone}</td>
+                  <td className="px-3 py-1.5 text-muted">{c.email || '—'}</td>
+                  <td className="px-3 py-1.5 text-right">{c.orders_count ?? 0}</td>
+                  <td className="px-3 py-1.5 text-right">{money(c.total_paid)}</td>
+                  <td className="px-3 py-1.5 text-muted whitespace-nowrap">{dateTime(c.last_order_at)}</td>
+                  <td className="px-3 py-1.5 text-right space-x-3 whitespace-nowrap">
+                    <button onClick={() => openDetail(c)} className="text-xs font-bold text-fg">
                       History
                     </button>
                     <button
                       onClick={() => { setFormError(null); setForm({ id: c.id, name: c.name, phone: c.phone, email: c.email || '', notes: c.notes || '' }); }}
-                      className="text-xs font-bold text-brand-600"
+                      className="text-xs font-bold text-primary"
                     >
                       Edit
                     </button>
@@ -170,25 +170,25 @@ export const CustomersPage: React.FC = () => {
       {detail && (
         <Modal title={`${detail.customer.name} · ${detail.customer.phone}`} onClose={() => setDetail(null)} wide>
           <div className="grid grid-cols-3 gap-3 text-sm">
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xs text-slate-500">Orders</p>
+            <div className="bg-canvas rounded-lg p-3">
+              <p className="text-xs text-muted">Orders</p>
               <p className="text-xl font-bold">{detail.summary.orders_count}</p>
             </div>
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xs text-slate-500">Paid total</p>
+            <div className="bg-canvas rounded-lg p-3">
+              <p className="text-xs text-muted">Paid total</p>
               <p className="text-xl font-bold">{money(detail.summary.total_paid)}</p>
             </div>
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xs text-slate-500">Email</p>
+            <div className="bg-canvas rounded-lg p-3">
+              <p className="text-xs text-muted">Email</p>
               <p className="font-semibold truncate">{detail.customer.email || '—'}</p>
             </div>
           </div>
-          {detail.customer.notes && <p className="text-sm text-slate-600 bg-amber-50 border border-amber-100 rounded-lg p-2">{detail.customer.notes}</p>}
+          {detail.customer.notes && <p className="text-sm text-muted bg-warning/10 border border-warning/40 rounded-lg p-2">{detail.customer.notes}</p>}
           {detail.orders.length === 0 ? (
             <EmptyState title="No orders with this phone number yet" />
           ) : (
             <table className="w-full text-sm">
-              <thead className="text-xs uppercase text-slate-500">
+              <thead className="text-xs uppercase text-muted">
                 <tr>
                   <th className="text-left py-2">Order</th>
                   <th className="text-left py-2">Date</th>
@@ -197,11 +197,11 @@ export const CustomersPage: React.FC = () => {
                   <th className="text-right py-2">Total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-line">
                 {detail.orders.map((o: any) => (
                   <tr key={o.id}>
-                    <td className="py-2 font-mono">{o.order_number}</td>
-                    <td className="py-2 text-slate-500">{dateTime(o.created_at)}</td>
+                    <td className="py-2 font-mono whitespace-nowrap">{o.order_number}</td>
+                    <td className="py-2 text-muted whitespace-nowrap">{dateTime(o.created_at)}</td>
                     <td className="py-2 text-xs">{[...new Set((o.items || []).map((i: any) => i.stall?.name))].join(', ')}</td>
                     <td className="py-2">
                       <Badge tone={statusTone(o.status)}>{humanize(o.status)}</Badge>

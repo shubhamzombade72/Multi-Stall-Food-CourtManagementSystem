@@ -3,11 +3,10 @@ import { desktop, isDesktopApp, logError, type DesktopConfig } from '../desktop/
 import { API_NOT_CONFIGURED } from '../lib/apiErrors';
 
 // Web build: VITE_API_BASE_URL or same-origin /api (the web build is served next to the API).
-// Desktop (Electron): there is NO build-time default. By default the app starts its own server on this PC
-// and the Electron main process reports its address; a saved/release address for a shared server takes
-// precedence. Either way it is loaded by initApiBaseUrl() before the UI renders. Until it is known,
-// API_BASE_URL is '' and every API call is refused with API_NOT_CONFIGURED, so the app shows a setup or
-// error screen instead of guessing a host.
+// Desktop (Electron): there is NO build-time default and nobody types an address. The main process reports
+// the address of this PC's own built-in server, or of the food court host this PC was connected to; it is
+// loaded by initApiBaseUrl() once the startup screen reports ready. Until then API_BASE_URL is '' and every
+// API call is refused with API_NOT_CONFIGURED instead of guessing a host.
 export let API_BASE_URL: string = isDesktopApp() ? '' : import.meta.env.VITE_API_BASE_URL || '/api';
 
 export const isApiConfigured = (): boolean => API_BASE_URL !== '';

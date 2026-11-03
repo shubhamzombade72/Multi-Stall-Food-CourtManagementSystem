@@ -47,6 +47,16 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by(Str::lower((string) $request->input('email')) . '|' . $request->ip());
         });
 
+        // Each sensitive route gets its OWN counter. Unnamed throttle:N,M middleware share one counter per IP/user,
+        // so stacking them would let polling the status endpoint lock out owner recovery.
+        RateLimiter::for('setup-status', fn (Request $request) => Limit::perMinute(60)->by('setup-status|' . $request->ip()));
+        RateLimiter::for('setup-owner', fn (Request $request) => Limit::perMinute(10)->by('setup-owner|' . $request->ip()));
+        RateLimiter::for('owner-recovery', fn (Request $request) => Limit::perMinute(5)->by('owner-recovery|' . $request->ip()));
+        RateLimiter::for('recovery-key', fn (Request $request) => Limit::perMinute(5)->by('recovery-key|' . ($request->user()?->id ?? $request->ip())));
+        RateLimiter::for('pairing-redeem', fn (Request $request) => Limit::perMinute(10)->by('pairing-redeem|' . $request->ip()));
+        RateLimiter::for('pairing-codes', fn (Request $request) => Limit::perMinute(10)->by('pairing-codes|' . ($request->user()?->id ?? $request->ip())));
+        RateLimiter::for('system-ready', fn (Request $request) => Limit::perMinute(120)->by('system-ready|' . $request->ip()));
+
         // Public QR ordering: flood control per table, plus a ceiling per source IP that still allows a
         // whole food court of phones behind one NAT/guest Wi-Fi gateway at peak hour.
         RateLimiter::for('public-orders', function (Request $request) {

@@ -103,11 +103,11 @@ export const SuppliersPanel: React.FC<{ stalls: { id: number; name: string }[]; 
         }}
       >
         <div className="relative flex-1 min-w-[240px]">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+          <Search className="w-4 h-4 text-muted absolute left-3 top-2.5" />
           <input aria-label="Search suppliers" placeholder="Search name, contact or phone" value={search} onChange={(e) => setSearch(e.target.value)} className={`${inputClass} pl-9`} />
         </div>
         {stalls.length > 1 && (
-          <select aria-label="Filter suppliers by stall" value={stallId} onChange={(e) => setStallId(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 text-sm">
+          <select aria-label="Filter suppliers by stall" value={stallId} onChange={(e) => setStallId(e.target.value)} className="px-3 py-2 rounded-lg border border-line text-sm">
             <option value="">All stalls</option>
             {stalls.map((s) => (
               <option key={s.id} value={s.id}>
@@ -116,7 +116,7 @@ export const SuppliersPanel: React.FC<{ stalls: { id: number; name: string }[]; 
             ))}
           </select>
         )}
-        <select aria-label="Filter suppliers by status" value={status} onChange={(e) => setStatus(e.target.value as any)} className="px-3 py-2 rounded-xl border border-slate-200 text-sm">
+        <select aria-label="Filter suppliers by status" value={status} onChange={(e) => setStatus(e.target.value as any)} className="px-3 py-2 rounded-lg border border-line text-sm">
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
           <option value="all">All</option>
@@ -138,39 +138,39 @@ export const SuppliersPanel: React.FC<{ stalls: { id: number; name: string }[]; 
           {visible.map((sup) => (
             <Card key={sup.id} className={`p-5 space-y-3 ${sup.is_active ? '' : 'opacity-60'}`}>
               <div className="flex items-center justify-between gap-2">
-                <h4 className="font-bold text-slate-900 text-sm">{sup.name}</h4>
+                <h4 className="font-bold text-fg text-sm">{sup.name}</h4>
                 <Badge tone={sup.is_active ? 'green' : 'slate'}>{sup.is_active ? 'Active' : 'Inactive'}</Badge>
               </div>
-              <p className="text-[11px] text-slate-500">{sup.stall?.name}</p>
-              <div className="text-xs text-slate-500 space-y-1.5">
+              <p className="text-[11px] text-muted">{sup.stall?.name}</p>
+              <div className="text-xs text-muted space-y-1.5">
                 {sup.contact_person && <p>Contact: {sup.contact_person}</p>}
                 {sup.phone && (
                   <p className="flex items-center">
-                    <Phone className="w-3.5 h-3.5 mr-1 text-slate-400" />
+                    <Phone className="w-3.5 h-3.5 mr-1 text-muted" />
                     {sup.phone}
                   </p>
                 )}
                 {sup.email && (
                   <p className="flex items-center">
-                    <Mail className="w-3.5 h-3.5 mr-1 text-slate-400" />
+                    <Mail className="w-3.5 h-3.5 mr-1 text-muted" />
                     {sup.email}
                   </p>
                 )}
-                {sup.address && <p className="text-[11px] text-slate-400">{sup.address}</p>}
+                {sup.address && <p className="text-[11px] text-muted">{sup.address}</p>}
               </div>
-              <p className="text-xs text-slate-600">
+              <p className="text-xs text-muted">
                 {sup.purchase_orders_count ?? 0} purchase order(s) · received {money(sup.received_total)}
               </p>
               <div className="flex gap-3 pt-1">
-                <button onClick={() => openHistory(sup)} className="text-xs font-bold text-slate-700">
+                <button onClick={() => openHistory(sup)} className="text-xs font-bold text-fg">
                   History
                 </button>
                 {canManage && (
                   <>
-                    <button onClick={() => { setFormError(null); setEditing({ ...sup }); }} className="text-xs font-bold text-brand-600">
+                    <button onClick={() => { setFormError(null); setEditing({ ...sup }); }} className="text-xs font-bold text-primary">
                       Edit
                     </button>
-                    <button onClick={() => toggle(sup)} className="text-xs font-bold text-rose-600">
+                    <button onClick={() => toggle(sup)} className="text-xs font-bold text-danger-fg">
                       {sup.is_active ? 'Deactivate' : 'Activate'}
                     </button>
                   </>
@@ -204,16 +204,16 @@ export const SuppliersPanel: React.FC<{ stalls: { id: number; name: string }[]; 
       {history && (
         <Modal title={`${history.supplier.name} · purchase history`} onClose={() => setHistory(null)} wide>
           <div className="grid grid-cols-3 gap-3 text-sm">
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xs text-slate-500">Purchase orders</p>
+            <div className="bg-surface-2 rounded-lg p-3">
+              <p className="text-xs text-muted">Purchase orders</p>
               <p className="text-xl font-bold">{history.summary.purchase_orders}</p>
             </div>
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xs text-slate-500">Received value</p>
+            <div className="bg-surface-2 rounded-lg p-3">
+              <p className="text-xs text-muted">Received value</p>
               <p className="text-xl font-bold">{money(history.summary.received_total)}</p>
             </div>
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xs text-slate-500">Open orders</p>
+            <div className="bg-surface-2 rounded-lg p-3">
+              <p className="text-xs text-muted">Open orders</p>
               <p className="text-xl font-bold">{history.summary.open_orders}</p>
             </div>
           </div>
@@ -221,7 +221,7 @@ export const SuppliersPanel: React.FC<{ stalls: { id: number; name: string }[]; 
             <EmptyState title="No purchase orders with this supplier yet" />
           ) : (
             <table className="w-full text-sm">
-              <thead className="text-xs uppercase text-slate-500">
+              <thead className="text-xs uppercase text-muted">
                 <tr>
                   <th className="text-left py-2">PO</th>
                   <th className="text-left py-2">Date</th>
@@ -230,11 +230,11 @@ export const SuppliersPanel: React.FC<{ stalls: { id: number; name: string }[]; 
                   <th className="text-right py-2">Total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-line">
                 {history.purchases.map((po: any) => (
                   <tr key={po.id}>
-                    <td className="py-2 font-mono">{po.purchase_number}</td>
-                    <td className="py-2">{dateOnly(po.order_date)}</td>
+                    <td className="py-2 font-mono whitespace-nowrap">{po.purchase_number}</td>
+                    <td className="py-2 whitespace-nowrap">{dateOnly(po.order_date)}</td>
                     <td className="py-2 text-xs">{po.items.map((i: any) => `${i.inventory_item?.name} ×${Number(i.quantity)}`).join(', ')}</td>
                     <td className="py-2">
                       <Badge tone={statusTone(po.status)}>{humanize(po.status)}</Badge>

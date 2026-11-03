@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\DiningTable;
 use App\Models\StallKitchenTicket;
+use App\Services\FulfillmentService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class WaiterController extends Controller
 {
@@ -51,55 +51,22 @@ class WaiterController extends Controller
         ]);
     }
 
-    public function markTicketServed(Request $request, $ticketId)
+    public function markTicketServed(Request $request, FulfillmentService $fulfillment, $ticketId)
     {
         $waiter = $request->user();
         if (!$waiter->isWaiter() && !$waiter->isOwner()) {
             return response()->json(['success' => false, 'message' => 'Unauthorized. Only waiters can confirm serving.'], 403);
         }
 
-        return DB::transaction(function () use ($ticketId, $waiter) {
-            $ticket = StallKitchenTicket::where('id', $ticketId)->lockForUpdate()->firstOrFail();
+        // Locks order -> ticket -> items, serves the ticket's unserved items (versioned, mirrored, audited)
+        // and derives the order status. Not ready -> 422 "Ticket is '...', only ready tickets can be served."
+        $result = $fulfillment->serveTicket((int) $ticketId, $waiter);
 
-            // Idempotent: a repeated tap (or offline retry) on an already-served ticket is a no-op
-            if ($ticket->status === 'picked_up') {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Food already marked as served',
-                    'data' => $ticket->fresh(['order.table', 'stall']),
-                ]);
-            }
-
-            if ($ticket->status !== 'ready') {
-                return response()->json([
-                    'success' => false,
-                    'message' => "Ticket is '{$ticket->status}', only ready tickets can be served.",
-                ], 422);
-            }
-
-            $ticket->update([
-                'status' => 'picked_up',
-                'picked_up_at' => now(),
-                'served_by_waiter_id' => $waiter->id,
-            ]);
-
-            $ticket->ticketItems()->update(['status' => 'served']);
-
-            // Check if all tickets for parent order are now served (a settled order keeps 'completed')
-            $parentOrder = $ticket->order()->lockForUpdate()->first();
-            $allServed = $parentOrder->kitchenTickets()->get()->every(function ($t) {
-                return in_array($t->status, ['picked_up', 'cancelled']);
-            });
-
-            if ($allServed && !in_array($parentOrder->status, ['completed', 'cancelled'], true)) {
-                $parentOrder->update(['status' => 'served']);
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Food marked as served to table',
-                'data' => $ticket->fresh(['order.table', 'stall']),
-            ]);
-        });
+        // Idempotent: a repeated tap (or offline retry) on an already-served ticket is a no-op
+        return response()->json([
+            'success' => true,
+            'message' => $result['already'] ? 'Food already marked as served' : 'Food marked as served to table',
+            'data' => $result['ticket']->fresh(['order.table', 'stall']),
+        ]);
     }
 }

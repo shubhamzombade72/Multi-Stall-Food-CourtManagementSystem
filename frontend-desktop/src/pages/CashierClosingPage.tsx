@@ -89,12 +89,12 @@ export const CashierClosingPage: React.FC = () => {
   const varianceTone = (v: number) => (v === 0 ? 'green' : v < 0 ? 'red' : 'amber');
 
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-6">
+    <div className="p-4 max-w-6xl mx-auto space-y-4">
       <PageHeader title="Cashier Closing" icon={Calculator} subtitle="Count the cash from sales at the end of the day and record it against the system's cash payments." />
       <ErrorBanner message={error} />
       <SuccessBanner message={success} />
 
-      <Card className="p-6 space-y-4">
+      <Card className="p-4 space-y-4">
         <div className="grid grid-cols-3 gap-4">
           <Field label="Business date">
             <input type="date" max={isoDate()} value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
@@ -114,37 +114,37 @@ export const CashierClosingPage: React.FC = () => {
         </div>
 
         {!preview ? (
-          <p className="text-sm text-slate-500">{isOwner ? 'Select a cashier to see their totals.' : 'Loading your totals…'}</p>
+          <p className="text-sm text-muted">{isOwner ? 'Select a cashier to see their totals.' : 'Loading your totals…'}</p>
         ) : (
           <>
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-slate-50 rounded-xl p-4">
-                <p className="text-xs text-slate-500">Payments taken</p>
-                <p className="text-2xl font-bold">{preview.totals.payments_count}</p>
+              <div className="bg-canvas rounded-lg p-4">
+                <p className="text-xs text-muted">Payments taken</p>
+                <p className="text-xl font-bold">{preview.totals.payments_count}</p>
               </div>
-              <div className="bg-slate-50 rounded-xl p-4">
-                <p className="text-xs text-slate-500">Expected cash (cash payments)</p>
-                <p className="text-2xl font-bold" data-testid="expected-cash">
+              <div className="bg-canvas rounded-lg p-4">
+                <p className="text-xs text-muted">Expected cash (cash payments)</p>
+                <p className="text-xl font-bold" data-testid="expected-cash">
                   {money(preview.totals.expected_cash)}
                 </p>
               </div>
-              <div className="bg-slate-50 rounded-xl p-4">
-                <p className="text-xs text-slate-500">Card / UPI / other</p>
-                <p className="text-2xl font-bold">{money(preview.totals.non_cash_total)}</p>
+              <div className="bg-canvas rounded-lg p-4">
+                <p className="text-xs text-muted">Card / UPI / other</p>
+                <p className="text-xl font-bold">{money(preview.totals.non_cash_total)}</p>
               </div>
             </div>
 
             {preview.closing ? (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm space-y-1">
-                <p className="font-bold text-emerald-900">
+              <div className="rounded-lg border border-success/40 bg-success/10 p-4 text-sm space-y-1">
+                <p className="font-bold text-success-fg">
                   Closed by {preview.closing.closed_by?.name} at {dateTime(preview.closing.created_at)}
                 </p>
                 <p>
                   Counted {money(preview.closing.counted_cash)} · expected {money(preview.closing.expected_cash)} · variance{' '}
                   <Badge tone={varianceTone(Number(preview.closing.variance))}>{money(preview.closing.variance)}</Badge>
                 </p>
-                {preview.closing.notes && <p className="text-slate-600">Note: {preview.closing.notes}</p>}
-                <p className="text-xs text-slate-500">Payments taken after this closing are not included in it.</p>
+                {preview.closing.notes && <p className="text-muted">Note: {preview.closing.notes}</p>}
+                <p className="text-xs text-muted">Payments taken after this closing are not included in it.</p>
               </div>
             ) : (
               <form onSubmit={submit} className="grid grid-cols-3 gap-4 items-end">
@@ -171,38 +171,38 @@ export const CashierClosingPage: React.FC = () => {
       </Card>
 
       <Card className="overflow-hidden">
-        <h3 className="font-bold px-4 pt-4">Closing history</h3>
+        <h3 className="font-semibold text-base px-4 pt-4">Closing history</h3>
         {history === null ? (
           <Loading />
         ) : history.length === 0 ? (
           <EmptyState title="No cashier closings recorded yet" />
         ) : (
           <table className="w-full text-sm mt-2">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+            <thead className="bg-canvas text-xs uppercase text-muted">
               <tr>
-                <th className="text-left px-4 py-2">Date</th>
-                <th className="text-left px-4 py-2">Cashier</th>
-                <th className="text-right px-4 py-2">Payments</th>
-                <th className="text-right px-4 py-2">Expected</th>
-                <th className="text-right px-4 py-2">Counted</th>
-                <th className="text-right px-4 py-2">Variance</th>
-                <th className="text-right px-4 py-2">Non-cash</th>
-                <th className="text-left px-4 py-2">Closed by</th>
+                <th className="text-left px-3 py-2">Date</th>
+                <th className="text-left px-3 py-2">Cashier</th>
+                <th className="text-right px-3 py-2">Payments</th>
+                <th className="text-right px-3 py-2">Expected</th>
+                <th className="text-right px-3 py-2">Counted</th>
+                <th className="text-right px-3 py-2">Variance</th>
+                <th className="text-right px-3 py-2">Non-cash</th>
+                <th className="text-left px-3 py-2">Closed by</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-line">
               {history.map((c) => (
                 <tr key={c.id}>
-                  <td className="px-4 py-2">{dateOnly(c.business_date)}</td>
-                  <td className="px-4 py-2 font-semibold">{c.cashier?.name}</td>
-                  <td className="px-4 py-2 text-right">{c.payments_count}</td>
-                  <td className="px-4 py-2 text-right">{money(c.expected_cash)}</td>
-                  <td className="px-4 py-2 text-right">{money(c.counted_cash)}</td>
-                  <td className="px-4 py-2 text-right">
+                  <td className="px-3 py-2 whitespace-nowrap">{dateOnly(c.business_date)}</td>
+                  <td className="px-3 py-2 font-semibold">{c.cashier?.name}</td>
+                  <td className="px-3 py-2 text-right">{c.payments_count}</td>
+                  <td className="px-3 py-2 text-right">{money(c.expected_cash)}</td>
+                  <td className="px-3 py-2 text-right">{money(c.counted_cash)}</td>
+                  <td className="px-3 py-2 text-right">
                     <Badge tone={varianceTone(Number(c.variance))}>{money(c.variance)}</Badge>
                   </td>
-                  <td className="px-4 py-2 text-right">{money(c.non_cash_total)}</td>
-                  <td className="px-4 py-2 text-slate-500">{c.closed_by?.name}</td>
+                  <td className="px-3 py-2 text-right">{money(c.non_cash_total)}</td>
+                  <td className="px-3 py-2 text-muted">{c.closed_by?.name}</td>
                 </tr>
               ))}
             </tbody>

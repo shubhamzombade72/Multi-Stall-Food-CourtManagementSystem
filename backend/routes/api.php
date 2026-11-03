@@ -5,11 +5,13 @@ use App\Http\Controllers\Api\BillingController;
 use App\Http\Controllers\Api\CashierClosingController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DiningTableController;
+use App\Http\Controllers\Api\FulfillmentController;
 use App\Http\Controllers\Api\InventoryController;
 use App\Http\Controllers\Api\KitchenController;
 use App\Http\Controllers\Api\MenuController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\PairingController;
 use App\Http\Controllers\Api\PurchaseController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SettingsController;
@@ -17,6 +19,7 @@ use App\Http\Controllers\Api\SetupController;
 use App\Http\Controllers\Api\SettlementController;
 use App\Http\Controllers\Api\StaffController;
 use App\Http\Controllers\Api\StallController;
+use App\Http\Controllers\Api\SystemController;
 use App\Http\Controllers\Api\WaiterController;
 use Illuminate\Support\Facades\Route;
 
@@ -30,10 +33,18 @@ Route::prefix('auth')->group(function () {
 });
 
 // Desktop built-in server only (config/foodcourt.php); 404 everywhere else
-Route::prefix('setup')->middleware('throttle:10,1')->group(function () {
-    Route::get('/status', [SetupController::class, 'status']);
-    Route::post('/owner', [SetupController::class, 'createOwner']);
+// Each route has its own named limiter: stacked unnamed throttles would share one counter per IP
+Route::prefix('setup')->group(function () {
+    Route::get('/status', [SetupController::class, 'status'])->middleware('throttle:setup-status');
+    Route::post('/owner', [SetupController::class, 'createOwner'])->middleware('throttle:setup-owner');
+    Route::post('/recover', [SetupController::class, 'recover'])->middleware('throttle:owner-recovery');
 });
+
+// Multi-PC: a terminal redeems the owner's one-time code (shared host only; 404 on a built-in server)
+Route::post('/pairing/redeem', [PairingController::class, 'redeem'])->middleware('throttle:pairing-redeem');
+
+// Readiness for the desktop app and monitors: booleans only
+Route::get('/system/ready', [SystemController::class, 'ready'])->middleware('throttle:system-ready');
 
 Route::prefix('public')->group(function () {
     Route::get('/stalls', [StallController::class, 'index']);
@@ -52,6 +63,12 @@ Route::prefix('public')->group(function () {
 Route::middleware(['auth:sanctum', 'active'])->group(function () {
     // Auth & Profile
     Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::post('/setup/recovery-key', [SetupController::class, 'issueRecoveryKey'])->middleware('throttle:recovery-key');
+
+    // Multi-PC pairing (owner)
+    Route::post('/pairing/codes', [PairingController::class, 'createCode'])->middleware('throttle:pairing-codes');
+    Route::get('/pairing/devices', [PairingController::class, 'devices']);
+    Route::delete('/pairing/devices/{id}', [PairingController::class, 'revoke']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
     // Stalls
@@ -100,7 +117,9 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     // Order Pipeline
     Route::get('/orders', [OrderController::class, 'index']);
     Route::post('/orders', [OrderController::class, 'createOrder']);
+    Route::get('/orders/board', [FulfillmentController::class, 'board']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
+    Route::post('/orders/{id}/serve-remaining', [FulfillmentController::class, 'serveRemaining'])->whereNumber('id');
     Route::post('/orders/{id}/cancel', [OrderController::class, 'cancelOrder']);
 
     // Kitchen Display System (KDS)
@@ -111,6 +130,9 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/waiter/tables', [WaiterController::class, 'getActiveTables']);
     Route::get('/waiter/ready-tickets', [WaiterController::class, 'getReadyTickets']);
     Route::post('/waiter/tickets/{id}/served', [WaiterController::class, 'markTicketServed']);
+
+    // Item-level fulfilment (single writer: FulfillmentService)
+    Route::patch('/ticket-items/{id}/status', [FulfillmentController::class, 'updateItemStatus'])->whereNumber('id');
 
     // Cashier POS & Billing
     Route::get('/billing/pending', [BillingController::class, 'getPendingBills']);

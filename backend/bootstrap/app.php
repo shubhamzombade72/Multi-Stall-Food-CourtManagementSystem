@@ -21,9 +21,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'active' => \App\Http\Middleware\EnsureUserIsActive::class,
         ]);
+        $middleware->appendToGroup('api', \App\Http\Middleware\RequirePairedDevice::class);
         $middleware->appendToGroup('api', \App\Http\Middleware\LogAccessDenied::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Expected fulfilment refusals (403 role, 409 version/key conflict, 422 transition) are normal results of
+        // double taps and races; they are rendered to the client and must not flood the error log.
+        $exceptions->dontReport(\App\Exceptions\FulfillmentException::class);
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );

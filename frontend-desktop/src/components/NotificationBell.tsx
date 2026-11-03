@@ -16,7 +16,7 @@ interface Notice {
 }
 
 const POLL_MS = 15000;
-const levelDot: Record<string, string> = { info: 'bg-sky-500', success: 'bg-emerald-500', warning: 'bg-amber-500' };
+const levelDot: Record<string, string> = { info: 'bg-st-running', success: 'bg-st-served', warning: 'bg-st-ready' };
 
 const seenKey = (userId?: number) => `foodcourt.notifications.seen.${userId ?? 'anon'}`;
 const readSeen = (userId?: number): number => {
@@ -83,26 +83,26 @@ export const NotificationBell: React.FC = () => {
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`}
-        className="relative p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+        className="relative p-2 rounded-lg text-muted hover:bg-surface-2 hover:text-fg"
       >
         <Bell className="w-5 h-5" />
         {unread > 0 && (
-          <span data-testid="notification-count" className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center">
+          <span data-testid="notification-count" className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-danger-fg text-surface text-[10px] font-bold flex items-center justify-center">
             {unread > 99 ? '99+' : unread}
           </span>
         )}
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden" role="dialog" aria-label="Notifications">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-            <span className="font-bold text-sm text-slate-900">Notifications</span>
-            <button onClick={markAllRead} className="text-xs font-bold text-brand-600">
+        <div className="absolute right-0 mt-2 w-96 bg-surface border border-line rounded-lg shadow-2xl z-50 overflow-hidden" role="dialog" aria-label="Notifications">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-line">
+            <span className="font-bold text-sm text-fg">Notifications</span>
+            <button onClick={markAllRead} className="text-xs font-bold text-primary">
               Mark all read
             </button>
           </div>
-          <div className="max-h-[420px] overflow-y-auto divide-y divide-slate-100">
-            {failed && <p className="p-4 text-xs text-rose-600">Could not load notifications (server unreachable).</p>}
-            {!failed && items.length === 0 && <p className="p-6 text-center text-xs text-slate-400">Nothing new in the last 12 hours.</p>}
+          <div className="max-h-[420px] overflow-y-auto divide-y divide-line">
+            {failed && <p className="p-4 text-xs text-danger-fg">Could not load notifications (server unreachable).</p>}
+            {!failed && items.length === 0 && <p className="p-6 text-center text-xs text-muted">Nothing new in the last 12 hours.</p>}
             {items.map((n) => {
               const isNew = new Date(n.at).getTime() > seenAt;
               return (
@@ -112,14 +112,14 @@ export const NotificationBell: React.FC = () => {
                     setOpen(false);
                     navigate(n.link);
                   }}
-                  className={`w-full text-left px-4 py-3 hover:bg-slate-50 flex items-start space-x-3 ${isNew ? 'bg-sky-50/40' : ''}`}
+                  className={`w-full text-left px-4 py-3 hover:bg-surface-2 flex items-start space-x-3 ${isNew ? 'bg-st-running-soft' : ''}`}
                 >
                   <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${levelDot[n.level] || levelDot.info}`} />
                   <span className="flex-1 min-w-0">
-                    <span className={`block text-sm ${isNew ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>{n.title}</span>
-                    <span className="block text-xs text-slate-500 truncate">{n.message}</span>
+                    <span className={`block text-sm ${isNew ? 'font-bold text-fg' : 'font-medium text-fg'}`}>{n.title}</span>
+                    <span className="block text-xs text-muted truncate">{n.message}</span>
                   </span>
-                  <span className="text-[10px] text-slate-400 shrink-0">{timeOnly(n.at)}</span>
+                  <span className="text-[10px] text-muted shrink-0">{timeOnly(n.at)}</span>
                 </button>
               );
             })}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Building2, Receipt as ReceiptIcon, Wallet, Percent } from 'lucide-react';
+import { Building2, Receipt as ReceiptIcon, Wallet, Percent, Timer } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useSettings, type BusinessProfile } from '../context/SettingsContext';
 import { apiError, humanize } from '../lib/format';
@@ -7,13 +7,15 @@ import { Card, ErrorBanner, Field, inputClass, PageHeader, SuccessBanner } from 
 
 /**
  * Owner-only food court settings: business profile, operating hours, receipt text and which of the
- * supported payment methods the counter may use. Tax is shown read-only (owner decision pending).
+ * supported payment methods the counter may use, and when the tracking board flags an order as late.
+ * Tax is shown read-only (owner decision pending).
  */
 export const FoodCourtSettingsPage: React.FC = () => {
   const { settings, loaded, reload } = useSettings();
   const [profile, setProfile] = useState<BusinessProfile>(settings.business_profile);
   const [receipt, setReceipt] = useState(settings.receipt);
   const [methods, setMethods] = useState<string[]>(settings.payment_methods.enabled);
+  const [delay, setDelay] = useState<string>(String(settings.order_tracking?.delay_minutes ?? 15));
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -22,6 +24,7 @@ export const FoodCourtSettingsPage: React.FC = () => {
     setProfile(settings.business_profile);
     setReceipt(settings.receipt);
     setMethods(settings.payment_methods.enabled);
+    setDelay(String(settings.order_tracking?.delay_minutes ?? 15));
   }, [settings]);
 
   const save = async (key: string, body: object, label: string) => {
@@ -39,17 +42,20 @@ export const FoodCourtSettingsPage: React.FC = () => {
     }
   };
 
+  const delayValue = Number(delay);
+  const delayValid = Number.isInteger(delayValue) && delayValue >= 1 && delayValue <= 120;
+
   const set = (k: keyof BusinessProfile) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setProfile((p) => ({ ...p, [k]: e.target.value === '' ? null : e.target.value }));
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-6">
-      <PageHeader title="Food Court Settings" icon={Building2} subtitle="Business profile, receipts and payment methods. Changes are recorded in the audit log." />
+    <div className="p-4 max-w-5xl mx-auto space-y-4">
+      <PageHeader title="Food Court Settings" icon={Building2} subtitle="Business profile, receipts, payment methods and order tracking. Changes are recorded in the audit log." />
       <ErrorBanner message={error} />
       <SuccessBanner message={success} />
-      {!loaded && <p className="text-sm text-slate-500">Loading saved settings…</p>}
+      {!loaded && <p className="text-sm text-muted">Loading saved settings…</p>}
 
-      <Card className="p-6">
+      <Card className="p-4">
         <form
           className="space-y-4"
           onSubmit={(e) => {
@@ -57,7 +63,7 @@ export const FoodCourtSettingsPage: React.FC = () => {
             save('business_profile', { ...profile, name: profile.name || '' }, 'Business profile');
           }}
         >
-          <h3 className="font-bold text-slate-900 flex items-center space-x-2">
+          <h3 className="font-semibold text-base text-fg flex items-center space-x-2">
             <Building2 className="w-5 h-5" />
             <span>Business profile & operating hours</span>
           </h3>
@@ -89,13 +95,13 @@ export const FoodCourtSettingsPage: React.FC = () => {
           <Field label="Address">
             <textarea rows={2} className={inputClass} value={profile.address || ''} onChange={set('address')} />
           </Field>
-          <button type="submit" disabled={saving !== null} className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white font-semibold text-sm rounded-xl disabled:opacity-50">
+          <button type="submit" disabled={saving !== null} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-fg font-semibold text-sm rounded-lg disabled:opacity-50">
             {saving === 'business_profile' ? 'Saving…' : 'Save business profile'}
           </button>
         </form>
       </Card>
 
-      <Card className="p-6">
+      <Card className="p-4">
         <form
           className="space-y-4"
           onSubmit={(e) => {
@@ -103,7 +109,7 @@ export const FoodCourtSettingsPage: React.FC = () => {
             save('receipt', receipt, 'Receipt settings');
           }}
         >
-          <h3 className="font-bold text-slate-900 flex items-center space-x-2">
+          <h3 className="font-semibold text-base text-fg flex items-center space-x-2">
             <ReceiptIcon className="w-5 h-5" />
             <span>Receipt</span>
           </h3>
@@ -117,15 +123,46 @@ export const FoodCourtSettingsPage: React.FC = () => {
             <input type="checkbox" checked={receipt.show_gstin} onChange={(e) => setReceipt((r) => ({ ...r, show_gstin: e.target.checked }))} />
             <span>Print GSTIN on receipts</span>
           </label>
-          <p className="text-xs text-slate-500">The receipt printer itself is chosen per computer under Settings → Printers.</p>
-          <button type="submit" disabled={saving !== null} className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white font-semibold text-sm rounded-xl disabled:opacity-50">
+          <p className="text-xs text-muted">The receipt printer itself is chosen per computer under Settings → Printers.</p>
+          <button type="submit" disabled={saving !== null} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-fg font-semibold text-sm rounded-lg disabled:opacity-50">
             {saving === 'receipt' ? 'Saving…' : 'Save receipt settings'}
           </button>
         </form>
       </Card>
 
-      <div className="grid grid-cols-2 gap-6">
-        <Card className="p-6">
+      <Card className="p-4">
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (delayValid) save('order_tracking', { delay_minutes: delayValue }, 'Order tracking');
+          }}
+        >
+          <h3 className="font-semibold text-base text-fg flex items-center space-x-2">
+            <Timer className="w-5 h-5" />
+            <span>Order tracking</span>
+          </h3>
+          <Field label="Late-order warning after (minutes)" hint="Orders with food still to serve after this many minutes are flagged as delayed on the tracking board (1–120).">
+            <input
+              type="number"
+              data-testid="delay-minutes"
+              required
+              min={1}
+              max={120}
+              step={1}
+              className={`${inputClass} max-w-[10rem]`}
+              value={delay}
+              onChange={(e) => setDelay(e.target.value)}
+            />
+          </Field>
+          <button type="submit" disabled={saving !== null || !delayValid} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-fg font-semibold text-sm rounded-lg disabled:opacity-50">
+            {saving === 'order_tracking' ? 'Saving…' : 'Save order tracking'}
+          </button>
+        </form>
+      </Card>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Card className="p-4">
           <form
             className="space-y-4"
             onSubmit={(e) => {
@@ -133,7 +170,7 @@ export const FoodCourtSettingsPage: React.FC = () => {
               save('payment_methods', { enabled: methods }, 'Payment methods');
             }}
           >
-            <h3 className="font-bold text-slate-900 flex items-center space-x-2">
+            <h3 className="font-semibold text-base text-fg flex items-center space-x-2">
               <Wallet className="w-5 h-5" />
               <span>Payment methods at the counter</span>
             </h3>
@@ -147,21 +184,21 @@ export const FoodCourtSettingsPage: React.FC = () => {
                 <span>{m === 'upi_qr' ? 'UPI / QR' : humanize(m)}</span>
               </label>
             ))}
-            <p className="text-xs text-slate-500">A payment always settles the full bill. Partial payments and refunds need an owner policy first.</p>
-            <button type="submit" disabled={saving !== null || methods.length === 0} className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white font-semibold text-sm rounded-xl disabled:opacity-50">
+            <p className="text-xs text-muted">A payment always settles the full bill. Partial payments and refunds need an owner policy first.</p>
+            <button type="submit" disabled={saving !== null || methods.length === 0} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-fg font-semibold text-sm rounded-lg disabled:opacity-50">
               {saving === 'payment_methods' ? 'Saving…' : 'Save payment methods'}
             </button>
           </form>
         </Card>
 
-        <Card className="p-6 space-y-3">
-          <h3 className="font-bold text-slate-900 flex items-center space-x-2">
+        <Card className="p-4 space-y-3">
+          <h3 className="font-semibold text-base text-fg flex items-center space-x-2">
             <Percent className="w-5 h-5" />
             <span>Tax</span>
           </h3>
-          <p className="text-3xl font-bold text-slate-900">{settings.tax.rate_percent}%</p>
-          <p className="text-sm text-slate-600">{settings.tax.note}</p>
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+          <p className="text-3xl font-bold text-fg">{settings.tax.rate_percent}%</p>
+          <p className="text-sm text-muted">{settings.tax.note}</p>
+          <p className="text-xs text-st-ready-fg bg-st-ready-soft border border-st-ready rounded-lg p-2">
             Not editable here. The GST rate and whether menu prices include tax must be confirmed by the owner and accountant before this can be changed.
           </p>
         </Card>

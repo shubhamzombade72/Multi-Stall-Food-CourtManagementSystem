@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
@@ -8,6 +8,7 @@ import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { PosPage } from './pages/PosPage';
 import { OrdersPage } from './pages/OrdersPage';
+import { OrderTrackingPage } from './pages/OrderTrackingPage';
 import { StallsPage } from './pages/StallsPage';
 import { MenuPage } from './pages/MenuPage';
 import { InventoryPage } from './pages/InventoryPage';
@@ -24,10 +25,10 @@ import { CustomersPage } from './pages/CustomersPage';
 import { WaiterPage } from './pages/WaiterPage';
 import { CashierClosingPage } from './pages/CashierClosingPage';
 import { SettingsProvider } from './context/SettingsContext';
-import { getDesktopConfig, isApiConfigured, setDesktopConfig } from './api/client';
-import { desktop, isDesktopApp } from './desktop/bridge';
 import { FirstRunPage } from './pages/FirstRunPage';
-import { ServerStartFailedPage } from './pages/ServerStartFailedPage';
+import { RecoverOwnerPage } from './pages/RecoverOwnerPage';
+import { ConnectHostPage } from './pages/ConnectHostPage';
+import { BackupNotice } from './components/BackupNotice';
 
 /** First screen per role (the server still authorizes every request). */
 export const homeFor = (role: string): string => {
@@ -54,8 +55,8 @@ const ProtectedLayout: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500"></div>
+      <div className="min-h-screen flex items-center justify-center bg-canvas text-fg">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -66,9 +67,10 @@ const ProtectedLayout: React.FC = () => {
 
   return (
     <SettingsProvider>
-      <div className="min-h-screen flex flex-col bg-slate-50">
+      <div className="min-h-screen flex flex-col bg-canvas">
         <Navbar />
         <ConnectionBanner />
+        <BackupNotice />
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
           <main className="flex-1 overflow-y-auto">
@@ -77,6 +79,7 @@ const ProtectedLayout: React.FC = () => {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/pos" element={<PosPage />} />
               <Route path="/orders" element={<OrdersPage />} />
+              <Route path="/tracking" element={<OrderTrackingPage />} />
               <Route path="/payments" element={<PaymentsPage />} />
               <Route path="/cashier-closing" element={<CashierClosingPage />} />
               <Route path="/kitchen" element={<KitchenPage />} />
@@ -101,47 +104,19 @@ const ProtectedLayout: React.FC = () => {
   );
 };
 
-/**
- * The desktop app starts its own server on this PC, so normally this gate is invisible. It only steps in
- * when no server is available: a failed start of the built-in server (error screen with Try again), or a
- * development run with nothing configured (Server Setup screen). It never guesses an address.
- */
-const ServerSetupGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [configured, setConfigured] = useState(() => !isDesktopApp() || isApiConfigured());
-  const [startError, setStartError] = useState<string | null>(() => getDesktopConfig()?.error ?? null);
-  if (!configured) {
-    if (startError) {
-      return (
-        <ServerStartFailedPage
-          error={startError}
-          onRetry={async () => {
-            const cfg = await desktop()!.getConfig();
-            setDesktopConfig(cfg);
-            setStartError(cfg.error);
-            setConfigured(isApiConfigured());
-          }}
-        />
-      );
-    }
-    return <SettingsPage standalone setupRequired onConfigured={() => setConfigured(isApiConfigured())} />;
-  }
-  return <>{children}</>;
-};
-
 export const App: React.FC = () => {
   return (
-    <ServerSetupGate>
     <AuthProvider>
       {/* Hash routing works both from a web server and from file:// inside the Electron app */}
       <HashRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/first-run" element={<FirstRunPage />} />
-          <Route path="/connection" element={<SettingsPage standalone />} />
+          <Route path="/recover" element={<RecoverOwnerPage />} />
+          <Route path="/connect" element={<ConnectHostPage />} />
           <Route path="/*" element={<ProtectedLayout />} />
         </Routes>
       </HashRouter>
     </AuthProvider>
-    </ServerSetupGate>
   );
 };

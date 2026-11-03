@@ -21,6 +21,7 @@ import {
   Calculator,
   Contact,
   Building2,
+  ListChecks,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -37,6 +38,7 @@ export const Sidebar: React.FC = () => {
         { to: '/pos', label: 'Cashier POS', icon: ShoppingCart, show: isCashier || isOwner },
         { to: '/waiter', label: 'Waiter Station', icon: ConciergeBell, show: isWaiter || isOwner },
         { to: '/orders', label: 'Orders & Receipts', icon: Receipt, show: isOwner || isCashier },
+        { to: '/tracking', label: 'Orders & Table Tracking', icon: ListChecks, show: isOwner || isCashier || isWaiter },
         { to: '/kitchen', label: 'Kitchen Display', icon: ChefHat, show: isOwner || role === 'kitchen_staff' || role === 'stall_manager' },
         { to: '/tables', label: 'Floor & Tables', icon: LayoutGrid, show: isOwner || isCashier || isWaiter },
       ],
@@ -75,18 +77,18 @@ export const Sidebar: React.FC = () => {
     },
   ];
 
-  const dot = state === 'online' ? 'text-emerald-400' : state === 'offline' ? 'text-rose-400' : 'text-slate-400';
-  const label = state === 'online' ? 'Server online' : state === 'offline' ? 'Server unreachable' : 'Checking server…';
+  const dot = state === 'online' ? 'text-st-served-fg' : state === 'offline' ? 'text-danger-fg' : 'text-muted';
+  const label = state === 'online' ? 'System online' : state === 'offline' ? 'System not responding' : 'Checking system…';
 
   return (
-    <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 min-h-[calc(100vh-4rem)]">
-      <nav className="p-4 flex-1 space-y-4 overflow-y-auto" aria-label="Main navigation">
+    <aside className="w-52 bg-sidebar text-fg border-r border-line flex flex-col shrink-0 min-h-[calc(100vh-3rem)]">
+      <nav className="p-2 flex-1 space-y-3 overflow-y-auto" aria-label="Main navigation">
         {groups.map((group) => {
           const links = group.links.filter((l) => l.show);
           if (links.length === 0) return null;
           return (
-            <div key={group.title} className="space-y-1">
-              <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">{group.title}</p>
+            <div key={group.title} className="space-y-0.5">
+              <p className="px-2 text-[11px] font-semibold uppercase tracking-wider text-muted mb-0.5">{group.title}</p>
               {links.map((link) => {
                 const Icon = link.icon;
                 return (
@@ -94,12 +96,12 @@ export const Sidebar: React.FC = () => {
                     key={link.to}
                     to={link.to}
                     className={({ isActive }) =>
-                      `flex items-center space-x-3 px-3 py-2 rounded-xl font-medium text-sm transition ${
-                        isActive ? 'bg-brand-500 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      `flex items-center space-x-2 px-2 py-1.5 rounded-lg font-medium text-[13px] transition ${
+                        isActive ? 'bg-primary text-primary-fg' : 'text-muted hover:text-fg hover:bg-surface-2'
                       }`
                     }
                   >
-                    <Icon className="w-5 h-5" />
+                    <Icon className="w-4 h-4 shrink-0" />
                     <span>{link.label}</span>
                   </NavLink>
                 );
@@ -109,11 +111,11 @@ export const Sidebar: React.FC = () => {
         })}
       </nav>
 
-      <div className="p-4 border-t border-slate-800">
-        <div className="bg-slate-800/60 rounded-xl p-3 text-xs text-slate-400" role="status">
-          <p className="font-semibold text-slate-200">Food court server</p>
+      <div className="p-2 border-t border-line">
+        <div className="bg-surface-2 rounded-lg p-2 text-xs text-muted" role="status">
+          <p className="font-semibold text-fg">Food court system</p>
           <p className={`mt-0.5 font-mono ${dot}`}>● {label}</p>
-          {lastChecked && <p className="mt-0.5 text-[10px] text-slate-500">checked {lastChecked.toLocaleTimeString()}</p>}
+          {lastChecked && <p className="mt-0.5 text-[10px] text-muted">checked {lastChecked.toLocaleTimeString()}</p>}
         </div>
       </div>
     </aside>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { statusChip } from '../lib/status';
 import { apiClient } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { SuppliersPanel } from '../components/SuppliersPanel';
@@ -182,14 +183,14 @@ export const PurchasesPage: React.FC = () => {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 max-w-7xl mx-auto space-y-4">
       {/* Top Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+          <h2 className="text-xl font-bold text-fg tracking-tight">
             Procurement & Supplier Management
           </h2>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-muted mt-1">
             Independent purchase orders, supplier directories, and stock receipt for stalls
           </p>
         </div>
@@ -201,7 +202,7 @@ export const PurchasesPage: React.FC = () => {
                 setShowPoModal(true);
                 if (poItems.length === 0) handleAddPoItemRow();
               }}
-              className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-1.5"
+              className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-fg font-bold text-xs rounded-lg shadow-sm transition flex items-center space-x-1.5"
             >
               <Plus className="w-4 h-4" />
               <span>New Purchase Order</span>
@@ -209,7 +210,7 @@ export const PurchasesPage: React.FC = () => {
           ) : (
             <button
               onClick={() => setShowSupplierModal(true)}
-              className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-1.5"
+              className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-fg font-bold text-xs rounded-lg shadow-sm transition flex items-center space-x-1.5"
             >
               <Plus className="w-4 h-4" />
               <span>Add Supplier</span>
@@ -219,13 +220,13 @@ export const PurchasesPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center space-x-2 border-b border-slate-200 pb-3">
+      <div className="flex items-center space-x-2 border-b border-line pb-3">
         <button
           onClick={() => setActiveTab('orders')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 ${
+          className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center space-x-2 ${
             activeTab === 'orders'
-              ? 'bg-slate-900 text-white shadow-sm'
-              : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+              ? 'bg-primary text-primary-fg shadow-sm'
+              : 'text-muted hover:text-fg hover:bg-surface-2'
           }`}
         >
           <Truck className="w-4 h-4" />
@@ -234,10 +235,10 @@ export const PurchasesPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('suppliers')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 ${
+          className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center space-x-2 ${
             activeTab === 'suppliers'
-              ? 'bg-slate-900 text-white shadow-sm'
-              : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+              ? 'bg-primary text-primary-fg shadow-sm'
+              : 'text-muted hover:text-fg hover:bg-surface-2'
           }`}
         >
           <Building className="w-4 h-4" />
@@ -246,76 +247,72 @@ export const PurchasesPage: React.FC = () => {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center p-16 text-slate-400">
-          <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
+        <div className="flex items-center justify-center p-16 text-muted">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       ) : (
         <>
           {/* TAB 1: PURCHASE ORDERS */}
           {activeTab === 'orders' && (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div className="bg-surface rounded-lg border border-line overflow-hidden shadow-sm">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+            <thead className="bg-canvas text-muted text-xs uppercase tracking-wider">
               <tr>
-                <th className="py-3 px-6">PO Number</th>
-                <th className="py-3 px-6">Date</th>
-                <th className="py-3 px-6">Stall</th>
-                <th className="py-3 px-6">Supplier</th>
-                <th className="py-3 px-6">Items Ordered</th>
-                <th className="py-3 px-6">Total Amount</th>
-                <th className="py-3 px-6">Status</th>
-                <th className="py-3 px-6 text-right">Actions</th>
+                <th className="py-2 px-3">PO Number</th>
+                <th className="py-2 px-3">Date</th>
+                <th className="py-2 px-3">Stall</th>
+                <th className="py-2 px-3">Supplier</th>
+                <th className="py-2 px-3">Items Ordered</th>
+                <th className="py-2 px-3">Total Amount</th>
+                <th className="py-2 px-3">Status</th>
+                <th className="py-2 px-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-line">
               {purchases.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400 text-xs">
+                  <td colSpan={8} className="py-12 text-center text-muted text-xs">
                     No purchase orders recorded. Click "New Purchase Order" to procure inventory.
                   </td>
                 </tr>
               ) : (
                 purchases.map((po) => (
-                  <tr key={po.id} className="hover:bg-slate-50 transition">
-                    <td className="py-3.5 px-6 font-mono font-bold text-slate-900 text-xs">
+                  <tr key={po.id} className="hover:bg-surface-2 transition">
+                    <td className="py-2 px-3 font-mono font-bold text-fg text-xs">
                       #{po.purchase_number}
                     </td>
-                    <td className="py-3.5 px-6 text-xs text-slate-500">{po.order_date}</td>
-                    <td className="py-3.5 px-6 text-xs font-bold text-slate-800">
+                    <td className="py-2 px-3 text-xs text-muted whitespace-nowrap">{po.order_date}</td>
+                    <td className="py-2 px-3 text-xs font-bold text-fg">
                       {po.stall?.name}
                     </td>
-                    <td className="py-3.5 px-6 text-xs text-slate-600">
+                    <td className="py-2 px-3 text-xs text-muted">
                       {po.supplier?.name || 'Standard Supplier'}
                     </td>
-                    <td className="py-3.5 px-6 text-xs text-slate-500">
+                    <td className="py-2 px-3 text-xs text-muted">
                       {po.items?.length || 0} materials
                     </td>
-                    <td className="py-3.5 px-6 font-bold text-slate-900 text-xs">
+                    <td className="py-2 px-3 font-bold text-fg text-xs">
                       ₹{Number(po.total_amount).toFixed(2)}
                     </td>
-                    <td className="py-3.5 px-6">
+                    <td className="py-2 px-3">
                       <span
-                        className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold uppercase ${
-                          po.status === 'received'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
+                        className={`text-[11px] px-2 py-0.5 rounded-full font-bold uppercase ${statusChip(po.status)}`}
                       >
                         {po.status}
                       </span>
                     </td>
-                    <td className="py-3.5 px-6 text-right">
+                    <td className="py-2 px-3 text-right">
                       {po.status === 'ordered' && (
                         <button
                           onClick={() => handleReceivePo(po.id)}
                           disabled={isReceivingId === po.id}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm disabled:opacity-50"
+                          className="px-3 py-1.5 bg-success-fg hover:opacity-90 text-surface rounded-lg text-xs font-bold transition shadow-sm disabled:opacity-50"
                         >
                           {isReceivingId === po.id ? 'Receiving...' : 'Receive Stock ✓'}
                         </button>
                       )}
                       {po.status === 'received' && (
-                        <span className="text-xs text-emerald-700 font-bold">In Stock ✓</span>
+                        <span className="text-xs text-success-fg font-bold">In Stock ✓</span>
                       )}
                     </td>
                   </tr>
@@ -339,13 +336,13 @@ export const PurchasesPage: React.FC = () => {
 
       {/* CREATE PO MODAL */}
       {showPoModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-900 text-base">New Purchase Order</h3>
+        <div className="fixed inset-0 !m-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-lg max-w-lg w-full p-4 shadow-2xl border border-line space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <h3 className="font-semibold text-base text-fg">New Purchase Order</h3>
               <button
                 onClick={() => setShowPoModal(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold"
+                className="text-muted hover:text-fg font-bold"
               >
                 ✕
               </button>
@@ -355,11 +352,11 @@ export const PurchasesPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 {isOwner && (
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Stall</label>
+                    <label className="block text-xs font-bold text-fg mb-1">Stall</label>
                     <select
                       value={poStallId}
                       onChange={(e) => setPoStallId(Number(e.target.value))}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium"
+                      className="w-full px-3 py-2 border border-line rounded-lg text-xs font-medium"
                       required
                     >
                       {stalls.map((s) => (
@@ -372,11 +369,11 @@ export const PurchasesPage: React.FC = () => {
                 )}
 
                 <div className={!isOwner ? 'col-span-2' : ''}>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Supplier</label>
+                  <label className="block text-xs font-bold text-fg mb-1">Supplier</label>
                   <select
                     value={poSupplierId}
                     onChange={(e) => setPoSupplierId(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium"
+                    className="w-full px-3 py-2 border border-line rounded-lg text-xs font-medium"
                     required
                   >
                     <option value="">Select Vendor</option>
@@ -392,12 +389,12 @@ export const PurchasesPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Order Date</label>
+                <label className="block text-xs font-bold text-fg mb-1">Order Date</label>
                 <input
                   type="date"
                   value={poDate}
                   onChange={(e) => setPoDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium"
+                  className="w-full px-3 py-2 border border-line rounded-lg text-xs font-medium"
                   required
                 />
               </div>
@@ -405,18 +402,18 @@ export const PurchasesPage: React.FC = () => {
               {/* Items Line Items */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-700">Order Materials</label>
+                  <label className="block text-xs font-bold text-fg">Order Materials</label>
                   <button
                     type="button"
                     onClick={handleAddPoItemRow}
-                    className="text-xs font-bold text-brand-600 hover:text-brand-700"
+                    className="text-xs font-bold text-primary hover:text-primary/80"
                   >
                     + Add Item
                   </button>
                 </div>
 
                 {poItems.map((row, idx) => (
-                  <div key={idx} className="flex items-center space-x-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                  <div key={idx} className="flex items-center space-x-2 bg-canvas p-2.5 rounded-lg border border-line">
                     <select
                       value={row.inventory_item_id}
                       onChange={(e) => {
@@ -434,7 +431,7 @@ export const PurchasesPage: React.FC = () => {
                           )
                         );
                       }}
-                      className="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-xs"
+                      className="flex-1 px-2 py-1.5 border border-line rounded-lg text-xs"
                     >
                       {inventoryItems
                         .filter((i) => !poStallId || i.stall_id === Number(poStallId))
@@ -458,7 +455,7 @@ export const PurchasesPage: React.FC = () => {
                         )
                       }
                       placeholder="Qty"
-                      className="w-20 px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold"
+                      className="w-20 px-2 py-1.5 border border-line rounded-lg text-xs font-bold"
                     />
 
                     <input
@@ -474,13 +471,13 @@ export const PurchasesPage: React.FC = () => {
                         )
                       }
                       placeholder="Rate ₹"
-                      className="w-24 px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold"
+                      className="w-24 px-2 py-1.5 border border-line rounded-lg text-xs font-bold"
                     />
 
                     <button
                       type="button"
                       onClick={() => handleRemovePoItemRow(idx)}
-                      className="text-slate-400 hover:text-rose-600 px-1 font-bold text-xs"
+                      className="text-muted hover:text-danger-fg px-1 font-bold text-xs"
                     >
                       ✕
                     </button>
@@ -489,13 +486,13 @@ export const PurchasesPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Notes</label>
+                <label className="block text-xs font-bold text-fg mb-1">Notes</label>
                 <input
                   type="text"
                   value={poNotes}
                   onChange={(e) => setPoNotes(e.target.value)}
                   placeholder="Optional delivery or vendor reference"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                  className="w-full px-3 py-2 border border-line rounded-lg text-xs"
                 />
               </div>
 
@@ -503,13 +500,13 @@ export const PurchasesPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPoModal(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                  className="flex-1 py-2 rounded-lg border border-line text-xs font-semibold text-muted hover:bg-surface-2"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold shadow-md shadow-brand-500/20"
+                  className="flex-1 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-fg text-xs font-bold shadow-md shadow-primary/20"
                 >
                   Create Purchase Order
                 </button>
@@ -521,13 +518,13 @@ export const PurchasesPage: React.FC = () => {
 
       {/* CREATE SUPPLIER MODAL */}
       {showSupplierModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-900 text-base">Register Vendor / Supplier</h3>
+        <div className="fixed inset-0 !m-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-lg max-w-md w-full p-4 shadow-2xl border border-line space-y-4">
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <h3 className="font-semibold text-base text-fg">Register Vendor / Supplier</h3>
               <button
                 onClick={() => setShowSupplierModal(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold"
+                className="text-muted hover:text-fg font-bold"
               >
                 ✕
               </button>
@@ -536,11 +533,11 @@ export const PurchasesPage: React.FC = () => {
             <form onSubmit={handleCreateSupplier} className="space-y-3">
               {isOwner && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Stall</label>
+                  <label className="block text-xs font-bold text-fg mb-1">Stall</label>
                   <select
                     value={supStallId}
                     onChange={(e) => setSupStallId(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium"
+                    className="w-full px-3 py-2 border border-line rounded-lg text-xs font-medium"
                     required
                   >
                     {stalls.map((s) => (
@@ -553,59 +550,59 @@ export const PurchasesPage: React.FC = () => {
               )}
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Company / Vendor Name</label>
+                <label className="block text-xs font-bold text-fg mb-1">Company / Vendor Name</label>
                 <input
                   type="text"
                   required
                   value={supName}
                   onChange={(e) => setSupName(e.target.value)}
                   placeholder="e.g. Metro Wholesale Foods"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold"
+                  className="w-full px-3 py-2 border border-line rounded-lg text-xs font-semibold"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Contact Person</label>
+                <label className="block text-xs font-bold text-fg mb-1">Contact Person</label>
                 <input
                   type="text"
                   value={supContact}
                   onChange={(e) => setSupContact(e.target.value)}
                   placeholder="e.g. Rajesh Kumar"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                  className="w-full px-3 py-2 border border-line rounded-lg text-xs"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Phone Number</label>
+                  <label className="block text-xs font-bold text-fg mb-1">Phone Number</label>
                   <input
                     type="tel"
                     value={supPhone}
                     onChange={(e) => setSupPhone(e.target.value)}
                     placeholder="e.g. 9876543210"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                    className="w-full px-3 py-2 border border-line rounded-lg text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Email</label>
+                  <label className="block text-xs font-bold text-fg mb-1">Email</label>
                   <input
                     type="email"
                     value={supEmail}
                     onChange={(e) => setSupEmail(e.target.value)}
                     placeholder="vendor@email.com"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                    className="w-full px-3 py-2 border border-line rounded-lg text-xs"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Address</label>
+                <label className="block text-xs font-bold text-fg mb-1">Address</label>
                 <input
                   type="text"
                   value={supAddress}
                   onChange={(e) => setSupAddress(e.target.value)}
                   placeholder="Warehouse / Market location"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                  className="w-full px-3 py-2 border border-line rounded-lg text-xs"
                 />
               </div>
 
@@ -613,13 +610,13 @@ export const PurchasesPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowSupplierModal(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                  className="flex-1 py-2 rounded-lg border border-line text-xs font-semibold text-muted hover:bg-surface-2"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold shadow-md shadow-brand-500/20"
+                  className="flex-1 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-fg text-xs font-bold shadow-md shadow-primary/20"
                 >
                   Save Supplier
                 </button>

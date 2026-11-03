@@ -14,10 +14,17 @@ class StallTicketItem extends Model
         'order_item_id',
         'quantity',
         'status',
+        'ready_at',
+        'served_at',
+        'served_by_user_id',
+        'version',
     ];
 
     protected $casts = [
         'quantity' => 'integer',
+        'ready_at' => 'datetime',
+        'served_at' => 'datetime',
+        'version' => 'integer',
     ];
 
     public function ticket()

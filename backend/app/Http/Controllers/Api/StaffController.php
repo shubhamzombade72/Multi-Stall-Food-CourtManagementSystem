@@ -70,7 +70,11 @@ class StaffController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:users,email',
+            'email' => ['required', 'email', 'max:255', function ($attribute, $value, $fail) {
+                if (User::query()->whereRaw('lower(email) = ?', [mb_strtolower(trim($value))])->exists()) {
+                    $fail('The email has already been taken.');
+                }
+            }],
             'password' => 'required|string|min:8|max:100',
             'role' => ['required', Rule::in(self::ROLES)],
             'stall_id' => 'nullable|exists:stalls,id',

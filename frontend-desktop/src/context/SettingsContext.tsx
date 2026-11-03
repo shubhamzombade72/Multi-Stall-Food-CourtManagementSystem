@@ -17,6 +17,8 @@ export interface FoodCourtSettings {
   receipt: { header: string | null; footer: string | null; show_gstin: boolean };
   payment_methods: { enabled: string[]; available: string[] };
   tax: { rate_percent: string; editable: boolean; note: string };
+  /** D10: minutes after which an order with unserved food is shown as delayed (owner-editable 1–120). */
+  order_tracking?: { delay_minutes: number };
 }
 
 const FALLBACK: FoodCourtSettings = {
@@ -24,6 +26,7 @@ const FALLBACK: FoodCourtSettings = {
   receipt: { header: null, footer: 'Thank you! Visit again.', show_gstin: false },
   payment_methods: { enabled: ['cash', 'upi_qr', 'card', 'split'], available: ['cash', 'upi_qr', 'card', 'split'] },
   tax: { rate_percent: '5.00', editable: false, note: '' },
+  order_tracking: { delay_minutes: 15 },
 };
 
 const SettingsContext = createContext<{ settings: FoodCourtSettings; loaded: boolean; reload: () => Promise<void> }>({

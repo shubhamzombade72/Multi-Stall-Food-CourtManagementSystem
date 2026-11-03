@@ -39,18 +39,18 @@ export const PaymentsPage: React.FC = () => {
   const total = rows.reduce((sum, p) => sum + Math.round(Number(p.amount) * 100), 0) / 100;
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 max-w-7xl mx-auto space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center space-x-2">
-            <CreditCard className="w-6 h-6" />
+          <h2 className="text-xl font-bold text-fg tracking-tight flex items-center space-x-2">
+            <CreditCard className="w-5 h-5" />
             <span>Payment History</span>
           </h2>
-          <p className="text-sm text-slate-500 mt-1">Every recorded payment; reprint the customer receipt at any time</p>
+          <p className="text-sm text-muted mt-1">Every recorded payment; reprint the customer receipt at any time</p>
         </div>
         <div className="flex items-center space-x-2">
-          <input aria-label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 text-sm" />
-          <select aria-label="Payment method" value={method} onChange={(e) => setMethod(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 text-sm">
+          <input aria-label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 rounded-lg border border-line text-sm" />
+          <select aria-label="Payment method" value={method} onChange={(e) => setMethod(e.target.value)} className="px-3 py-2 rounded-lg border border-line text-sm">
             {METHODS.map((m) => (
               <option key={m.value} value={m.value}>
                 {m.label}
@@ -60,47 +60,47 @@ export const PaymentsPage: React.FC = () => {
         </div>
       </div>
 
-      {error && <div role="alert" className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm">{error}</div>}
+      {error && <div role="alert" className="p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger-fg text-sm">{error}</div>}
 
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="bg-surface rounded-lg border border-line overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+          <thead className="bg-canvas text-xs uppercase text-muted">
             <tr>
-              <th className="text-left px-4 py-3">Time</th>
-              <th className="text-left px-4 py-3">Receipt</th>
-              <th className="text-left px-4 py-3">Bill</th>
-              <th className="text-left px-4 py-3">Table</th>
-              <th className="text-left px-4 py-3">Method</th>
-              <th className="text-right px-4 py-3">Amount</th>
-              <th className="text-left px-4 py-3">Cashier</th>
-              <th className="text-right px-4 py-3"></th>
+              <th className="text-left px-3 py-1.5">Time</th>
+              <th className="text-left px-3 py-1.5">Receipt</th>
+              <th className="text-left px-3 py-1.5">Bill</th>
+              <th className="text-left px-3 py-1.5">Table</th>
+              <th className="text-left px-3 py-1.5">Method</th>
+              <th className="text-right px-3 py-1.5">Amount</th>
+              <th className="text-left px-3 py-1.5">Cashier</th>
+              <th className="text-right px-3 py-1.5"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line">
             {rows.map((p) => (
               <tr key={p.id}>
-                <td className="px-4 py-2 text-slate-500">{new Date(p.created_at).toLocaleTimeString()}</td>
-                <td className="px-4 py-2 font-mono text-xs">{p.payment_number}</td>
-                <td className="px-4 py-2 font-mono text-xs">{p.order?.order_number}</td>
-                <td className="px-4 py-2">{p.order?.table?.table_number || 'Takeaway'}</td>
-                <td className="px-4 py-2 uppercase text-xs font-bold">{p.payment_method}</td>
-                <td className="px-4 py-2 text-right font-bold">₹{Number(p.amount).toFixed(2)}</td>
-                <td className="px-4 py-2">{p.cashier?.name}</td>
-                <td className="px-4 py-2 text-right">
-                  <PrintReceiptButton orderId={p.order_id} label="Reprint" className="text-xs font-bold text-brand-600" />
+                <td className="px-3 py-2 text-muted whitespace-nowrap">{new Date(p.created_at).toLocaleTimeString()}</td>
+                <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.payment_number}</td>
+                <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.order?.order_number}</td>
+                <td className="px-3 py-2">{p.order?.table?.table_number || 'Takeaway'}</td>
+                <td className="px-3 py-2 uppercase text-xs font-bold">{p.payment_method}</td>
+                <td className="px-3 py-2 text-right font-bold">₹{Number(p.amount).toFixed(2)}</td>
+                <td className="px-3 py-2">{p.cashier?.name}</td>
+                <td className="px-3 py-2 text-right">
+                  <PrintReceiptButton orderId={p.order_id} label="Reprint" className="text-xs font-bold text-primary" />
                 </td>
               </tr>
             ))}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-400">No payments for this filter.</td>
+                <td colSpan={8} className="px-4 py-8 text-center text-muted">No payments for this filter.</td>
               </tr>
             )}
           </tbody>
-          <tfoot className="bg-slate-50 font-bold">
+          <tfoot className="bg-canvas font-bold">
             <tr>
-              <td colSpan={5} className="px-4 py-3 text-right">{rows.length} payments</td>
-              <td className="px-4 py-3 text-right">₹{total.toFixed(2)}</td>
+              <td colSpan={5} className="px-3 py-1.5 text-right">{rows.length} payments</td>
+              <td className="px-3 py-1.5 text-right">₹{total.toFixed(2)}</td>
               <td colSpan={2}></td>
             </tr>
           </tfoot>

@@ -117,14 +117,14 @@ export const TablesPage: React.FC = () => {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 max-w-7xl mx-auto space-y-4">
       <PageHeader
         title="Floor & Tables"
         icon={LayoutGrid}
         subtitle={`${counts.total} active tables · ${counts.occupied} occupied · ${counts.available} available · ${counts.reserved} reserved`}
         actions={
           <>
-            <select aria-label="Filter by section" value={sectionFilter} onChange={(e) => setSectionFilter(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 text-sm">
+            <select aria-label="Filter by section" value={sectionFilter} onChange={(e) => setSectionFilter(e.target.value)} className="px-3 py-2 rounded-lg border border-line text-sm">
               <option value="">All sections</option>
               {sections.map((s) => (
                 <option key={s}>{s}</option>
@@ -153,41 +153,41 @@ export const TablesPage: React.FC = () => {
       ) : (
         Object.entries(grouped).map(([section, rows]) => (
           <section key={section} className="space-y-3">
-            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">{section}</h3>
+            <h3 className="text-sm font-bold text-muted uppercase tracking-wider">{section}</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
               {rows.map((t) => {
                 const open = t.orders?.[0];
                 return (
                   <Card key={t.id} className={`p-4 space-y-2 ${t.is_active ? '' : 'opacity-60'}`}>
                     <div className="flex items-center justify-between">
-                      <span className="text-lg font-bold text-slate-900" data-table={t.table_number}>
+                      <span className="text-lg font-bold text-fg" data-table={t.table_number}>
                         {t.table_number}
                       </span>
                       <Badge tone={t.is_active ? statusTone(t.status) : 'slate'}>{t.is_active ? humanize(t.status) : 'Inactive'}</Badge>
                     </div>
-                    <p className="text-xs text-slate-500 flex items-center">
+                    <p className="text-xs text-muted flex items-center">
                       <Users className="w-3 h-3 mr-1" />
                       Seats {t.capacity}
                     </p>
                     {open ? (
-                      <div className="text-xs bg-slate-50 rounded-lg p-2 border border-slate-100">
+                      <div className="text-xs bg-canvas rounded-lg p-2 border border-line">
                         <p className="font-mono font-semibold">{open.order_number}</p>
-                        <p className="text-slate-500">
+                        <p className="text-muted">
                           {humanize(open.status)} · {money(open.total_amount)} · {open.payment_status === 'paid' ? 'Paid' : 'Unpaid'}
                         </p>
-                        {(t.orders?.length || 0) > 1 && <p className="text-amber-700">+{(t.orders?.length || 0) - 1} more open order(s)</p>}
+                        {(t.orders?.length || 0) > 1 && <p className="text-warning-fg">+{(t.orders?.length || 0) - 1} more open order(s)</p>}
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-400">No open order</p>
+                      <p className="text-xs text-muted">No open order</p>
                     )}
                     <div className="flex flex-wrap gap-2 pt-1">
                       {t.is_active && !open && t.status !== 'available' && (
-                        <button onClick={() => setStatus(t, 'available')} className="text-xs font-bold text-emerald-700">
+                        <button onClick={() => setStatus(t, 'available')} className="text-xs font-bold text-success-fg">
                           Mark available
                         </button>
                       )}
                       {t.is_active && !open && t.status === 'available' && (
-                        <button onClick={() => setStatus(t, 'reserved')} className="text-xs font-bold text-sky-700">
+                        <button onClick={() => setStatus(t, 'reserved')} className="text-xs font-bold text-info-fg">
                           Reserve
                         </button>
                       )}
@@ -195,17 +195,17 @@ export const TablesPage: React.FC = () => {
                         <>
                           <button
                             onClick={() => { setFormError(null); setForm({ id: t.id, table_number: t.table_number, capacity: String(t.capacity), section: t.section }); }}
-                            className="text-xs font-bold text-brand-600"
+                            className="text-xs font-bold text-primary"
                           >
                             Edit
                           </button>
-                          <button onClick={() => toggleActive(t)} className="text-xs font-bold text-rose-600">
+                          <button onClick={() => toggleActive(t)} className="text-xs font-bold text-danger-fg">
                             {t.is_active ? 'Deactivate' : 'Activate'}
                           </button>
                         </>
                       )}
                     </div>
-                    {isOwner && t.qr_token && <p className="text-[10px] text-slate-400 font-mono truncate" title="QR ordering code">QR: {t.qr_token}</p>}
+                    {isOwner && t.qr_token && <p className="text-[10px] text-muted font-mono truncate" title="QR ordering code">QR: {t.qr_token}</p>}
                   </Card>
                 );
               })}

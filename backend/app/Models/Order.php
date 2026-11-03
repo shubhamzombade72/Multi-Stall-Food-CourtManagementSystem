@@ -32,6 +32,7 @@ class Order extends Model
         'total_amount',
         'payment_status',
         'notes',
+        'guest_count',
     ];
 
     protected $casts = [
@@ -39,6 +40,7 @@ class Order extends Model
         'tax_amount' => 'decimal:2',
         'discount_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
+        'guest_count' => 'integer',
     ];
 
     protected static function boot()

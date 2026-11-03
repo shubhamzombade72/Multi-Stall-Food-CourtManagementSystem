@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\AuditService;
+use App\Services\SetupState;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -18,7 +19,23 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
-        $user = User::with('stall')->where('email', $validated['email'])->first();
+        $email = mb_strtolower(trim($validated['email']));
+        $user = User::with('stall')->whereRaw('lower(email) = ?', [$email])->first();
+
+        if (!$user && config('foodcourt.embedded') && !User::query()->exists()) {
+            // Nothing to sign in to yet: say so instead of the misleading "wrong credentials"
+            $recovery = SetupState::marker() !== null;
+            $message = $recovery
+                ? 'No accounts exist on this computer any more. Restore the owner account with your recovery key.'
+                : 'This Food Court has not been set up yet. Create the owner account first.';
+
+            return response()->json([
+                'success' => false,
+                'code' => $recovery ? 'owner_missing' : 'setup_required',
+                'message' => $message,
+                'errors' => ['email' => [$message]],
+            ], 422);
+        }
 
         if (!$user || !Hash::check($validated['password'], $user->password)) {
             // Login history: failed attempts are kept (the password never is)

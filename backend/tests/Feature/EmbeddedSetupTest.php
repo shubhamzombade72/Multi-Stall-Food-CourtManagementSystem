@@ -17,7 +17,11 @@ class EmbeddedSetupTest extends TestCase
 
     private function emptySystem(): void
     {
-        Schema::withoutForeignKeyConstraints(fn () => User::query()->delete());
+        // A fresh install has neither accounts nor the "setup completed" marker
+        Schema::withoutForeignKeyConstraints(function () {
+            User::query()->delete();
+            \App\Models\Setting::query()->where('key', 'system_setup')->delete();
+        });
     }
 
     public function test_setup_routes_do_not_exist_outside_embedded_mode(): void

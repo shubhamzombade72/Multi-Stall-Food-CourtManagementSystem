@@ -50,3 +50,5 @@ __pycache__/
 frontend-desktop/installers/
 # Generated built-in server bundle (scripts/prepare-embedded-server.mjs)
 frontend-desktop/build-server/
+# Added by code-review-graph
+.code-review-graph/

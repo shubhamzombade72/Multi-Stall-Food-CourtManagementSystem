@@ -186,24 +186,24 @@ export const MenuPage: React.FC = () => {
   const canManage = isOwner || user?.role === 'stall_manager';
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 max-w-7xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Menu Catalog & Dish Pricing</h2>
-          <p className="text-sm text-slate-500 mt-1">Manage food recipes, prices, and kitchen live availability</p>
+          <h2 className="text-xl font-bold text-fg tracking-tight">Menu Catalog & Dish Pricing</h2>
+          <p className="text-sm text-muted mt-1">Manage food recipes, prices, and kitchen live availability</p>
         </div>
 
         {canManage && (
           <div className="flex space-x-2">
             <button
               onClick={addCategory}
-              className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl transition"
+              className="px-4 py-2 bg-surface border border-line hover:bg-surface-2 text-fg font-bold text-xs rounded-lg transition"
             >
               + Category
             </button>
             <button
               onClick={openCreateModal}
-              className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-1.5"
+              className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-fg font-bold text-xs rounded-lg shadow-sm transition flex items-center space-x-1.5"
             >
               <Plus className="w-4 h-4" />
               <span>Add New Dish</span>
@@ -212,21 +212,21 @@ export const MenuPage: React.FC = () => {
         )}
       </div>
 
-      <div className="flex items-center space-x-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex items-center space-x-3 bg-surface p-4 rounded-lg border border-line shadow-sm">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+          <Search className="w-4 h-4 text-subtle absolute left-3 top-3" />
           <input
             type="text"
             placeholder="Search dish or category..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full pl-9 pr-4 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-focus"
           />
         </div>
         <select
           value={selectedStall}
           onChange={(e) => setSelectedStall(e.target.value)}
-          className="py-2 px-3 rounded-xl border border-slate-200 text-sm font-medium"
+          className="py-2 px-3 rounded-lg border border-line text-sm font-medium"
         >
           <option value="all">All Stalls ({stalls.length})</option>
           {stalls.map((s) => (
@@ -237,47 +237,49 @@ export const MenuPage: React.FC = () => {
         </select>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      <div className="bg-surface rounded-lg border border-line overflow-hidden shadow-sm">
         <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+          <thead className="bg-canvas text-muted text-xs uppercase tracking-wider">
             <tr>
-              <th className="py-3 px-6">Dish Name</th>
-              <th className="py-3 px-6">Stall Owner</th>
-              <th className="py-3 px-6">Category</th>
-              <th className="py-3 px-6">Price</th>
-              <th className="py-3 px-6">Dietary</th>
-              <th className="py-3 px-6">Prep Time</th>
-              <th className="py-3 px-6 text-center">Availability</th>
-              {canManage && <th className="py-3 px-6 text-right">Edit</th>}
+              <th className="py-2 px-3">Dish Name</th>
+              <th className="py-2 px-3">Stall Owner</th>
+              <th className="py-2 px-3">Category</th>
+              <th className="py-2 px-3">Price</th>
+              <th className="py-2 px-3">Dietary</th>
+              <th className="py-2 px-3">Prep Time</th>
+              <th className="py-2 px-3 text-center">Availability</th>
+              {canManage && <th className="py-2 px-3 text-right">Edit</th>}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line">
             {filteredItems.map((item) => (
-              <tr key={item.id} className="hover:bg-slate-50 transition">
-                <td className="py-3.5 px-6 font-bold text-slate-900">{item.name}</td>
-                <td className="py-3.5 px-6 text-xs text-brand-600 font-semibold">{item.stall?.name}</td>
-                <td className="py-3.5 px-6 text-xs text-slate-500">{item.category?.name}</td>
-                <td className="py-3.5 px-6 font-extrabold text-slate-900">₹{Number(item.price).toFixed(2)}</td>
-                <td className="py-3.5 px-6">
+              <tr key={item.id} className="hover:bg-surface-2 transition">
+                <td className="py-2 px-3 font-bold text-fg">{item.name}</td>
+                <td className="py-2 px-3 text-xs text-primary font-semibold">{item.stall?.name}</td>
+                <td className="py-2 px-3 text-xs text-muted">{item.category?.name}</td>
+                <td className="py-2 px-3 font-extrabold text-fg">₹{Number(item.price).toFixed(2)}</td>
+                <td className="py-2 px-3">
                   <span
                     className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
-                      item.is_veg ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                      item.is_veg ? 'bg-st-served-soft text-st-served-fg' : 'bg-danger/10 text-danger-fg'
                     }`}
                   >
                     {item.is_veg ? '🌱 Veg' : '🍗 Non-Veg'}
                   </span>
                 </td>
-                <td className="py-3.5 px-6 text-xs text-slate-500 flex items-center">
-                  <Clock className="w-3.5 h-3.5 mr-1 text-slate-400" />
-                  {item.preparation_time_minutes}m
+                <td className="py-2 px-3 text-xs text-muted">
+                  <span className="inline-flex items-center">
+                    <Clock className="w-3.5 h-3.5 mr-1 text-subtle" />
+                    {item.preparation_time_minutes}m
+                  </span>
                 </td>
-                <td className="py-3.5 px-6 text-center">
+                <td className="py-2 px-3 text-center">
                   <button
                     onClick={() => toggleAvailability(item.id)}
-                    className={`px-3 py-1 rounded-xl text-xs font-bold transition inline-flex items-center space-x-1 ${
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition inline-flex items-center space-x-1 ${
                       item.is_available
-                        ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800'
-                        : 'bg-slate-200 hover:bg-slate-300 text-slate-600'
+                        ? 'bg-st-served-soft hover:opacity-80 text-st-served-fg'
+                        : 'bg-surface-2 hover:bg-line text-muted'
                     }`}
                   >
                     {item.is_available ? (
@@ -294,10 +296,10 @@ export const MenuPage: React.FC = () => {
                   </button>
                 </td>
                 {canManage && (
-                  <td className="py-3.5 px-6 text-right">
+                  <td className="py-2 px-3 text-right">
                     <button
                       onClick={() => openEditModal(item)}
-                      className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 transition"
+                      className="p-1.5 rounded-lg border border-line hover:bg-surface-2 text-muted transition"
                       title="Edit Dish & Price"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
@@ -312,15 +314,15 @@ export const MenuPage: React.FC = () => {
 
       {/* CREATE / EDIT DISH MODAL */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-900 text-base">
+        <div className="fixed inset-0 !m-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-lg max-w-md w-full p-4 shadow-2xl border border-line space-y-4">
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <h3 className="font-semibold text-base text-fg">
                 {editingItem ? 'Edit Dish & Price' : 'Add New Menu Item'}
               </h3>
               <button
                 onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold"
+                className="text-muted hover:text-fg font-bold"
               >
                 ✕
               </button>
@@ -330,7 +332,7 @@ export const MenuPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-2">
                 {isOwner && (
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Stall</label>
+                    <label className="block text-xs font-bold text-fg mb-1">Stall</label>
                     <select
                       aria-label="Dish stall"
                       value={stallId}
@@ -339,7 +341,7 @@ export const MenuPage: React.FC = () => {
                         setStallId(next);
                         setCategoryId(categories.find((c) => c.stall_id === next)?.id ?? '');
                       }}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium"
+                      className="w-full px-3 py-2 border border-line rounded-lg text-xs font-medium"
                       required
                     >
                       {stalls.map((s) => (
@@ -352,12 +354,12 @@ export const MenuPage: React.FC = () => {
                 )}
 
                 <div className={!isOwner ? 'col-span-2' : ''}>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Category</label>
+                  <label className="block text-xs font-bold text-fg mb-1">Category</label>
                   <select
                     aria-label="Dish category"
                     value={categoryId}
                     onChange={(e) => setCategoryId(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium"
+                    className="w-full px-3 py-2 border border-line rounded-lg text-xs font-medium"
                     required
                   >
                     <option value="">Select category</option>
@@ -375,11 +377,11 @@ export const MenuPage: React.FC = () => {
               {editingItem && (
                 <div className="flex items-center space-x-3">
                   {editingItem.image_url ? (
-                    <img src={editingItem.image_url} alt="" className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+                    <img src={editingItem.image_url} alt="" className="w-14 h-14 rounded-lg object-cover border border-line" />
                   ) : (
-                    <div className="w-14 h-14 rounded-lg bg-slate-100 border border-slate-200" />
+                    <div className="w-14 h-14 rounded-lg bg-surface-2 border border-line" />
                   )}
-                  <label className="text-xs font-bold text-brand-600 cursor-pointer">
+                  <label className="text-xs font-bold text-primary cursor-pointer">
                     Upload photo (JPG/PNG/WebP, max 2 MB)
                     <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => uploadImage(e.target.files?.[0])} />
                   </label>
@@ -387,20 +389,20 @@ export const MenuPage: React.FC = () => {
               )}
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Dish Name</label>
+                <label className="block text-xs font-bold text-fg mb-1">Dish Name</label>
                 <input
                   type="text"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Gourmet Veg Supreme Pizza"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold"
+                  className="w-full px-3 py-2 border border-line rounded-lg text-xs font-semibold"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Price (₹)</label>
+                  <label className="block text-xs font-bold text-fg mb-1">Price (₹)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -409,51 +411,51 @@ export const MenuPage: React.FC = () => {
                     value={price}
                     onChange={(e) => setPrice(Number(e.target.value))}
                     placeholder="250.00"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold"
+                    className="w-full px-3 py-2 border border-line rounded-lg text-xs font-bold"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Prep Time (min)</label>
+                  <label className="block text-xs font-bold text-fg mb-1">Prep Time (min)</label>
                   <input
                     type="number"
                     min="1"
                     required
                     value={prepTime}
                     onChange={(e) => setPrepTime(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                    className="w-full px-3 py-2 border border-line rounded-lg text-xs"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Description (Optional)</label>
+                <label className="block text-xs font-bold text-fg mb-1">Description (Optional)</label>
                 <input
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Ingredients or preparation style"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                  className="w-full px-3 py-2 border border-line rounded-lg text-xs"
                 />
               </div>
 
               <div className="flex items-center space-x-6 py-1">
-                <label className="flex items-center space-x-2 text-xs font-bold text-slate-700 cursor-pointer">
+                <label className="flex items-center space-x-2 text-xs font-bold text-fg cursor-pointer">
                   <input
                     type="checkbox"
                     checked={isVeg}
                     onChange={(e) => setIsVeg(e.target.checked)}
-                    className="rounded text-brand-500 focus:ring-brand-500"
+                    className="rounded text-primary focus:ring-focus"
                   />
                   <span>Vegetarian 🌱</span>
                 </label>
 
-                <label className="flex items-center space-x-2 text-xs font-bold text-slate-700 cursor-pointer">
+                <label className="flex items-center space-x-2 text-xs font-bold text-fg cursor-pointer">
                   <input
                     type="checkbox"
                     checked={isAvailable}
                     onChange={(e) => setIsAvailable(e.target.checked)}
-                    className="rounded text-brand-500 focus:ring-brand-500"
+                    className="rounded text-primary focus:ring-focus"
                   />
                   <span>Live in Menu (In Stock)</span>
                 </label>
@@ -463,13 +465,13 @@ export const MenuPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                  className="flex-1 py-2 rounded-lg border border-line text-xs font-semibold text-muted hover:bg-surface-2"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold shadow-md shadow-brand-500/20"
+                  className="flex-1 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-fg text-xs font-bold shadow-md shadow-primary/20"
                 >
                   {editingItem ? 'Update Dish' : 'Add Dish'}
                 </button>
@@ -492,7 +494,7 @@ export const MenuPage: React.FC = () => {
               </select>
             </Field>
           ) : (
-            <p className="text-sm text-slate-600">Stall: {stalls.find((s) => s.id === catForm.stall_id)?.name}</p>
+            <p className="text-sm text-muted">Stall: {stalls.find((s) => s.id === catForm.stall_id)?.name}</p>
           )}
           <Field label="Category name">
             <input required autoFocus maxLength={100} aria-label="Category name" value={catForm.name} onChange={(e) => setCatForm((f) => (f ? { ...f, name: e.target.value } : f))} className={inputClass} />

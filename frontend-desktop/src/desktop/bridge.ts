@@ -3,22 +3,27 @@
  * `window.desktop` is undefined and every helper degrades gracefully.
  */
 export interface DesktopConfig {
-  /** null only when no server is available (built-in server missing or failed, nothing configured) */
+  /** null only when no server is available (the built-in server failed to start) */
   apiBaseUrl: string | null;
-  source: 'saved' | 'environment' | 'release' | 'embedded' | 'none';
-  /** embedded = the app's own server on this PC (default); remote = a configured shared server */
+  source: 'paired' | 'environment' | 'release' | 'embedded' | 'none';
+  /** embedded = this PC's own database (default); remote = a shared food court host this PC is connected to */
   mode: 'embedded' | 'remote' | 'none';
-  /** why the built-in server could not start, when it could not */
+  /** plain-language reason the built-in server could not start, when it could not */
   error: string | null;
+  /** true when this PC was connected to its host with a connection code */
+  paired: boolean;
+  foodCourtName: string;
 }
 
-export interface ConnectionTestResult {
-  ok: boolean;
-  code: string;
+export type StartupPhase = 'starting' | 'preparing_database' | 'connecting' | 'ready' | 'degraded' | 'failed' | 'host_unreachable';
+
+/** What the startup screen shows. Messages are written for the operator: no addresses, ports or product names. */
+export interface StartupStatus {
+  phase: StartupPhase;
   message: string;
-  url?: string;
-  apiStatus?: number;
-  healthStatus?: number | null;
+  code?: string;
+  mode?: 'remote';
+  setup?: 'needed' | 'complete' | 'recovery_required' | null;
 }
 
 export interface DesktopAppInfo {
@@ -32,6 +37,39 @@ export interface DesktopAppInfo {
   dataDir: string | null;
 }
 
+export interface BackupEntry {
+  name: string;
+  bytes: number;
+  modified: string;
+  kind: string;
+}
+
+export interface BackupStatus {
+  available: boolean;
+  directory: string;
+  customDirectory: boolean;
+  lastBackupAt: string | null;
+  lastError: { at: string; message: string } | null;
+  backups: BackupEntry[];
+}
+
+export interface BackupResult {
+  ok: boolean;
+  name?: string;
+  error?: string;
+  cancelled?: boolean;
+}
+
+export interface DesktopDiagnostics {
+  app: { name: string; version: string; electron: string; packaged: boolean; platform: string };
+  mode: string;
+  startup: StartupStatus;
+  apiBase: string | null;
+  readiness: { reachable: boolean; reason?: string; httpStatus?: number; report?: unknown } | null;
+  paths: { log: string; data: string | null; backups: string | null };
+  recentLog: string[];
+}
+
 export interface DesktopPrinter {
   name: string;
   displayName: string;
@@ -41,10 +79,16 @@ export interface DesktopPrinter {
 
 interface DesktopBridge {
   getConfig(): Promise<DesktopConfig>;
-  setApiBaseUrl(url: string): Promise<{ ok: boolean; apiBaseUrl?: string; error?: string; warnings?: string[] }>;
-  testConnection(url: string): Promise<ConnectionTestResult>;
+  getStartupStatus(): Promise<StartupStatus>;
+  retryStart(): Promise<DesktopConfig>;
   useBuiltInServer(): Promise<DesktopConfig>;
+  connectToHost(pairingString: string): Promise<{ ok: boolean; error?: string; foodCourtName?: string }>;
   getAppInfo(): Promise<DesktopAppInfo>;
+  getDiagnostics(): Promise<DesktopDiagnostics>;
+  getBackupStatus(): Promise<BackupStatus>;
+  backupNow(): Promise<BackupResult>;
+  chooseBackupFolder(): Promise<BackupResult>;
+  restoreBackup(name?: string | null): Promise<BackupResult>;
   log(level: 'INFO' | 'WARN' | 'ERROR', message: string): Promise<boolean>;
   listPrinters(): Promise<DesktopPrinter[]>;
   print(options?: { deviceName?: string }): Promise<{ ok: boolean; error: string | null }>;

@@ -323,18 +323,18 @@ export const ReportsPage: React.FC = () => {
     );
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-5">
+    <div className="p-4 max-w-7xl mx-auto space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center space-x-2">
-            <BarChart3 className="w-6 h-6" />
+          <h2 className="text-xl font-bold text-fg tracking-tight flex items-center space-x-2">
+            <BarChart3 className="w-5 h-5" />
             <span>Reports & Audit</span>
           </h2>
-          <p className="text-sm text-slate-500 mt-1">All figures come from recorded orders, payments, purchases and stock movements. No commission or settlement formula is applied.</p>
+          <p className="text-sm text-muted mt-1">All figures come from recorded orders, payments, purchases and stock movements. No commission or settlement formula is applied.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {report.stall && (
-            <select aria-label="Stall filter" value={stallId} onChange={(e) => setStallId(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white">
+            <select aria-label="Stall filter" value={stallId} onChange={(e) => setStallId(e.target.value)} className="px-3 py-2 rounded-lg border border-line text-xs bg-surface">
               <option value="">All stalls</option>
               {stalls.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -343,12 +343,12 @@ export const ReportsPage: React.FC = () => {
               ))}
             </select>
           )}
-          <div className="flex items-center space-x-2 bg-white p-2 rounded-xl border border-slate-200 text-xs">
-            <Calendar className="w-4 h-4 text-slate-400" />
+          <div className="flex items-center space-x-2 bg-surface p-2 rounded-lg border border-line text-xs">
+            <Calendar className="w-4 h-4 text-subtle" />
             {!report.singleDay && (
               <>
                 <input aria-label="Start date" type="date" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} className="border-none focus:outline-none font-semibold" />
-                <span className="text-slate-400">to</span>
+                <span className="text-muted">to</span>
               </>
             )}
             <input aria-label="End date" type="date" value={endDate} min={report.singleDay ? undefined : startDate} onChange={(e) => setEndDate(e.target.value)} className="border-none focus:outline-none font-semibold" />
@@ -363,7 +363,7 @@ export const ReportsPage: React.FC = () => {
             role="tab"
             aria-selected={tab === key}
             onClick={() => setTab(key)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold ${tab === key ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${tab === key ? 'bg-primary text-primary-fg' : 'bg-surface border border-line text-muted'}`}
           >
             {REPORTS[key].label}
           </button>
@@ -371,16 +371,16 @@ export const ReportsPage: React.FC = () => {
       </div>
 
       {error && (
-        <div role="alert" className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm">
+        <div role="alert" className="p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger-fg text-sm">
           {error}
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+      <div className="bg-surface rounded-lg border border-line overflow-hidden shadow-sm">
+        <div className="p-4 border-b border-line flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h3 className="font-bold text-slate-900">{title}</h3>
-            {report.note && <p className="text-xs text-slate-500">{report.note}</p>}
+            <h3 className="font-semibold text-base text-fg">{title}</h3>
+            {report.note && <p className="text-xs text-muted">{report.note}</p>}
           </div>
           <div className="flex gap-2 items-center flex-wrap">
             {tab === 'audit' && (
@@ -390,18 +390,18 @@ export const ReportsPage: React.FC = () => {
                   setAppliedAction(action.trim());
                 }}
               >
-                <input aria-label="Audit action filter" placeholder="action, e.g. order_cancelled" value={action} onChange={(e) => setAction(e.target.value)} className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs w-56" />
+                <input aria-label="Audit action filter" placeholder="action, e.g. order_cancelled" value={action} onChange={(e) => setAction(e.target.value)} className="px-3 py-1.5 rounded-lg border border-line text-xs w-56" />
               </form>
             )}
             <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
-              <input aria-label="Search report rows" placeholder="Search rows" value={filter} onChange={(e) => setFilter(e.target.value)} className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs w-44" />
+              <Search className="w-3.5 h-3.5 text-subtle absolute left-2.5 top-2" />
+              <input aria-label="Search report rows" placeholder="Search rows" value={filter} onChange={(e) => setFilter(e.target.value)} className="pl-8 pr-3 py-1.5 rounded-lg border border-line text-xs w-44" />
             </div>
-            <button onClick={exportCsv} disabled={visible.length === 0} className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold flex items-center disabled:opacity-40">
+            <button onClick={exportCsv} disabled={visible.length === 0} className="px-3 py-1.5 rounded-lg border border-line text-xs font-bold flex items-center disabled:opacity-40">
               <Download className="w-3.5 h-3.5 mr-1" />
               CSV
             </button>
-            <button onClick={print} disabled={visible.length === 0} className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold flex items-center disabled:opacity-40">
+            <button onClick={print} disabled={visible.length === 0} className="px-3 py-1.5 rounded-lg border border-line text-xs font-bold flex items-center disabled:opacity-40">
               <Printer className="w-3.5 h-3.5 mr-1" />
               Print
             </button>
@@ -409,7 +409,7 @@ export const ReportsPage: React.FC = () => {
         </div>
         <div className="overflow-x-auto">
           {rows === null ? (
-            <p className="py-10 text-center text-sm text-slate-400" role="status">
+            <p className="py-10 text-center text-sm text-muted" role="status">
               Loading…
             </p>
           ) : (
@@ -422,7 +422,7 @@ export const ReportsPage: React.FC = () => {
             />
           )}
         </div>
-        {rows !== null && <p className="px-4 py-2 text-xs text-slate-400 border-t border-slate-100">{visible.length} row(s)</p>}
+        {rows !== null && <p className="px-4 py-2 text-xs text-muted border-t border-line">{visible.length} row(s)</p>}
       </div>
     </div>
   );
@@ -436,10 +436,10 @@ const ReportTable: React.FC<{
   onSort?: (col: number) => void;
 }> = ({ columns, rows, screen, sort, onSort }) => (
   <table className={screen ? 'w-full text-sm' : ''}>
-    <thead className={screen ? 'bg-slate-50 text-slate-500 text-xs uppercase' : ''}>
+    <thead className={screen ? 'bg-canvas text-muted text-xs uppercase' : ''}>
       <tr>
         {columns.map((c, i) => (
-          <th key={c.header} className={screen ? `py-2.5 px-4 whitespace-nowrap ${c.align === 'right' ? 'text-right' : 'text-left'}` : ''}>
+          <th key={c.header} className={screen ? `py-2 px-3 whitespace-nowrap ${c.align === 'right' ? 'text-right' : 'text-left'}` : ''}>
             {screen && onSort ? (
               <button onClick={() => onSort(i)} className="inline-flex items-center uppercase">
                 {c.header}
@@ -452,10 +452,10 @@ const ReportTable: React.FC<{
         ))}
       </tr>
     </thead>
-    <tbody className={screen ? 'divide-y divide-slate-100' : ''}>
+    <tbody className={screen ? 'divide-y divide-line' : ''}>
       {rows.length === 0 ? (
         <tr>
-          <td colSpan={columns.length} className={screen ? 'py-8 text-center text-slate-400' : ''}>
+          <td colSpan={columns.length} className={screen ? 'py-8 text-center text-muted' : ''}>
             No data for this period.
           </td>
         </tr>

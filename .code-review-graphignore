@@ -1,0 +1,10 @@
+# code-review-graph: keep build output and the tool's own source out of the code graph
+frontend-desktop/dist-electron/**
+frontend-desktop/dist-electron-v1/**
+frontend-desktop/dist-electron-v2/**
+frontend-desktop/dist-electron-1.0.1/**
+frontend-desktop/build-server/**
+frontend-desktop/installers/**
+frontend-desktop/dist/**
+release/windows/**
+code-review-graph/**

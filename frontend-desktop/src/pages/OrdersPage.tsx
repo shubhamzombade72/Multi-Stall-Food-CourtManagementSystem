@@ -4,7 +4,8 @@ import { ClipboardList, Eye, Search } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { PrintReceiptButton } from '../components/Receipt';
 import { apiError, dateTime, humanize, isoDate, money } from '../lib/format';
-import { Badge, buttonClass, Card, EmptyState, ErrorBanner, Field, inputClass, Loading, Modal, PageHeader, Pagination, statusTone } from '../components/ui';
+import { Badge, buttonClass, Card, EmptyState, ErrorBanner, Field, inputClass, Loading, Modal, PageHeader, Pagination, statusTone, Tag } from '../components/ui';
+import { statusChip } from '../lib/status';
 
 const STATUSES = ['confirmed', 'partially_ready', 'ready', 'served', 'completed', 'cancelled'];
 const CHANNELS = [
@@ -90,7 +91,7 @@ export const OrdersPage: React.FC = () => {
   const canCancel = detail && detail.status !== 'cancelled' && detail.payment_status !== 'paid' && !detail.kitchen_tickets?.some((t: any) => ['preparing', 'ready', 'picked_up'].includes(t.status));
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 max-w-7xl mx-auto space-y-4">
       <PageHeader title="Orders & Receipts" icon={ClipboardList} subtitle="Parent orders from every channel with their stall kitchen tickets" />
 
       <Card className="p-4">
@@ -105,7 +106,7 @@ export const OrdersPage: React.FC = () => {
           <div className="col-span-2">
             <Field label="Search">
               <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <Search className="w-4 h-4 text-subtle absolute left-3 top-2.5" />
                 <input aria-label="Search orders" placeholder="Order #, customer, phone" value={filters.search} onChange={set('search')} className={`${inputClass} pl-9`} />
               </div>
             </Field>
@@ -181,45 +182,45 @@ export const OrdersPage: React.FC = () => {
           <EmptyState title="No orders match these filters" />
         ) : (
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+            <thead className="bg-canvas text-muted text-xs uppercase tracking-wider">
               <tr>
-                <th className="py-3 px-4">Order</th>
-                <th className="py-3 px-4">Time</th>
-                <th className="py-3 px-4">Table / Type</th>
-                <th className="py-3 px-4">Customer</th>
-                <th className="py-3 px-4">Channel</th>
-                <th className="py-3 px-4">Stall tickets</th>
-                <th className="py-3 px-4 text-right">Total</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+                <th className="py-1.5 px-3">Order</th>
+                <th className="py-1.5 px-3">Time</th>
+                <th className="py-1.5 px-3">Table / Type</th>
+                <th className="py-1.5 px-3">Customer</th>
+                <th className="py-1.5 px-3">Channel</th>
+                <th className="py-1.5 px-3">Stall tickets</th>
+                <th className="py-1.5 px-3 text-right">Total</th>
+                <th className="py-1.5 px-3">Status</th>
+                <th className="py-1.5 px-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-line">
               {orders.map((o) => (
-                <tr key={o.id} className="hover:bg-slate-50">
-                  <td className="py-3 px-4 font-mono font-semibold text-slate-900">{o.order_number}</td>
-                  <td className="py-3 px-4 text-xs text-slate-500">{dateTime(o.created_at)}</td>
-                  <td className="py-3 px-4">{o.table ? <span className="font-bold">{o.table.table_number}</span> : 'Takeaway'}</td>
-                  <td className="py-3 px-4 text-xs">{o.customer_name || '—'}</td>
-                  <td className="py-3 px-4">
-                    <Badge>{CHANNELS.find(([v]) => v === o.order_channel)?.[1] || o.order_channel}</Badge>
+                <tr key={o.id} className="hover:bg-surface-2">
+                  <td className="py-1.5 px-3 font-mono font-semibold text-fg whitespace-nowrap">{o.order_number}</td>
+                  <td className="py-1.5 px-3 text-xs text-muted whitespace-nowrap">{dateTime(o.created_at)}</td>
+                  <td className="py-1.5 px-3">{o.table ? <span className="font-bold">{o.table.table_number}</span> : 'Takeaway'}</td>
+                  <td className="py-1.5 px-3 text-xs">{o.customer_name || '—'}</td>
+                  <td className="py-1.5 px-3">
+                    <Tag>{CHANNELS.find(([v]) => v === o.order_channel)?.[1] || o.order_channel}</Tag>
                   </td>
-                  <td className="py-3 px-4">
+                  <td className="py-1.5 px-3">
                     <div className="flex flex-wrap gap-1">
                       {o.kitchen_tickets?.map((t: any) => (
-                        <span key={t.id} className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
+                        <span key={t.id} className={`text-[11px] px-2 py-0.5 rounded-md font-semibold whitespace-nowrap ${statusChip(t.status)}`}>
                           {t.stall?.code}: {humanize(t.status)}
                         </span>
                       ))}
                     </div>
                   </td>
-                  <td className="py-3 px-4 font-bold text-right">{money(o.total_amount)}</td>
-                  <td className="py-3 px-4 space-y-1">
+                  <td className="py-1.5 px-3 font-bold text-right whitespace-nowrap">{money(o.total_amount)}</td>
+                  <td className="py-1.5 px-3 space-y-1">
                     <Badge tone={statusTone(o.status)}>{humanize(o.status)}</Badge>{' '}
                     <Badge tone={statusTone(o.payment_status)}>{humanize(o.payment_status)}</Badge>
                   </td>
-                  <td className="py-3 px-4 text-right">
-                    <button onClick={() => openDetail(o.id)} aria-label={`Open ${o.order_number}`} className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600">
+                  <td className="py-1.5 px-3 text-right">
+                    <button onClick={() => openDetail(o.id)} aria-label={`Open ${o.order_number}`} className="p-1 rounded-lg border border-line hover:bg-surface-2 text-muted">
                       <Eye className="w-4 h-4" />
                     </button>
                   </td>
@@ -234,39 +235,39 @@ export const OrdersPage: React.FC = () => {
       {detail && (
         <Modal title={`Order ${detail.order_number}`} onClose={() => setDetail(null)} wide>
           <div className="grid grid-cols-4 gap-3 text-xs">
-            <div className="bg-slate-50 rounded-lg p-2">
-              <p className="text-slate-500">Created</p>
+            <div className="bg-canvas rounded-lg p-2">
+              <p className="text-muted">Created</p>
               <p className="font-semibold">{dateTime(detail.created_at)}</p>
             </div>
-            <div className="bg-slate-50 rounded-lg p-2">
-              <p className="text-slate-500">Table / type</p>
+            <div className="bg-canvas rounded-lg p-2">
+              <p className="text-muted">Table / type</p>
               <p className="font-semibold">{detail.table ? detail.table.table_number : 'Takeaway'}</p>
             </div>
-            <div className="bg-slate-50 rounded-lg p-2">
-              <p className="text-slate-500">Customer</p>
+            <div className="bg-canvas rounded-lg p-2">
+              <p className="text-muted">Customer</p>
               <p className="font-semibold">{detail.customer_name || '—'} {detail.customer_phone ? `· ${detail.customer_phone}` : ''}</p>
             </div>
-            <div className="bg-slate-50 rounded-lg p-2">
-              <p className="text-slate-500">Staff</p>
+            <div className="bg-canvas rounded-lg p-2">
+              <p className="text-muted">Staff</p>
               <p className="font-semibold">{detail.waiter?.name || detail.cashier?.name || '—'}</p>
             </div>
           </div>
 
           <div className="space-y-2">
-            <h4 className="text-xs font-bold text-slate-500 uppercase">Stall kitchen tickets</h4>
+            <h4 className="text-xs font-bold text-muted uppercase">Stall kitchen tickets</h4>
             {detail.kitchen_tickets?.map((t: any) => (
-              <div key={t.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs flex justify-between">
+              <div key={t.id} className="p-3 bg-canvas rounded-lg border border-line text-xs flex justify-between items-start gap-2">
                 <div>
-                  <span className="font-bold text-slate-900 block">{t.stall?.name}</span>
-                  <span className="text-slate-500 font-mono">{t.ticket_number}</span>
-                  <span className="text-slate-500 block">{t.ticket_items?.map((ti: any) => `${ti.quantity}× ${ti.order_item?.item_name}`).join(', ')}</span>
+                  <span className="font-bold text-fg block">{t.stall?.name}</span>
+                  <span className="text-muted font-mono">{t.ticket_number}</span>
+                  <span className="text-muted block">{t.ticket_items?.map((ti: any) => `${ti.quantity}× ${ti.order_item?.item_name}`).join(', ')}</span>
                 </div>
                 <Badge tone={statusTone(t.status)}>{humanize(t.status)}</Badge>
               </div>
             ))}
           </div>
 
-          <div className="bg-slate-50 p-4 rounded-xl space-y-1 text-sm">
+          <div className="bg-canvas p-4 rounded-lg space-y-1 text-sm">
             <div className="flex justify-between">
               <span>Subtotal</span>
               <span>{money(detail.subtotal)}</span>
@@ -275,12 +276,12 @@ export const OrdersPage: React.FC = () => {
               <span>Tax</span>
               <span>{money(detail.tax_amount)}</span>
             </div>
-            <div className="flex justify-between font-bold border-t border-slate-200 pt-1">
+            <div className="flex justify-between font-bold border-t border-line pt-1">
               <span>Total</span>
               <span>{money(detail.total_amount)}</span>
             </div>
             {detail.payments?.map((p: any) => (
-              <div key={p.id} className="flex justify-between text-xs text-emerald-800">
+              <div key={p.id} className="flex justify-between text-xs text-success-fg">
                 <span>
                   Paid {humanize(p.payment_method)} · {p.payment_number} · {p.cashier?.name}
                 </span>
@@ -288,7 +289,7 @@ export const OrdersPage: React.FC = () => {
               </div>
             ))}
           </div>
-          {detail.notes && <p className="text-xs whitespace-pre-line bg-amber-50 border border-amber-100 rounded-lg p-2">{detail.notes}</p>}
+          {detail.notes && <p className="text-xs whitespace-pre-line bg-warning/10 border border-warning/40 rounded-lg p-2">{detail.notes}</p>}
 
           <div className="flex flex-wrap gap-2">
             <PrintReceiptButton orderId={detail.id} className={buttonClass.secondary} label={detail.payment_status === 'paid' ? 'Print receipt' : 'Print bill'} />
@@ -304,11 +305,11 @@ export const OrdersPage: React.FC = () => {
             )}
           </div>
           {showCancel && (
-            <form onSubmit={cancelOrder} className="border border-rose-200 bg-rose-50 rounded-xl p-3 space-y-2">
+            <form onSubmit={cancelOrder} className="border border-danger/30 bg-danger/10 rounded-lg p-3 space-y-2">
               <Field label="Reason for cancellation (recorded in the audit log)">
                 <input required minLength={3} maxLength={255} value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} className={inputClass} />
               </Field>
-              {cancelError && <p className="text-xs text-rose-700">{cancelError}</p>}
+              {cancelError && <p className="text-xs text-danger-fg">{cancelError}</p>}
               <div className="flex gap-2">
                 <button type="submit" disabled={cancelling} className={buttonClass.danger}>
                   {cancelling ? 'Cancelling…' : 'Confirm cancellation'}
@@ -320,7 +321,7 @@ export const OrdersPage: React.FC = () => {
             </form>
           )}
           {detail.status !== 'cancelled' && detail.payment_status !== 'paid' && !canCancel && (
-            <p className="text-xs text-slate-500">This order can no longer be cancelled: a kitchen has started preparing it.</p>
+            <p className="text-xs text-muted">This order can no longer be cancelled: a kitchen has started preparing it.</p>
           )}
         </Modal>
       )}

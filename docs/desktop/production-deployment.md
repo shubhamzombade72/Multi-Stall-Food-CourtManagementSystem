@@ -1,7 +1,8 @@
 # Production deployment guide (backend for the Windows desktop app)
 
-> **Not needed for the default install.** Desktop v1.0.2 carries its own server and database and works on one PC with
-> nothing hosted anywhere (`README.md` §2). Use this guide only if several PCs must **share** one server.
+> **Not needed for the default install.** Desktop v1.1.0 carries its own database and works on one PC with nothing hosted
+> anywhere (`README.md` §2). Use this guide to build the **host** for several PCs; the other PCs then join it with a connection
+> code (`multi-pc-deployment.md`). Nobody types an address.
 
 **Status (2026-11-03): no shared production backend has been identified, deployed or verified.** This repository
 records no production hostname, and none was invented. Everything below is what a shared server must satisfy before
@@ -56,8 +57,10 @@ curl.exe -s -X POST "$api/api/auth/login" -H "Accept: application/json" -H "Cont
   -d '{"email":"<owner email>","password":"<typed password>"}'   # expect HTTP 200 and a token
 ```
 
-Then on a clean Windows PC: install the desktop app, enter `https://<production-host>/api` in Server setup, press
-**Save & test** (expect *Food Court API found and responding*), sign in, open Dashboard, Stalls and POS, close and reopen.
+Then create the owner and the first connection code on the host (`php artisan foodcourt:create-owner …`,
+`php artisan foodcourt:pairing-code --url=https://<production-host>/api`), and on a clean Windows PC: install the desktop app,
+choose *Connect to an existing food court*, paste the code, sign in, open Dashboard, Stalls and POS, close and reopen.
+Full procedure: `multi-pc-deployment.md`.
 
 ## 4. Server-side checklist
 

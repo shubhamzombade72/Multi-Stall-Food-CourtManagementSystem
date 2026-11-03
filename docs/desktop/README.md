@@ -8,31 +8,33 @@ The Android app and the customer QR app are **frozen (P2)**: code kept, not deve
 
 ## 1. Install
 
-1. Run `Multi-Stall-Food-Court-Setup-1.0.2.exe` (built to `frontend-desktop/installers/1.0.2/`, ~150 MB). Nothing else to install:
-   the program carries its own server and database.
+1. Run `Multi-Stall-Food-Court-Setup-1.1.0.exe` (built to `frontend-desktop/installers/1.1.0/`, ~130 MB). Nothing else to install:
+   the program carries everything it needs. It installs over 1.0.x and keeps the data (`release-notes-1.1.0.md`).
 2. The installer is per-user (no admin rights), lets you choose the folder, and creates a desktop shortcut.
 3. **The installer is not code-signed.** Windows SmartScreen will warn "Windows protected your PC" → *More info* →
    *Run anyway*. PCs with **Smart App Control** or an application-control policy can block it outright; a code-signing
    certificate (covering the app **and** the bundled `php.exe`) is required before distributing beyond internal testing.
-4. Earlier installers (1.0.0, 1.0.1) must not be given to clients: see `release-notes-1.0.2.md`.
+4. Earlier installers (1.0.0, 1.0.1) must not be given to clients: see `release-notes-1.0.2.md`. 1.0.2 is superseded by 1.1.0.
 
-Silent install (IT / scripted): `Multi-Stall-Food-Court-Setup-1.0.2.exe /S /D=C:\Path\To\Folder`
+Silent install (IT / scripted): `Multi-Stall-Food-Court-Setup-1.1.0.exe /S /D=C:\Path\To\Folder`
 Uninstall: *Settings → Apps → Multi-Stall Food Court*. Uninstalling does **not** delete the data folder (see §2).
 
-## 2. How it works: one PC, built-in server
+## 2. How it works
 
-The app is complete on its own. On every launch it starts a small server **inside the program** and talks to it on
-`127.0.0.1` (this computer only; nothing is reachable from the network). **There is no server address to enter.**
+**One PC (default):** open the app. It starts its own database by itself (the start-up screen shows *Starting application →
+Preparing database → Connecting to food court services → ready*), then shows the **Welcome** screen on the very first run, or the
+sign-in screen afterwards. **There is no server address to enter and no screen to enter one on.**
 
-- **First launch:** a *Welcome* screen asks for the owner's name, email and a password (8+ characters, letters and
-  numbers). That creates the owner account and signs in. There are no demo accounts and no default passwords.
-- **Data** is stored on this PC only, in `%APPDATA%\FoodCourt Desktop\server\`:
-  `foodcourt.sqlite` (the database), `backups\` (automatic copy before each program upgrade, last 5 kept), `logs\`.
-  **To back up, close the app and copy `foodcourt.sqlite`.** Data is **not shared** between computers.
-- **Closing the app stops the server.** Opening it again resumes with all data.
-- Settings → *Server connection* shows the status and the data folder. *Advanced: connect to a different server*
-  switches this PC to a shared server instead (see `server-configuration.md`); *Use the built-in server* switches back.
-- Hosting a shared server for several PCs is a separate setup: `production-deployment.md`. Handing over: `client-handover.md`.
+- **First launch:** Welcome asks for the owner's name, email and a password (8+ characters, letters and numbers), then shows a
+  **one-time recovery key** to print or write down. There are no demo accounts and no default passwords.
+- **Data** is stored on this PC only, in `%APPDATA%\FoodCourt Desktop\server\`. It is never in the install folder, survives upgrades
+  and reinstalls, and uninstalling does **not** delete it. Automatic daily verified backups: `backup-and-recovery.md`.
+- **Closing the app stops its server.** If the server ever stops by itself it is restarted; if it cannot be, the screen says
+  "Service unavailable. Contact your administrator." with *Try again*, *Restore a backup…* and *Copy support information*.
+- **Several PCs:** one host keeps the shared database; the other PCs join it with a one-time connection code:
+  `multi-pc-deployment.md`. Why it is built this way: `architecture-decision.md`.
+- Owner-only tools in **Device Settings**: Backup & recovery, owner recovery key, Connected computers (host), Support information.
+- Support: `login-failure-root-cause.md` (how to find out why someone cannot sign in), `client-handover.md`.
 
 ## 3. Build from source
 

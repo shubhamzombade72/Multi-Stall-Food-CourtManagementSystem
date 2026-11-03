@@ -14,4 +14,18 @@ return [
     */
     'embedded' => (bool) env('FOODCOURT_EMBEDDED', false),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Shared host (multi-PC) mode
+    |--------------------------------------------------------------------------
+    |
+    | On the one computer or server that holds the shared database, every other computer is "paired" with a
+    | one-time code (/api/pairing/*). With require_paired_devices on, only paired terminals can sign in.
+    | public_url is the address terminals reach this host on (https://host/api); when empty it is taken from
+    | the request that created the pairing code.
+    |
+    */
+    'require_paired_devices' => (bool) env('FOODCOURT_REQUIRE_PAIRING', false),
+    'public_url' => env('FOODCOURT_PUBLIC_API_URL'),
+
 ];
