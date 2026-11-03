@@ -15,8 +15,13 @@ export const useConnection = (intervalMs = 15000) => {
   useEffect(() => {
     let alive = true;
     const check = async () => {
+      const target = healthUrl();
+      if (!target) {
+        if (alive) setState('offline');
+        return;
+      }
       try {
-        await axios.get(healthUrl(), { timeout: 5000 });
+        await axios.get(target, { timeout: 5000 });
         if (alive) setState('online');
       } catch {
         if (alive) setState('offline');

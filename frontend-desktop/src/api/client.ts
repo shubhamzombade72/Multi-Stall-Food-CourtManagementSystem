@@ -1,9 +1,16 @@
 import axios from 'axios';
-import { desktop, logError } from '../desktop/bridge';
+import { desktop, isDesktopApp, logError, type DesktopConfig } from '../desktop/bridge';
+import { API_NOT_CONFIGURED } from '../lib/apiErrors';
 
-// Web build: VITE_API_BASE_URL or same-origin /api. Desktop (Electron): the URL saved in the app's
-// configuration, loaded by initApiBaseUrl() before the UI renders.
-export let API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || '/api';
+// Web build: VITE_API_BASE_URL or same-origin /api (the web build is served next to the API).
+// Desktop (Electron): there is NO build-time default. By default the app starts its own server on this PC
+// and the Electron main process reports its address; a saved/release address for a shared server takes
+// precedence. Either way it is loaded by initApiBaseUrl() before the UI renders. Until it is known,
+// API_BASE_URL is '' and every API call is refused with API_NOT_CONFIGURED, so the app shows a setup or
+// error screen instead of guessing a host.
+export let API_BASE_URL: string = isDesktopApp() ? '' : import.meta.env.VITE_API_BASE_URL || '/api';
+
+export const isApiConfigured = (): boolean => API_BASE_URL !== '';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -19,24 +26,39 @@ export const setApiBaseUrl = (url: string) => {
   apiClient.defaults.baseURL = url;
 };
 
+let desktopConfig: DesktopConfig | null = null;
+
+/** What the desktop main process resolved at startup (null in the web build). */
+export const getDesktopConfig = (): DesktopConfig | null => desktopConfig;
+export const setDesktopConfig = (cfg: DesktopConfig): void => {
+  desktopConfig = cfg;
+  if (cfg.apiBaseUrl) setApiBaseUrl(cfg.apiBaseUrl);
+};
+
 export const initApiBaseUrl = async (): Promise<void> => {
   const d = desktop();
   if (!d) return;
   try {
     const cfg = await d.getConfig();
-    if (cfg?.apiBaseUrl) setApiBaseUrl(cfg.apiBaseUrl);
+    if (cfg) setDesktopConfig(cfg);
   } catch (err: any) {
     logError(`Could not read desktop configuration: ${err?.message || err}`);
   }
 };
 
-/** Laravel health endpoint lives at the server root (/up), next to /api. */
+/** Laravel health endpoint lives at the server root (/up), next to /api. Empty when no server is configured. */
 export const healthUrl = (): string => {
+  if (!isApiConfigured()) return '';
   const base = API_BASE_URL.replace(/\/api\/?$/, '');
   return `${base || ''}/up`;
 };
 
+export const SESSION_EXPIRED_KEY = 'fc_session_expired';
+
 apiClient.interceptors.request.use((config) => {
+  if (!isApiConfigured()) {
+    return Promise.reject(Object.assign(new Error('No server address is configured'), { code: API_NOT_CONFIGURED, config }));
+  }
   const token = localStorage.getItem('fc_auth_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -48,11 +70,23 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
+      // A 401 on the sign-in call itself is a credentials problem, not an expired session
+      const isLogin = String(error.config?.url || '').includes('/auth/login');
+      const hadSession = Boolean(localStorage.getItem('fc_auth_token'));
       localStorage.removeItem('fc_auth_token');
       localStorage.removeItem('fc_auth_user');
+      if (!isLogin && hadSession) {
+        try {
+          sessionStorage.setItem(SESSION_EXPIRED_KEY, '1');
+        } catch {
+          // storage unavailable: the user simply lands on the sign-in page
+        }
+      }
       if (!window.location.hash.startsWith('#/login')) {
         window.location.hash = '#/login';
       }
+    } else if (error.code === API_NOT_CONFIGURED) {
+      // expected until the operator enters the server address; not worth logging per request
     } else if (!error.response) {
       logError(`Network error calling ${error.config?.url}: ${error.message}`);
     } else if (error.response.status >= 500) {

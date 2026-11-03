@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { apiClient } from '../api/client';
+import { API_BASE_URL, SESSION_EXPIRED_KEY, apiClient, getDesktopConfig } from '../api/client';
+import { desktop } from '../desktop/bridge';
+import { describeLoginError } from '../lib/apiErrors';
 import { Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
 import logoImg from '../assets/logo.jpg';
 
@@ -14,14 +16,40 @@ export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const { login } = useAuth();
   const navigate = useNavigate();
+  const builtIn = getDesktopConfig()?.mode === 'embedded';
+
+  // A brand-new single-PC install has no accounts yet: go to the one-time owner setup
+  useEffect(() => {
+    if (!builtIn) return;
+    apiClient
+      .get('/setup/status')
+      .then((r) => {
+        if (r.data?.data?.needs_setup) navigate('/first-run', { replace: true });
+      })
+      .catch(() => undefined);
+  }, [builtIn, navigate]);
+
+  // The API interceptor leaves this flag when a stored session was rejected (expired or revoked token)
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) {
+        sessionStorage.removeItem(SESSION_EXPIRED_KEY);
+        setNotice('Your session has expired. Please sign in again.');
+      }
+    } catch {
+      // storage unavailable: no notice
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setNotice(null);
     setIsLoading(true);
 
     try {
@@ -31,7 +59,23 @@ export const LoginPage: React.FC = () => {
         navigate('/');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed. Please verify your credentials.');
+      const described = describeLoginError(err);
+      let message = described.message;
+      // Server not reachable at all: ask the desktop main process WHY (DNS, certificate, refused, timeout)
+      if (builtIn && (described.kind === 'unreachable' || described.kind === 'timeout')) {
+        message = "The program's built-in server is not responding. Close the app completely and open it again.";
+      } else if (described.kind === 'unreachable' || described.kind === 'timeout') {
+        const d = desktop();
+        if (d && API_BASE_URL) {
+          try {
+            const probe = await d.testConnection(API_BASE_URL);
+            if (!probe.ok) message = probe.message;
+          } catch {
+            // keep the generic message
+          }
+        }
+      }
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -54,8 +98,14 @@ export const LoginPage: React.FC = () => {
           <p className="text-sm text-slate-500 mt-1">Multi-Stall Food Court Management & POS</p>
         </div>
 
+        {notice && (
+          <div role="status" className="mb-6 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+            {notice}
+          </div>
+        )}
+
         {error && (
-          <div className="mb-6 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center space-x-2">
+          <div role="alert" className="mb-6 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center space-x-2">
             <span>{error}</span>
           </div>
         )}
@@ -143,12 +193,13 @@ export const LoginPage: React.FC = () => {
             <ShieldCheck className="w-4 h-4 text-emerald-500" />
             <span>Role-based access</span>
           </span>
-          <Link to="/connection" className="font-semibold text-brand-600 hover:underline">
-            Server settings
-          </Link>
+          {!builtIn && (
+            <Link to="/connection" className="font-semibold text-brand-600 hover:underline">
+              Server settings
+            </Link>
+          )}
         </div>
       </div>
     </div>
   );
 };
-

@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\PurchaseController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SettingsController;
+use App\Http\Controllers\Api\SetupController;
 use App\Http\Controllers\Api\SettlementController;
 use App\Http\Controllers\Api\StaffController;
 use App\Http\Controllers\Api\StallController;
@@ -26,6 +27,12 @@ use Illuminate\Support\Facades\Route;
 */
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
+});
+
+// Desktop built-in server only (config/foodcourt.php); 404 everywhere else
+Route::prefix('setup')->middleware('throttle:10,1')->group(function () {
+    Route::get('/status', [SetupController::class, 'status']);
+    Route::post('/owner', [SetupController::class, 'createOwner']);
 });
 
 Route::prefix('public')->group(function () {

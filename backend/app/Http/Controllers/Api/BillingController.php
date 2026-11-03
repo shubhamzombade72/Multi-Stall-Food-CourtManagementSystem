@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\DiningTable;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Support\Sql;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -25,8 +26,8 @@ class BillingController extends Controller
         if ($request->filled('search')) {
             $search = $request->query('search');
             $query->where(function ($q) use ($search) {
-                $q->where('order_number', 'ilike', "%{$search}%")
-                  ->orWhere('customer_name', 'ilike', "%{$search}%");
+                $q->where('order_number', Sql::like(), "%{$search}%")
+                  ->orWhere('customer_name', Sql::like(), "%{$search}%");
             });
         }
 

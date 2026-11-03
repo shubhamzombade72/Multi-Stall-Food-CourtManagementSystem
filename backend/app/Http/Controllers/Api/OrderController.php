@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\StallKitchenTicket;
 use App\Models\StallTicketItem;
+use App\Support\Sql;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -47,9 +48,9 @@ class OrderController extends Controller
         if ($request->filled('search')) {
             $term = '%' . addcslashes($request->query('search'), '%_\\') . '%';
             $query->where(function ($q) use ($term) {
-                $q->where('order_number', 'ilike', $term)
-                    ->orWhere('customer_name', 'ilike', $term)
-                    ->orWhere('customer_phone', 'ilike', $term);
+                $q->where('order_number', Sql::like(), $term)
+                    ->orWhere('customer_name', Sql::like(), $term)
+                    ->orWhere('customer_phone', Sql::like(), $term);
             });
         }
 

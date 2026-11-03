@@ -8,26 +8,31 @@ The Android app and the customer QR app are **frozen (P2)**: code kept, not deve
 
 ## 1. Install
 
-1. Run `FoodCourt-Desktop-Setup-1.0.0.exe` (produced in `frontend-desktop/release/`, ~115 MB).
+1. Run `Multi-Stall-Food-Court-Setup-1.0.2.exe` (built to `frontend-desktop/installers/1.0.2/`, ~150 MB). Nothing else to install:
+   the program carries its own server and database.
 2. The installer is per-user (no admin rights), lets you choose the folder, and creates a desktop shortcut.
-   Default folder: `%LOCALAPPDATA%\Programs\FoodCourt Desktop`.
 3. **The installer is not code-signed.** Windows SmartScreen will warn "Windows protected your PC" → *More info* →
-   *Run anyway*. A code-signing certificate is required before distributing beyond internal testing.
+   *Run anyway*. PCs with **Smart App Control** or an application-control policy can block it outright; a code-signing
+   certificate (covering the app **and** the bundled `php.exe`) is required before distributing beyond internal testing.
+4. Earlier installers (1.0.0, 1.0.1) must not be given to clients: see `release-notes-1.0.2.md`.
 
-Silent install (IT / scripted): `FoodCourt-Desktop-Setup-1.0.0.exe /S /D=C:\Path\To\Folder`
-Uninstall: *Settings → Apps → FoodCourt Desktop 1.0.0*, or `Uninstall FoodCourt Desktop.exe /currentuser /S`.
+Silent install (IT / scripted): `Multi-Stall-Food-Court-Setup-1.0.2.exe /S /D=C:\Path\To\Folder`
+Uninstall: *Settings → Apps → Multi-Stall Food Court*. Uninstalling does **not** delete the data folder (see §2).
 
-## 2. Point it at the server
+## 2. How it works: one PC, built-in server
 
-The app holds **no database credentials**. It talks only to the Laravel API over HTTP(S) with a per-user
-Sanctum token obtained at sign-in.
+The app is complete on its own. On every launch it starts a small server **inside the program** and talks to it on
+`127.0.0.1` (this computer only; nothing is reachable from the network). **There is no server address to enter.**
 
-- First launch defaults to `http://127.0.0.1:8000/api` (the API on the same PC).
-- On a counter PC, open **Server settings** on the login screen (or *Settings* after sign-in), enter the
-  server address, e.g. `http://192.168.1.50:8000/api`, press **Test connection**, then **Save**.
-- Accepted form: `http(s)://host[:port]/…/api` with no user/password, query or fragment. Anything else is rejected.
-- Stored in `%APPDATA%\FoodCourt Desktop\config.json` (written atomically). Only `apiBaseUrl` is stored.
-- The sidebar shows the live server status (polls `/up` every 15 s); a red banner appears when the server is unreachable.
+- **First launch:** a *Welcome* screen asks for the owner's name, email and a password (8+ characters, letters and
+  numbers). That creates the owner account and signs in. There are no demo accounts and no default passwords.
+- **Data** is stored on this PC only, in `%APPDATA%\FoodCourt Desktop\server\`:
+  `foodcourt.sqlite` (the database), `backups\` (automatic copy before each program upgrade, last 5 kept), `logs\`.
+  **To back up, close the app and copy `foodcourt.sqlite`.** Data is **not shared** between computers.
+- **Closing the app stops the server.** Opening it again resumes with all data.
+- Settings → *Server connection* shows the status and the data folder. *Advanced: connect to a different server*
+  switches this PC to a shared server instead (see `server-configuration.md`); *Use the built-in server* switches back.
+- Hosting a shared server for several PCs is a separate setup: `production-deployment.md`. Handing over: `client-handover.md`.
 
 ## 3. Build from source
 
@@ -37,7 +42,7 @@ pnpm install            # .npmrc sets node-linker=hoisted (required by electron-
 pnpm test               # desktop unit tests (KDS state machine, CSV safety, API URL validation)
 pnpm build              # tsc + vite build -> dist/
 pnpm electron:start     # build and run in Electron (unpackaged, DevTools allowed)
-pnpm dist:win           # build + NSIS installer -> release/
+pnpm dist:win           # build + assemble built-in server (needs PHP 8.3 on PATH) + NSIS installer -> installers/<version>/
 ```
 
 Optional realtime for the KDS: build with `VITE_REVERB_APP_KEY`, `VITE_REVERB_HOST`, `VITE_REVERB_PORT`,
@@ -45,13 +50,15 @@ Optional realtime for the KDS: build with `VITE_REVERB_APP_KEY`, `VITE_REVERB_HO
 
 If `electron-builder` fails with `EBUSY … app.asar`, a scanner or file watcher is holding files in `release/`;
 build to another folder: `pnpm exec electron-builder --win --x64 -c.directories.output=<folder>`.
+The installer folder is `installers/<version>/` (git-ignored); bump `version` in `package.json` for every release so a new
+installer can never be confused with one already delivered.
 
 ## 4. Security model
 
 | Control | Implementation |
 |---|---|
 | Renderer isolation | `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`, `webSecurity: true` |
-| Bridge | `preload.cjs` exposes exactly six functions on `window.desktop`: `getConfig`, `setApiBaseUrl`, `getAppInfo`, `log`, `listPrinters`, `print` |
+| Bridge | `preload.cjs` exposes exactly eight functions on `window.desktop`: `getConfig`, `setApiBaseUrl`, `useBuiltInServer`, `testConnection`, `getAppInfo`, `log`, `listPrinters`, `print` |
 | IPC | Each handler checks the sender frame is the app's own page; anything else is rejected and logged |
 | CSP | Injected into the production `index.html`: `script-src 'self'`, `object-src 'none'`, `base-uri 'none'`, `form-action 'none'`, `frame-ancestors 'none'` |
 | Navigation | `will-navigate` away from the app is blocked; `window.open` is denied (http(s) links open in the system browser) |
@@ -91,6 +98,6 @@ Every role also has Settings. This table is sidebar visibility; the API enforces
 
 ## 8. Not supported (by decision)
 
-- **No offline mode.** The desktop needs the API reachable. A Local Edge Server needs a separately approved architecture.
+- **No data sharing between PCs in the default (single-PC) mode.** Each computer has its own database. Several PCs that must see the same orders need one shared server (`production-deployment.md`).
 - No auto-update. Install new versions over the old one (settings and config are kept).
 - No expense management, discounts, refunds, split payments, recipe/BOM depletion. See `docs/staging/known-limitations.md`.

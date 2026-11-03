@@ -3,7 +3,22 @@
  * `window.desktop` is undefined and every helper degrades gracefully.
  */
 export interface DesktopConfig {
-  apiBaseUrl: string;
+  /** null only when no server is available (built-in server missing or failed, nothing configured) */
+  apiBaseUrl: string | null;
+  source: 'saved' | 'environment' | 'release' | 'embedded' | 'none';
+  /** embedded = the app's own server on this PC (default); remote = a configured shared server */
+  mode: 'embedded' | 'remote' | 'none';
+  /** why the built-in server could not start, when it could not */
+  error: string | null;
+}
+
+export interface ConnectionTestResult {
+  ok: boolean;
+  code: string;
+  message: string;
+  url?: string;
+  apiStatus?: number;
+  healthStatus?: number | null;
 }
 
 export interface DesktopAppInfo {
@@ -13,6 +28,8 @@ export interface DesktopAppInfo {
   platform: string;
   packaged: boolean;
   logFile: string;
+  /** folder holding this PC's database (built-in server only) */
+  dataDir: string | null;
 }
 
 export interface DesktopPrinter {
@@ -24,7 +41,9 @@ export interface DesktopPrinter {
 
 interface DesktopBridge {
   getConfig(): Promise<DesktopConfig>;
-  setApiBaseUrl(url: string): Promise<{ ok: boolean; apiBaseUrl?: string; error?: string }>;
+  setApiBaseUrl(url: string): Promise<{ ok: boolean; apiBaseUrl?: string; error?: string; warnings?: string[] }>;
+  testConnection(url: string): Promise<ConnectionTestResult>;
+  useBuiltInServer(): Promise<DesktopConfig>;
   getAppInfo(): Promise<DesktopAppInfo>;
   log(level: 'INFO' | 'WARN' | 'ERROR', message: string): Promise<boolean>;
   listPrinters(): Promise<DesktopPrinter[]>;

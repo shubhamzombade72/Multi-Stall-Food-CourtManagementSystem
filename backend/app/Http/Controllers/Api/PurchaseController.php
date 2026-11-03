@@ -9,6 +9,7 @@ use App\Models\PurchaseOrderItem;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Services\AuditService;
+use App\Support\Sql;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -39,9 +40,9 @@ class PurchaseController extends Controller
 
         if ($request->filled('search')) {
             $term = '%' . addcslashes($request->query('search'), '%_\\') . '%';
-            $query->where(fn ($q) => $q->where('name', 'ilike', $term)
-                ->orWhere('contact_person', 'ilike', $term)
-                ->orWhere('phone', 'ilike', $term));
+            $query->where(fn ($q) => $q->where('name', Sql::like(), $term)
+                ->orWhere('contact_person', Sql::like(), $term)
+                ->orWhere('phone', Sql::like(), $term));
         }
 
         return response()->json([

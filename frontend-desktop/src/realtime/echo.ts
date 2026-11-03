@@ -13,17 +13,12 @@ let echo: Echo<'reverb'> | null = null;
 export const realtimeConfigured = (): boolean => Boolean(import.meta.env.VITE_REVERB_APP_KEY);
 
 export const getEcho = (): Echo<'reverb'> | null => {
-  if (!realtimeConfigured()) return null;
+  if (!realtimeConfigured() || !API_BASE_URL) return null;
   if (echo) return echo;
   try {
     (window as any).Pusher = Pusher;
-    const apiHost = (() => {
-      try {
-        return new URL(API_BASE_URL, window.location.href).hostname;
-      } catch {
-        return '127.0.0.1';
-      }
-    })();
+    // Same host as the API unless VITE_REVERB_HOST says otherwise; an unparseable API address throws into the catch below
+    const apiHost = new URL(API_BASE_URL, window.location.href).hostname;
     echo = new Echo({
       broadcaster: 'reverb',
       key: import.meta.env.VITE_REVERB_APP_KEY,

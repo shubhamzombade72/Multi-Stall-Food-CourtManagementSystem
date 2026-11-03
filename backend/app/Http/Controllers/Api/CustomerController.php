@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Services\AuditService;
+use App\Support\Sql;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -61,9 +62,9 @@ class CustomerController extends Controller
 
         if ($request->filled('search')) {
             $term = '%' . addcslashes($request->query('search'), '%_\\') . '%';
-            $query->where(fn ($q) => $q->where('customers.name', 'ilike', $term)
-                ->orWhere('customers.phone', 'ilike', $term)
-                ->orWhere('customers.email', 'ilike', $term));
+            $query->where(fn ($q) => $q->where('customers.name', Sql::like(), $term)
+                ->orWhere('customers.phone', Sql::like(), $term)
+                ->orWhere('customers.email', Sql::like(), $term));
         }
 
         return response()->json([

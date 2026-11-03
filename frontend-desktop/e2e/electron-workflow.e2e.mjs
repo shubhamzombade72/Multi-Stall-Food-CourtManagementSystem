@@ -98,7 +98,7 @@ const logout = async () => {
   const startupMs = Date.now() - t0;
   const sec1 = await page.evaluate(() => ({ req: typeof require, proc: typeof process, keys: Object.keys(window.desktop || {}).sort(), csp: !!document.querySelector('meta[http-equiv="Content-Security-Policy"]') }));
   check('S-01', 'Packaged app starts to the login screen', true, `${startupMs} ms`);
-  check('S-02', 'Renderer has no Node access; bridge is the 6-function allowlist; CSP present', sec1.req === 'undefined' && sec1.proc === 'undefined' && sec1.keys.length === 6 && sec1.csp, JSON.stringify(sec1));
+  check('S-02', 'Renderer has no Node access; bridge is the 8-function allowlist; CSP present', sec1.req === 'undefined' && sec1.proc === 'undefined' && sec1.keys.length === 8 && sec1.csp, JSON.stringify(sec1));
   const isPackaged = await app.evaluate(({ app: a }) => a.isPackaged);
   check('S-03', 'Running the packaged (asar) build', isPackaged === true);
 
@@ -304,7 +304,7 @@ const logout = async () => {
   await page.getByText('Cashier closing recorded.').waitFor();
   const closing = sql(`SELECT expected_cash || '|' || counted_cash || '|' || variance FROM cashier_closings WHERE cashier_id=(SELECT id FROM users WHERE email=${lit(staff.cashier.email)})`);
   check('P-05', 'Cashier closing: expected cash from payments, zero variance (DB)', closing === `${expected}|${expected}|0.00`, `${closing} (screen ${expectedText})`);
-  const inHistory = await page.locator('td', { hasText: staff.cashier.name }).waitFor({ timeout: 10000 }).then(() => true, () => false);
+  const inHistory = await page.locator('td', { hasText: staff.cashier.name }).first().waitFor({ timeout: 10000 }).then(() => true, () => false);
   check('P-06', 'The new closing appears in the closing history table', inHistory);
   await shot('05-cashier-closing');
   await logout();
@@ -339,16 +339,16 @@ const logout = async () => {
   // ------------------------------------------------------------------ connectivity, persistence, restart
   sec('Disconnection, reconnection, restart');
   await go('#/settings');
-  const urlInput = page.locator('input[placeholder="http://192.168.1.50:8000/api"]');
+  const urlInput = page.locator('#api-url');
   await urlInput.fill('http://127.0.0.1:8199/api');
   await page.click('button:has-text("Save & test")');
-  await page.getByText(/Cannot reach server/).waitFor();
+  await page.getByText(/refused the connection|could not be reached|did not respond/).first().waitFor();
   await page.reload();
   await page.getByText('Server unreachable').first().waitFor({ timeout: 30000 });
   check('N-01', 'Pointing at a dead server shows "Server unreachable"', true);
-  await page.locator('input[placeholder="http://192.168.1.50:8000/api"]').fill(API);
+  await page.locator('#api-url').fill(API);
   await page.click('button:has-text("Save & test")');
-  await page.getByText(/Connected to/).waitFor();
+  await page.getByText(/Food Court API found and responding/).waitFor();
   await page.reload();
   await page.getByText('Server online').waitFor({ timeout: 30000 });
   check('N-02', 'Reconnecting shows "Server online" again', true);

@@ -45,3 +45,8 @@ __pycache__/
 *.pyc
 .system_generated/
 
+
+# New desktop installers (frontend-desktop/installers/<version>/): build output, not source
+frontend-desktop/installers/
+# Generated built-in server bundle (scripts/prepare-embedded-server.mjs)
+frontend-desktop/build-server/
