@@ -21,6 +21,7 @@ const { normalizeApiUrl, classifyNetworkError, parseBundledConfig, shouldUseSave
 const { artisanFor, locateRuntime, startEmbeddedServer, FAILURE } = require('./embedded-server.cjs');
 const backup = require('./backup.cjs');
 const pairing = require('./pairing.cjs');
+const { createPrinting } = require('./printing/index.cjs');
 
 const DEV_URL = process.env.ELECTRON_START_URL || ''; // e.g. http://localhost:3000 for `pnpm dev`
 
@@ -419,6 +420,9 @@ function createWindow() {
       webSecurity: true,
       allowRunningInsecureContent: false,
       spellcheck: false,
+      // Order/ticket sounds fire from polling, not from a click; without this Chromium would mute them until the
+      // first tap. This only relaxes media autoplay; it grants no other capability.
+      autoplayPolicy: 'no-user-gesture-required',
       devTools: !app.isPackaged,
     },
   });
@@ -543,9 +547,12 @@ function buildMenu() {
 // ------------------------------------------------------------------ IPC (allowlist)
 // Keep in sync with preload.cjs and the smoke test: this is the renderer's entire reach into the main process.
 const BRIDGE_KEYS = [
-  'backupNow', 'chooseBackupFolder', 'connectToHost', 'getAppInfo', 'getBackupStatus', 'getConfig', 'getDiagnostics', 'getStartupStatus',
-  'listPrinters', 'log', 'print', 'restoreBackup', 'retryStart', 'useBuiltInServer',
+  'backupNow', 'chooseBackupFolder', 'connectToHost', 'enqueuePrintJob', 'getAppInfo', 'getBackupStatus', 'getConfig', 'getDiagnostics', 'getPrintConfig',
+  'getPrinterStatus', 'getStartupStatus', 'listPrintJobs', 'listPrinters', 'log', 'onPrintJobsChanged', 'previewPrintDocument', 'print', 'reprintPrintJob',
+  'restoreBackup', 'retryPrintJob', 'retryStart', 'sendTestPrint', 'setPrintConfig', 'useBuiltInServer',
 ].sort();
+
+let printing = null; // thermal printing service (electron/printing), created once the app is ready
 
 function fromApp(event) {
   const url = event.senderFrame?.url || '';
@@ -677,14 +684,25 @@ if (diagnoseArg) {
       if (p && pairing.shouldAttachDeviceToken(details.url, p.apiBaseUrl)) details.requestHeaders['X-Device-Token'] = p.token;
       callback({ requestHeaders: details.requestHeaders });
     });
+    printing = createPrinting({
+      app,
+      BrowserWindow,
+      handle,
+      getWindows: () => BrowserWindow.getAllWindows(),
+      log,
+      listPrinters: async () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents.getPrintersAsync() : []),
+    });
     registerIpc();
+    printing.registerIpc();
     buildMenu();
     if (!readConfig().apiBaseUrl) startBuiltInServer(); // start services while the window loads
     createWindow();
+    printing.start(); // resumes queued jobs; jobs that were mid-print at the last shutdown are marked failed, never re-sent
     log('INFO', `Started v${app.getVersion()} (electron ${process.versions.electron})`);
   });
 
   app.on('will-quit', () => {
+    if (printing) void printing.shutdown();
     void shutdownServer();
   });
   process.on('exit', () => {

@@ -35,7 +35,8 @@ export const OrderTrackingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  // Cards are open by default and stay open (several at once, across refreshes); only cards the user collapsed are listed.
+  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<number>>(new Set());
   const [busyItems, setBusyItems] = useState<ReadonlySet<number>>(new Set());
   const [servingOrders, setServingOrders] = useState<ReadonlySet<number>>(new Set());
 
@@ -206,7 +207,15 @@ export const OrderTrackingPage: React.FC = () => {
     }
   }, [refresh, replaceOrder]);
 
-  const onToggle = useCallback((id: number) => setExpandedId((cur) => (cur === id ? null : id)), []);
+  const onToggle = useCallback(
+    (id: number) =>
+      setCollapsedIds((cur) => {
+        const next = new Set(cur);
+        if (!next.delete(id)) next.add(id);
+        return next;
+      }),
+    [],
+  );
 
   /** Load more = one more page in every refresh; sequenced exactly like a poll (same guards). */
   const loadMore = async () => {
@@ -245,7 +254,7 @@ export const OrderTrackingPage: React.FC = () => {
                 order={order}
                 nowMs={cardNow(order.created_at, now)}
                 delayMinutes={delayMinutes}
-                expanded={expandedId === order.id}
+                expanded={!collapsedIds.has(order.id)}
                 canMarkReady={canMarkReady}
                 busyItems={order.items.some((i) => busyItems.has(i.id)) ? busyItems : NO_BUSY}
                 serving={servingOrders.has(order.id)}

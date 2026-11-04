@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ClipboardList, Eye, Search } from 'lucide-react';
 import { apiClient } from '../api/client';
-import { PrintReceiptButton } from '../components/Receipt';
+import { PrintReceiptButton, ReceiptPreviewButton } from '../components/Receipt';
+import { taxLines } from '../lib/tax';
 import { apiError, dateTime, humanize, isoDate, money } from '../lib/format';
 import { Badge, buttonClass, Card, EmptyState, ErrorBanner, Field, inputClass, Loading, Modal, PageHeader, Pagination, statusTone, Tag } from '../components/ui';
 import { statusChip } from '../lib/status';
@@ -268,14 +269,12 @@ export const OrdersPage: React.FC = () => {
           </div>
 
           <div className="bg-canvas p-4 rounded-lg space-y-1 text-sm">
-            <div className="flex justify-between">
-              <span>Subtotal</span>
-              <span>{money(detail.subtotal)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Tax</span>
-              <span>{money(detail.tax_amount)}</span>
-            </div>
+            {taxLines(detail).map((line) => (
+              <div key={line.label} data-testid="order-tax-line" className="flex justify-between">
+                <span>{line.label}</span>
+                <span>{money(line.value)}</span>
+              </div>
+            ))}
             <div className="flex justify-between font-bold border-t border-line pt-1">
               <span>Total</span>
               <span>{money(detail.total_amount)}</span>
@@ -292,6 +291,7 @@ export const OrdersPage: React.FC = () => {
           {detail.notes && <p className="text-xs whitespace-pre-line bg-warning/10 border border-warning/40 rounded-lg p-2">{detail.notes}</p>}
 
           <div className="flex flex-wrap gap-2">
+            <ReceiptPreviewButton orderId={detail.id} className={buttonClass.secondary} label="Preview" />
             <PrintReceiptButton orderId={detail.id} className={buttonClass.secondary} label={detail.payment_status === 'paid' ? 'Print receipt' : 'Print bill'} />
             {detail.payment_status === 'unpaid' && detail.status !== 'cancelled' && (
               <button onClick={() => navigate('/pos')} className={buttonClass.primary}>

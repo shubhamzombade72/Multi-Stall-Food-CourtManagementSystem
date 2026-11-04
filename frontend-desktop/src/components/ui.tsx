@@ -5,7 +5,7 @@ import { isStruck, statusClasses, statusKind, type StatusKind } from '../lib/sta
 /** Small shared building blocks so every management screen looks and behaves the same. */
 
 export const inputClass =
-  'w-full px-2.5 py-1.5 rounded-lg border border-line text-sm bg-surface text-fg placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-focus disabled:bg-surface-2 disabled:text-muted';
+  'w-full px-2.5 py-1.5 rounded-lg border border-line text-sm bg-surface text-fg placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-focus disabled:bg-surface-2 disabled:text-muted';
 
 export const buttonClass = {
   primary: 'px-3 py-1.5 bg-primary text-primary-fg hover:opacity-90 font-semibold text-sm rounded-lg flex items-center space-x-1.5 disabled:opacity-50',

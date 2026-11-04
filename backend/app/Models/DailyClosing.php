@@ -23,7 +23,7 @@ class DailyClosing extends Model
     ];
 
     protected $casts = [
-        'closing_date' => 'date',
+        'closing_date' => 'date:Y-m-d',
         'total_orders_count' => 'integer',
         'total_gross_sales' => 'decimal:2',
         'total_discounts' => 'decimal:2',

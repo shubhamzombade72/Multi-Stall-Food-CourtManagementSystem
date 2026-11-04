@@ -1,0 +1,177 @@
+[
+  {
+    "scenario": "Contract",
+    "testId": "CTR-01",
+    "description": "Stale expected_version returns HTTP 409 with version_conflict and current item",
+    "status": "PASS",
+    "details": "HTTP 409"
+  },
+  {
+    "scenario": "Contract",
+    "testId": "CTR-02",
+    "description": "Valid advance increments version to 1 with changed:true",
+    "status": "PASS",
+    "details": "Version 1"
+  },
+  {
+    "scenario": "Contract",
+    "testId": "CTR-03",
+    "description": "Same-status request returns HTTP 200 with changed:false (no-op)",
+    "status": "PASS",
+    "details": "Changed: false"
+  },
+  {
+    "scenario": "Contract",
+    "testId": "CTR-04",
+    "description": "Backward transition returns HTTP 422 with invalid_transition",
+    "status": "PASS",
+    "details": "HTTP 422"
+  },
+  {
+    "scenario": "Contract",
+    "testId": "CTR-05",
+    "description": "Serve All Remaining returns HTTP 200",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Contract",
+    "testId": "CTR-06",
+    "description": "Replay identical key returns HTTP 200",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Contract",
+    "testId": "CTR-07",
+    "description": "Same key with different payload returns HTTP 409 idempotency_key_reused",
+    "status": "PASS",
+    "details": "HTTP 409"
+  },
+  {
+    "scenario": "Scenario A",
+    "testId": "SCN-A01",
+    "description": "Multi-stall order generates 1 ticket per stall (2 tickets total)",
+    "status": "PASS",
+    "details": "Found 2 tickets"
+  },
+  {
+    "scenario": "Scenario A",
+    "testId": "SCN-A02",
+    "description": "Each stall KDS sees ONLY its own stall tickets",
+    "status": "PASS",
+    "details": "Strict stall isolation confirmed"
+  },
+  {
+    "scenario": "Scenario A",
+    "testId": "SCN-A03",
+    "description": "Cross-stall ticket update rejected with HTTP 403",
+    "status": "PASS",
+    "details": "HTTP 403"
+  },
+  {
+    "scenario": "Scenario B",
+    "testId": "SCN-B01",
+    "description": "1 item ready moves order to partially_ready / in_preparation",
+    "status": "PASS",
+    "details": "Status: partially_ready"
+  },
+  {
+    "scenario": "Scenario B",
+    "testId": "SCN-B02",
+    "description": "Serving 1 item leaves other 3 items unserved",
+    "status": "PASS",
+    "details": "Unserved: 3"
+  },
+  {
+    "scenario": "Scenario B",
+    "testId": "SCN-B03",
+    "description": "Serve All Remaining reconciles order to served and all tickets to picked_up",
+    "status": "PASS",
+    "details": "Items: 4/4, Order: served, Tickets picked_up: 2"
+  },
+  {
+    "scenario": "Scenario C",
+    "testId": "SCN-C01",
+    "description": "Concurrent item serve and Serve All complete without 500 error",
+    "status": "PASS",
+    "details": "Statuses: 200,200"
+  },
+  {
+    "scenario": "Scenario C",
+    "testId": "SCN-C02",
+    "description": "Audit trail matches version exactly (no lost updates)",
+    "status": "PASS",
+    "details": ""
+  },
+  {
+    "scenario": "Scenario D",
+    "testId": "SCN-D01",
+    "description": "Order and payment records persist across process restart",
+    "status": "PASS",
+    "details": "Payment status: paid"
+  },
+  {
+    "scenario": "Scenario D",
+    "testId": "SCN-D02",
+    "description": "Audit records persist in PostgreSQL across server restart",
+    "status": "PASS",
+    "details": "Audit rows: 5"
+  },
+  {
+    "scenario": "Scenario E",
+    "testId": "SCN-E01",
+    "description": "Kitchen staff cannot access payment endpoints (HTTP 403)",
+    "status": "PASS",
+    "details": "HTTP 403"
+  },
+  {
+    "scenario": "Scenario E",
+    "testId": "SCN-E02",
+    "description": "Kitchen staff cannot modify food court settings (HTTP 403)",
+    "status": "PASS",
+    "details": "HTTP 403"
+  },
+  {
+    "scenario": "Scenario E",
+    "testId": "SCN-E03",
+    "description": "Cashier cannot directly update kitchen ticket status (HTTP 403)",
+    "status": "PASS",
+    "details": "HTTP 403"
+  },
+  {
+    "scenario": "Scalability",
+    "testId": "SCN-S01",
+    "description": "Board returns 100 orders on page 1 with has_more: true and cursor",
+    "status": "PASS",
+    "details": "Received: 100"
+  },
+  {
+    "scenario": "Scalability",
+    "testId": "SCN-S02",
+    "description": "Board fetches remaining orders via cursor pagination without drops",
+    "status": "PASS",
+    "details": "Page 2 received: 65"
+  },
+  {
+    "scenario": "Scalability",
+    "testId": "SCN-S03",
+    "description": "Zero duplicate orders between page 1 and page 2",
+    "status": "PASS",
+    "details": "Overlaps: 0"
+  },
+  {
+    "scenario": "Scalability",
+    "testId": "SCN-S04",
+    "description": "Paid order with unserved items remains on tracking board",
+    "status": "PASS",
+    "details": "Order 165 retained"
+  },
+  {
+    "scenario": "Scalability",
+    "testId": "SCN-S05",
+    "description": "Cancelled order does not appear as active unserved order on board",
+    "status": "PASS",
+    "details": "Cancelled order 166 excluded"
+  }
+]

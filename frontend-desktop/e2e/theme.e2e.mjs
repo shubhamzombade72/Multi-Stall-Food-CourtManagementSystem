@@ -430,7 +430,7 @@ try {
       await page.getByText('Consolidated Bill Settlement').waitFor({ timeout: 15000 });
       await settle(500);
       const big = await page.evaluate(() => {
-        const label = [...document.querySelectorAll('span')].find((s) => s.innerText.trim() === 'Total Bill Amount:');
+        const label = [...document.querySelectorAll('span')].find((s) => /^Total Bill Amount:?$/.test(s.innerText.trim()));
         const v = label?.nextElementSibling;
         return v ? [getComputedStyle(v).fontSize, getComputedStyle(v).fontWeight, getComputedStyle(v).fontVariantNumeric] : null;
       });
@@ -447,7 +447,7 @@ try {
         return;
       }
       await page.getByRole('button', { name: 'Record Payout' }).first().click();
-      await page.getByText(/Record Payout to/).waitFor({ timeout: 15000 });
+      await page.getByRole('dialog', { name: /Record payout/i }).waitFor({ timeout: 15000 });
       await settle(500);
       await verifyScreen(theme, 'daily-closing-payout', 'Daily Closing settlement payout details');
     }

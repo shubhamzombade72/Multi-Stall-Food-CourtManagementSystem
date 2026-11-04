@@ -880,7 +880,7 @@ class ItemFulfillmentTest extends TestCase
         $this->quietBoard();
         $table = DiningTable::orderBy('id')->firstOrFail();
         $newer = $this->makeBoardOrder(['pending', 'ready'], now()->subMinutes(5), [
-            'order_type' => 'dine_in', 'table_id' => $table->id, 'guest_count' => 4,
+            'order_type' => 'dine_in', 'table_id' => $table->id, 'guest_count' => 4, 'notes' => 'Less spicy, no onion',
         ]);
         $older = $this->makeBoardOrder(['preparing'], now()->subMinutes(12));
 
@@ -893,9 +893,11 @@ class ItemFulfillmentTest extends TestCase
         $this->assertSame([$newer->id, $older->id], array_column($res->json('data.orders'), 'id'));
 
         $o = $res->json('data.orders.0');
-        $this->assertSame(['id', 'order_number', 'order_type', 'table', 'guest_count', 'created_at', 'status', 'payment_status', 'items'], array_keys($o));
+        $this->assertSame(['id', 'order_number', 'order_type', 'table', 'guest_count', 'notes', 'created_at', 'status', 'payment_status', 'items'], array_keys($o));
         $this->assertSame(['id' => $table->id, 'table_number' => $table->table_number], $o['table']);
         $this->assertSame(4, $o['guest_count']);
+        $this->assertSame('Less spicy, no onion', $o['notes']);
+        $this->assertNull($res->json('data.orders.1.notes'));
         $this->assertSame('dine_in', $o['order_type']);
         $this->assertSame($newer->order_number, $o['order_number']);
         $this->assertCount(2, $o['items']);

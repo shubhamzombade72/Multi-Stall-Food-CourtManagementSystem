@@ -162,6 +162,13 @@ try {
   const redLabel = await labelOf(order1);
   check('S1-02', 'New order shows a red card with 0/4 Served', red === 'red' && /0\/4 Served/.test(redLabel) && (await progressOf(order1)) === '0/4', `${red} | ${redLabel}`);
   await page.screenshot({ path: join(shots, 'tracking-red.png') });
+  const tableLine = await page.getByTestId(`order-detail-table-${order1}`).innerText();
+  const stallLine = await page.getByTestId(`order-detail-stalls-${order1}`).innerText();
+  check('S1-02b', 'Card details: "Table : <table no>" and "Stalls : <both stall names>", card open by default', tableLine === `Table : T-${tag}` && stallLine === `Stalls : Pizza ${tag}, Burger ${tag}` && (await card(order1).locator('button[aria-expanded]').getAttribute('aria-expanded')) === 'true', `${tableLine} | ${stallLine}`);
+
+  const stallLabels = await Promise.all([...itemsA, ...itemsB].map((id) => page.getByTestId(`item-stall-${id}`).innerText()));
+  const rowText = await page.getByTestId(`item-row-${itemsA[0]}`).innerText();
+  check('S1-02c', 'Item rows show the stall name next to the dish, not the stall code', stallLabels.slice(0, itemsA.length).every((t) => t === `(Pizza ${tag})`) && stallLabels.slice(itemsA.length).every((t) => t === `(Burger ${tag})`) && !rowText.includes(`PZ${tag}`), stallLabels.join(' '));
 
   const ticketA = await kdsTicketFor(order1);
   await api(kitchenToken, 'PUT', `/kitchen/tickets/${ticketA.id}/status`, { status: 'ready' });
@@ -220,6 +227,18 @@ try {
   const item3 = (await boardOrder(order3)).items[0].id;
   await card(order3).waitFor({ timeout: 20000 });
   await waitCardState(order3, 'amber', 15000);
+  // Cards open by default and stay open together: order 1 (already open) and order 3 (new) are both expanded without a click
+  const openAttr = (id) => card(id).locator('button[aria-expanded]').getAttribute('aria-expanded');
+  const bothOpen = (await openAttr(order1)) === 'true' && (await openAttr(order3)) === 'true';
+  await page.waitForTimeout(6500); // one more 5 s poll
+  const stillOpen = (await openAttr(order1)) === 'true' && (await openAttr(order3)) === 'true';
+  check('S5-01', 'Cards are open by default; two cards stay open at once and a poll does not close them', bothOpen && stillOpen, `both=${bothOpen} afterPoll=${stillOpen}`);
+  await card(order1).locator('button[aria-expanded]').click();
+  const collapsed = (await openAttr(order1)) === 'false' && (await openAttr(order3)) === 'true';
+  await page.waitForTimeout(5500);
+  const staysCollapsed = (await openAttr(order1)) === 'false';
+  await card(order1).locator('button[aria-expanded]').click();
+  check('S5-02', 'Clicking the title collapses only that card (and it stays collapsed after a poll); clicking again re-opens it', collapsed && staysCollapsed && (await openAttr(order1)) === 'true', `collapsed=${collapsed} stays=${staysCollapsed}`);
   await expand(order3);
   await waitText(() => statusOf(item3), /Ready/);
 

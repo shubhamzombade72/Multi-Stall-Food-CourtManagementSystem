@@ -1,0 +1,190 @@
+{
+  "results": [
+    {
+      "id": "D-00",
+      "desc": "Owner signs in to the desktop app against the demo database",
+      "result": "PASS",
+      "evidence": "1033 ms"
+    },
+    {
+      "id": "D-01",
+      "desc": "Dashboard shows sales / order figures from the seeded orders",
+      "result": "PASS",
+      "evidence": "Urban Food Court (Demo) Multi-Stall Management System 60 Demo Owner (Mr. Prakash Deshmukh) Owner / Admin owner@demo.example.test OPERATIONS "
+    },
+    {
+      "id": "D-02",
+      "desc": "Stall Directory lists 50 demo stalls (12 per page, 5 pages)",
+      "result": "PASS",
+      "evidence": "50 records"
+    },
+    {
+      "id": "D-03",
+      "desc": "Stall search filters the directory",
+      "result": "PASS",
+      "evidence": "1 match \"Biryani\""
+    },
+    {
+      "id": "D-04",
+      "desc": "Floor & Tables shows the 500 tables (T-001..T-500, sections, statuses)",
+      "result": "PASS",
+      "evidence": "nodes=8290"
+    },
+    {
+      "id": "D-05",
+      "desc": "Menu Catalog is paginated: 1,500 dishes, 25 rows rendered per page",
+      "result": "PASS",
+      "evidence": "1500 records, rows=25"
+    },
+    {
+      "id": "D-06",
+      "desc": "Menu search narrows 1,500 dishes instantly",
+      "result": "PASS",
+      "evidence": "52 records in 46 ms"
+    },
+    {
+      "id": "D-07",
+      "desc": "POS product search (\"Misal\") responds quickly and narrows the grid",
+      "result": "PASS",
+      "evidence": "all nodes=19700, filtered=1708, 255 ms"
+    },
+    {
+      "id": "D-08",
+      "desc": "POS stall filter shows only the selected stall's dishes (Pune Misal House)",
+      "result": "PASS",
+      "evidence": "stall filter applied"
+    },
+    {
+      "id": "D-09",
+      "desc": "Order & Table Tracking board shows live demo orders",
+      "result": "PASS",
+      "evidence": "Urban Food Court (Demo) Multi-Stall Management System 60 Demo Owner (Mr. Prakash Deshmukh) Owner / Admin owner@demo.exam"
+    },
+    {
+      "id": "D-10",
+      "desc": "Reports, inventory, purchases, customers and staff screens render with data",
+      "result": "PASS",
+      "evidence": "customers rows=25, staff rows=150"
+    },
+    {
+      "id": "D-11",
+      "desc": "A stall manager can open the Menu Catalog (a read-only catalogue of all stalls; edits to other stalls are refused by the API)",
+      "result": "PASS",
+      "evidence": "rows on page=25, other stalls visible=true"
+    },
+    {
+      "id": "D-12",
+      "desc": "A stall manager's inventory screen shows own-stall stock only",
+      "result": "PASS",
+      "evidence": "own stall only"
+    },
+    {
+      "id": "D-13",
+      "desc": "No unexpected renderer errors",
+      "result": "PASS",
+      "evidence": ""
+    }
+  ],
+  "metrics": {
+    "login_ms": 1033,
+    "dashboard": {
+      "visit_ms": 2714,
+      "nodes": 809,
+      "rows": 5,
+      "text": 5470
+    },
+    "stalls": {
+      "visit_ms": 1367,
+      "nodes": 635,
+      "rows": 0,
+      "text": 4478
+    },
+    "tables": {
+      "visit_ms": 2317,
+      "nodes": 8290,
+      "rows": 0,
+      "text": 46407
+    },
+    "menu": {
+      "visit_ms": 2936,
+      "nodes": 914,
+      "rows": 25,
+      "text": 3999
+    },
+    "menu_search_ms": 46,
+    "pos": {
+      "visit_ms": 3796,
+      "nodes": 19700,
+      "rows": 0,
+      "text": 108514
+    },
+    "pos_search_ms": 255,
+    "order-board": {
+      "visit_ms": 1000,
+      "nodes": 3326,
+      "rows": 0,
+      "text": 18916
+    },
+    "kitchen": {
+      "visit_ms": 2193,
+      "nodes": 313,
+      "rows": 0,
+      "text": 1840
+    },
+    "orders": {
+      "visit_ms": 866,
+      "nodes": 792,
+      "rows": 25,
+      "text": 3975
+    },
+    "payments": {
+      "visit_ms": 1406,
+      "nodes": 304,
+      "rows": 6,
+      "text": 1362
+    },
+    "reports": {
+      "visit_ms": 674,
+      "nodes": 336,
+      "rows": 7,
+      "text": 1423
+    },
+    "inventory": {
+      "visit_ms": 2301,
+      "nodes": 7965,
+      "rows": 630,
+      "text": 56121
+    },
+    "purchases": {
+      "visit_ms": 3912,
+      "nodes": 467,
+      "rows": 20,
+      "text": 3693
+    },
+    "customers": {
+      "visit_ms": 826,
+      "nodes": 500,
+      "rows": 25,
+      "text": 3073
+    },
+    "staff": {
+      "visit_ms": 1830,
+      "nodes": 2785,
+      "rows": 150,
+      "text": 16998
+    },
+    "manager-menu": {
+      "visit_ms": 5550,
+      "nodes": 748,
+      "rows": 25,
+      "text": 3683
+    },
+    "manager_menu_shows_other_stalls": true,
+    "manager-inventory": {
+      "visit_ms": 1198,
+      "nodes": 521,
+      "rows": 42,
+      "text": 5383
+    }
+  }
+}

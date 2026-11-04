@@ -134,6 +134,25 @@ export const setReceiptPrinter = (name: string): void => {
   }
 };
 
+const RECEIPT_WIDTH_KEY = 'foodcourt.receiptWidth';
+
+/** Paper roll loaded in this computer's receipt printer: 58 mm or 80 mm (default). Chosen per computer. */
+export const getReceiptWidth = (): 58 | 80 => {
+  try {
+    return localStorage.getItem(RECEIPT_WIDTH_KEY) === '58' ? 58 : 80;
+  } catch {
+    return 80;
+  }
+};
+
+export const setReceiptWidth = (width: 58 | 80): void => {
+  try {
+    localStorage.setItem(RECEIPT_WIDTH_KEY, String(width));
+  } catch {
+    // storage unavailable: 80 mm is used
+  }
+};
+
 /** Prints the current page (receipts use print-only CSS). Native dialog in Electron, browser dialog on the web. */
 export const printPage = async (paper: 'receipt' | 'a4' = 'a4'): Promise<void> => {
   const d = desktop();

@@ -4,7 +4,7 @@
   "description": "Multi-Stall Food Court Management System - Windows desktop (Owner, Cashier POS, Kitchen Display, Inventory). Runs on one PC with its own database, or joins a shared food court host.",
   "author": "Multi-Stall Food Court",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -15,7 +15,9 @@
     "electron:dev": "electron .",
     "electron:start": "pnpm build && electron .",
     "pack:dir": "pnpm build && pnpm prepare:server && electron-builder --win --x64 --dir",
+    "pack:dir:demo": "pnpm build && set FOODCOURT_DEMO_DATA=1&& pnpm prepare:server && electron-builder --win --x64 --dir",
     "dist:win": "pnpm build && pnpm prepare:server && electron-builder --win --x64",
+    "dist:win:demo": "pnpm build && set FOODCOURT_DEMO_DATA=1&& pnpm prepare:server && electron-builder --win --x64 --config.win.artifactName=Multi-Stall-Food-Court-DEMO-Setup-${version}.${ext}",
     "prepare:server": "node scripts/prepare-embedded-server.mjs"
   },
   "dependencies": {
@@ -92,6 +94,10 @@
       {
         "from": "build-server/backend",
         "to": "server/backend"
+      },
+      {
+        "from": "build-server/demo",
+        "to": "server/demo"
       },
       {
         "from": "build-server/router.php",

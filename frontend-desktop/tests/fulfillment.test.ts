@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  applyOptimistic, cardLabel, cardNow, cardState, displayStatus, elapsedMinutes, isDelayed, nextItemAction, progress, serverOffset,
+  applyOptimistic, cardDetails, cardLabel, cardNow, cardState, displayStatus, elapsedMinutes, isDelayed, nextItemAction, progress, serverOffset,
 } from '../src/lib/fulfillment.ts';
 import type { BoardItem, BoardOrder, ItemStatus } from '../src/lib/fulfillment.ts';
 import { createClock } from '../src/lib/clock.ts';
@@ -165,4 +165,30 @@ test('cardNow changes only when the elapsed minute changes and keeps label/delay
     assert.equal(cardLabel(o, cardNow(created, t)), cardLabel(o, t));
     assert.equal(isDelayed(o, cardNow(created, t), 15), isDelayed(o, t, 15));
   }
+});
+
+test('cardDetails lists Table, Stall and order notes for a dine-in card', () => {
+  const o = order(['preparing', 'pending'], { notes: 'Less spicy' });
+  assert.deepEqual(cardDetails(o), [
+    { label: 'Table', value: 'T-04' },
+    { label: 'Stall', value: 'Pizza' },
+    { label: 'Notes', value: 'Less spicy' },
+  ]);
+});
+
+test('cardDetails: takeaway has no table line, several stalls are listed once each in order of appearance', () => {
+  const items = [item(1, 'pending'), { ...item(2, 'pending'), stall: { id: 2, name: 'Burger', code: 'BG' } }, item(3, 'ready')];
+  const o = order([], { order_type: 'takeaway', table: null, items });
+  assert.deepEqual(cardDetails(o), [
+    { label: 'Order', value: 'Takeaway' },
+    { label: 'Stalls', value: 'Pizza, Burger' },
+  ]);
+});
+
+test('cardDetails ignores cancelled items, blank notes, and shows no notes on a cancelled order', () => {
+  const cancelledStall = { ...item(2, 'cancelled'), stall: { id: 2, name: 'Burger', code: 'BG' } };
+  const o = order([], { items: [item(1, 'pending'), cancelledStall], notes: '   ' });
+  assert.deepEqual(cardDetails(o), [{ label: 'Table', value: 'T-04' }, { label: 'Stall', value: 'Pizza' }]);
+  const dead = order(['cancelled'], { notes: 'Cancelled by Sam: customer left' });
+  assert.deepEqual(cardDetails(dead), [{ label: 'Table', value: 'T-04' }]);
 });

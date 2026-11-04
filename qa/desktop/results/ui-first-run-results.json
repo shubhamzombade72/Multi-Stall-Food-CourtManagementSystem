@@ -21,7 +21,7 @@
     "id": "U-14b",
     "desc": "The scheduled automatic backup ran by itself and was recorded as successful",
     "result": "PASS",
-    "evidence": "foodcourt-auto-2026-11-03T16-45-11-705Z.sqlite"
+    "evidence": "foodcourt-auto-2026-11-04T06-24-21-214Z.sqlite"
   },
   {
     "id": "U-04",
@@ -39,7 +39,7 @@
     "id": "U-06",
     "desc": "The owner is shown a one-time recovery key",
     "result": "PASS",
-    "evidence": "LEJG********************"
+    "evidence": "TLCR********************"
   },
   {
     "id": "U-07",

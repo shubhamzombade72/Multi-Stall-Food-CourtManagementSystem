@@ -1,5 +1,5 @@
 import { memo, useCallback, useState } from 'react';
-import { cardLabel, cardState, isDelayed, progress, type BoardItem, type BoardOrder, type CardState } from '../../lib/fulfillment';
+import { cardDetails, cardLabel, cardState, isDelayed, progress, type BoardItem, type BoardOrder, type CardState } from '../../lib/fulfillment';
 import { statusClasses } from '../../lib/status';
 import { ItemRow } from './ItemRow';
 import { LateBadge } from '../ui';
@@ -72,6 +72,14 @@ export const OrderCard = memo(function OrderCard({ order, nowMs, delayMinutes, e
             {delayed && <LateBadge />}
           </span>
         </button>
+        <ul data-testid={`order-details-${order.id}`} className="relative px-3 pb-1.5 space-y-0.5 text-xs text-muted">
+          {cardDetails(order).map((d) => (
+            <li key={d.label} data-testid={`order-detail-${d.label.toLowerCase()}-${order.id}`} className="break-words">
+              <span>{d.label} : </span>
+              <span className="font-semibold text-fg">{d.value}</span>
+            </li>
+          ))}
+        </ul>
         {/* Outside the button: interactive content must not contain other landmark/widget roles. */}
         <div className="relative px-3 pb-2">
           <div

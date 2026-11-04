@@ -46,13 +46,13 @@
       "id": "T-02",
       "desc": "Owner created on Welcome; 2 stalls, 4 items, 2 tables, 2 orders (one ticket ready) seeded via API",
       "result": "PASS",
-      "evidence": "ORD-20261103-GEFRB, ORD-20261103-LUXHL"
+      "evidence": "ORD-20261104-KA9ZH, ORD-20261104-M2IL7"
     },
     {
       "id": "T-03",
       "desc": "Extra data seeded: customer + cancelled order, 2 payments, inventory (1 low), supplier + purchase, day closed, KDS tickets new/accepted/preparing x2/ready",
       "result": "PASS",
-      "evidence": "customer=1 late=KKT-20261103-AWMM new=KKT-20261103-7J9V"
+      "evidence": "customer=1 late=KKT-20261104-D5GH new=KKT-20261104-7QBX"
     },
     {
       "id": "light-dashboard-attr",
@@ -178,7 +178,7 @@
       "id": "light-tracking-contrast",
       "desc": "Orders & Table Tracking (expanded card) (light): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
       "result": "PASS",
-      "evidence": "text elements=60 (large=1) low=0 "
+      "evidence": "text elements=118 (large=1) low=0 "
     },
     {
       "id": "light-tracking-late",
@@ -220,7 +220,7 @@
       "id": "light-orders-detail-open",
       "desc": "Orders detail modal (light) is open for the scan",
       "result": "PASS",
-      "evidence": "elements in dialog=51 \"Order ORD-20261103-GEFRB Created 03 No\""
+      "evidence": "elements in dialog=52 \"Order ORD-20261104-KA9ZH Created 04 No\""
     },
     {
       "id": "light-orders-detail-attr",
@@ -232,7 +232,7 @@
       "id": "light-orders-detail-contrast",
       "desc": "Orders detail modal (light): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
       "result": "PASS",
-      "evidence": "text elements=156 (large=1) low=0 "
+      "evidence": "text elements=157 (large=1) low=0 "
     },
     {
       "id": "light-orders-detail-scrim",
@@ -256,7 +256,19 @@
       "id": "light-daily-closing-contrast",
       "desc": "Daily Closing (light): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
       "result": "PASS",
-      "evidence": "text elements=57 (large=5) low=0 "
+      "evidence": "text elements=93 (large=9) low=0 "
+    },
+    {
+      "id": "light-daily-closing-payout-attr",
+      "desc": "Daily Closing settlement payout details (light): <html data-theme=\"light\">",
+      "result": "PASS",
+      "evidence": "light"
+    },
+    {
+      "id": "light-daily-closing-payout-contrast",
+      "desc": "Daily Closing settlement payout details (light): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
+      "result": "PASS",
+      "evidence": "text elements=113 (large=9) low=0 "
     },
     {
       "id": "light-reports-attr",
@@ -280,7 +292,7 @@
       "id": "light-food-court-settings-contrast",
       "desc": "Food Court Settings (light): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
       "result": "PASS",
-      "evidence": "text elements=68 (large=2) low=0 "
+      "evidence": "text elements=82 (large=1) low=0 "
     },
     {
       "id": "light-device-settings-attr",
@@ -292,7 +304,7 @@
       "id": "light-device-settings-contrast",
       "desc": "Device Settings (light): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
       "result": "PASS",
-      "evidence": "text elements=57 (large=0) low=0 "
+      "evidence": "text elements=59 (large=0) low=0 "
     },
     {
       "id": "light-payments-attr",
@@ -304,7 +316,7 @@
       "id": "light-payments-contrast",
       "desc": "Payment History (light): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
       "result": "PASS",
-      "evidence": "text elements=60 (large=1) low=0 "
+      "evidence": "text elements=62 (large=1) low=0 "
     },
     {
       "id": "light-tables-attr",
@@ -352,7 +364,7 @@
       "id": "light-menu-contrast",
       "desc": "Menu (light): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
       "result": "PASS",
-      "evidence": "text elements=73 (large=1) low=0 "
+      "evidence": "text elements=78 (large=1) low=0 "
     },
     {
       "id": "light-staff-attr",
@@ -376,7 +388,7 @@
       "id": "light-stalls-contrast",
       "desc": "Stalls (light): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
       "result": "PASS",
-      "evidence": "text elements=56 (large=1) low=0 "
+      "evidence": "text elements=65 (large=1) low=0 "
     },
     {
       "id": "light-inventory-attr",
@@ -514,7 +526,7 @@
       "id": "dark-pos-settle-modal-nowhite",
       "desc": "POS settle / payment modal (dark): no visible element has a white/near-white background",
       "result": "PASS",
-      "evidence": "sampled=251 white=0 near=0 "
+      "evidence": "sampled=253 white=0 near=0 "
     },
     {
       "id": "dark-pos-settle-modal-contrast",
@@ -592,13 +604,13 @@
       "id": "dark-tracking-nowhite",
       "desc": "Orders & Table Tracking (expanded card) (dark): no visible element has a white/near-white background",
       "result": "PASS",
-      "evidence": "sampled=163 white=0 near=0 "
+      "evidence": "sampled=273 white=0 near=0 "
     },
     {
       "id": "dark-tracking-contrast",
       "desc": "Orders & Table Tracking (expanded card) (dark): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
       "result": "PASS",
-      "evidence": "text elements=60 (large=1) low=0 "
+      "evidence": "text elements=118 (large=1) low=0 "
     },
     {
       "id": "dark-tracking-late",
@@ -646,7 +658,7 @@
       "id": "dark-orders-detail-open",
       "desc": "Orders detail modal (dark) is open for the scan",
       "result": "PASS",
-      "evidence": "elements in dialog=51 \"Order ORD-20261103-GEFRB Created 03 No\""
+      "evidence": "elements in dialog=52 \"Order ORD-20261104-KA9ZH Created 04 No\""
     },
     {
       "id": "dark-orders-detail-attr",
@@ -658,13 +670,13 @@
       "id": "dark-orders-detail-nowhite",
       "desc": "Orders detail modal (dark): no visible element has a white/near-white background",
       "result": "PASS",
-      "evidence": "sampled=313 white=0 near=0 "
+      "evidence": "sampled=315 white=0 near=0 "
     },
     {
       "id": "dark-orders-detail-contrast",
       "desc": "Orders detail modal (dark): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
       "result": "PASS",
-      "evidence": "text elements=156 (large=1) low=0 "
+      "evidence": "text elements=157 (large=1) low=0 "
     },
     {
       "id": "dark-orders-detail-scrim",
@@ -682,7 +694,7 @@
       "id": "dark-orders-detail-dialog-nowhite",
       "desc": "Orders detail modal (dark): no white/near-white element inside the dialog",
       "result": "PASS",
-      "evidence": "sampled in dialog=46 white=0 near=0 "
+      "evidence": "sampled in dialog=48 white=0 near=0 "
     },
     {
       "id": "dark-daily-closing-attr",
@@ -694,13 +706,31 @@
       "id": "dark-daily-closing-nowhite",
       "desc": "Daily Closing (dark): no visible element has a white/near-white background",
       "result": "PASS",
-      "evidence": "sampled=118 white=0 near=0 "
+      "evidence": "sampled=175 white=0 near=0 "
     },
     {
       "id": "dark-daily-closing-contrast",
       "desc": "Daily Closing (dark): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
       "result": "PASS",
-      "evidence": "text elements=57 (large=5) low=0 "
+      "evidence": "text elements=93 (large=9) low=0 "
+    },
+    {
+      "id": "dark-daily-closing-payout-attr",
+      "desc": "Daily Closing settlement payout details (dark): <html data-theme=\"dark\">",
+      "result": "PASS",
+      "evidence": "dark"
+    },
+    {
+      "id": "dark-daily-closing-payout-nowhite",
+      "desc": "Daily Closing settlement payout details (dark): no visible element has a white/near-white background",
+      "result": "PASS",
+      "evidence": "sampled=222 white=0 near=0 "
+    },
+    {
+      "id": "dark-daily-closing-payout-contrast",
+      "desc": "Daily Closing settlement payout details (dark): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
+      "result": "PASS",
+      "evidence": "text elements=113 (large=9) low=0 "
     },
     {
       "id": "dark-reports-attr",
@@ -730,13 +760,13 @@
       "id": "dark-food-court-settings-nowhite",
       "desc": "Food Court Settings (dark): no visible element has a white/near-white background",
       "result": "PASS",
-      "evidence": "sampled=165 white=0 near=0 "
+      "evidence": "sampled=201 white=0 near=0 "
     },
     {
       "id": "dark-food-court-settings-contrast",
       "desc": "Food Court Settings (dark): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
       "result": "PASS",
-      "evidence": "text elements=68 (large=2) low=0 "
+      "evidence": "text elements=82 (large=1) low=0 "
     },
     {
       "id": "dark-device-settings-attr",
@@ -748,13 +778,13 @@
       "id": "dark-device-settings-nowhite",
       "desc": "Device Settings (dark): no visible element has a white/near-white background",
       "result": "PASS",
-      "evidence": "sampled=118 white=0 near=0 "
+      "evidence": "sampled=121 white=0 near=0 "
     },
     {
       "id": "dark-device-settings-contrast",
       "desc": "Device Settings (dark): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
       "result": "PASS",
-      "evidence": "text elements=57 (large=0) low=0 "
+      "evidence": "text elements=59 (large=0) low=0 "
     },
     {
       "id": "dark-payments-attr",
@@ -766,13 +796,13 @@
       "id": "dark-payments-nowhite",
       "desc": "Payment History (dark): no visible element has a white/near-white background",
       "result": "PASS",
-      "evidence": "sampled=124 white=0 near=0 "
+      "evidence": "sampled=126 white=0 near=0 "
     },
     {
       "id": "dark-payments-contrast",
       "desc": "Payment History (dark): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
       "result": "PASS",
-      "evidence": "text elements=60 (large=1) low=0 "
+      "evidence": "text elements=62 (large=1) low=0 "
     },
     {
       "id": "dark-tables-attr",
@@ -838,13 +868,13 @@
       "id": "dark-menu-nowhite",
       "desc": "Menu (dark): no visible element has a white/near-white background",
       "result": "PASS",
-      "evidence": "sampled=159 white=0 near=0 "
+      "evidence": "sampled=178 white=0 near=0 "
     },
     {
       "id": "dark-menu-contrast",
       "desc": "Menu (dark): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
       "result": "PASS",
-      "evidence": "text elements=73 (large=1) low=0 "
+      "evidence": "text elements=78 (large=1) low=0 "
     },
     {
       "id": "dark-staff-attr",
@@ -874,13 +904,13 @@
       "id": "dark-stalls-nowhite",
       "desc": "Stalls (dark): no visible element has a white/near-white background",
       "result": "PASS",
-      "evidence": "sampled=119 white=0 near=0 "
+      "evidence": "sampled=146 white=0 near=0 "
     },
     {
       "id": "dark-stalls-contrast",
       "desc": "Stalls (dark): all visible text meets WCAG AA (4.5:1 normal, 3:1 large)",
       "result": "PASS",
-      "evidence": "text elements=56 (large=1) low=0 "
+      "evidence": "text elements=65 (large=1) low=0 "
     },
     {
       "id": "dark-inventory-attr",
@@ -970,7 +1000,7 @@
       "id": "P-01",
       "desc": "Receipt rendered into #print-root from Orders (dark theme), print requested once",
       "result": "PASS",
-      "evidence": "calls=1 paper=receipt screen-display=none \"URBAN FOOD COURT Consolidated Bill Bill: ORD-20261103-GEFRB \""
+      "evidence": "calls=1 paper=receipt screen-display=none \"URBAN FOOD COURT Consolidated Bill Bill: ORD-20261104-KA9ZH \""
     },
     {
       "id": "P-02",
@@ -1108,7 +1138,7 @@
     },
     {
       "screen": "light-tracking",
-      "checked": 60,
+      "checked": 118,
       "large": 1,
       "low": []
     },
@@ -1120,14 +1150,20 @@
     },
     {
       "screen": "light-orders-detail",
-      "checked": 156,
+      "checked": 157,
       "large": 1,
       "low": []
     },
     {
       "screen": "light-daily-closing",
-      "checked": 57,
-      "large": 5,
+      "checked": 93,
+      "large": 9,
+      "low": []
+    },
+    {
+      "screen": "light-daily-closing-payout",
+      "checked": 113,
+      "large": 9,
       "low": []
     },
     {
@@ -1138,19 +1174,19 @@
     },
     {
       "screen": "light-food-court-settings",
-      "checked": 68,
-      "large": 2,
+      "checked": 82,
+      "large": 1,
       "low": []
     },
     {
       "screen": "light-device-settings",
-      "checked": 57,
+      "checked": 59,
       "large": 0,
       "low": []
     },
     {
       "screen": "light-payments",
-      "checked": 60,
+      "checked": 62,
       "large": 1,
       "low": []
     },
@@ -1174,7 +1210,7 @@
     },
     {
       "screen": "light-menu",
-      "checked": 73,
+      "checked": 78,
       "large": 1,
       "low": []
     },
@@ -1186,7 +1222,7 @@
     },
     {
       "screen": "light-stalls",
-      "checked": 56,
+      "checked": 65,
       "large": 1,
       "low": []
     },
@@ -1252,7 +1288,7 @@
     },
     {
       "screen": "dark-tracking",
-      "checked": 60,
+      "checked": 118,
       "large": 1,
       "low": []
     },
@@ -1264,14 +1300,20 @@
     },
     {
       "screen": "dark-orders-detail",
-      "checked": 156,
+      "checked": 157,
       "large": 1,
       "low": []
     },
     {
       "screen": "dark-daily-closing",
-      "checked": 57,
-      "large": 5,
+      "checked": 93,
+      "large": 9,
+      "low": []
+    },
+    {
+      "screen": "dark-daily-closing-payout",
+      "checked": 113,
+      "large": 9,
       "low": []
     },
     {
@@ -1282,19 +1324,19 @@
     },
     {
       "screen": "dark-food-court-settings",
-      "checked": 68,
-      "large": 2,
+      "checked": 82,
+      "large": 1,
       "low": []
     },
     {
       "screen": "dark-device-settings",
-      "checked": 57,
+      "checked": 59,
       "large": 0,
       "low": []
     },
     {
       "screen": "dark-payments",
-      "checked": 60,
+      "checked": 62,
       "large": 1,
       "low": []
     },
@@ -1318,7 +1360,7 @@
     },
     {
       "screen": "dark-menu",
-      "checked": 73,
+      "checked": 78,
       "large": 1,
       "low": []
     },
@@ -1330,7 +1372,7 @@
     },
     {
       "screen": "dark-stalls",
-      "checked": 56,
+      "checked": 65,
       "large": 1,
       "low": []
     },

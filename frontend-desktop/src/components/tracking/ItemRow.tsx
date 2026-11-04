@@ -33,7 +33,10 @@ export const ItemRow = memo(function ItemRow({ item, canMarkReady, busy, onActio
     <li data-testid={`item-row-${item.id}`} className="flex items-center justify-between gap-2 py-1.5 text-sm">
       <div className="min-w-0">
         <p className={`font-medium truncate ${item.status === 'cancelled' ? 'line-through text-muted' : 'text-fg'}`}>
-          {item.quantity} × {item.name} <span className="text-[11px] font-mono text-muted">{item.stall.code}</span>
+          {item.quantity} × {item.name}{' '}
+          <span data-testid={`item-stall-${item.id}`} className="text-[11px] font-medium text-muted">
+            ({item.stall.name})
+          </span>
         </p>
         {item.notes && <p className="text-[11px] text-muted truncate">{item.notes}</p>}
       </div>

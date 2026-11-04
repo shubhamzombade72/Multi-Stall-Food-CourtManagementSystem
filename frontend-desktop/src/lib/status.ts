@@ -31,6 +31,13 @@ const RAW: Record<string, StatusKind> = {
   // closing / settlement
   closed: 'settled',
   paid: 'settled',
+  // stall payout ledger: Pending / Partially Paid / Paid must read differently at a glance
+  partially_paid: 'ready',
+  nothing_due: 'void',
+  negative_balance: 'cooking',
+  overpaid: 'cancelled',
+  reversed: 'void',
+  reversal: 'kitchen',
   // unpaid: neutral for now; the owner will pick an attention colour later
   unpaid: 'pending',
   // misc statuses shown through Badge elsewhere (purchases, active flags)

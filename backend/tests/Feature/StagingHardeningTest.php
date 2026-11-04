@@ -263,15 +263,24 @@ class StagingHardeningTest extends TestCase
         $record = StallSettlementRecord::create([
             'closing_id' => $closing->id,
             'stall_id' => Stall::first()->id,
-            'stall_gross_sales' => 0,
+            'stall_gross_sales' => '1500.50',
             'stall_item_count' => 0,
             'settlement_amount' => 0,
             'settlement_status' => 'calculated',
+            'payable_at_close' => '1500.50',
+            'net_payable' => '1500.50',
+            'remaining_amount' => '1500.50',
+            'payout_status' => 'pending',
         ]);
 
         $this->actingAs($owner, 'sanctum')->postJson("/api/settlements/{$record->id}/pay", [
             'paid_to_representative' => 'Rep', 'payment_method' => 'cash',
-        ])->assertStatus(422); // the owner must state the amount actually paid; none is derived
+        ])->assertStatus(422); // the owner must state the amount actually paid
+
+        // A payout can never exceed the payable (ledger rule); the owner states the amount, the server enforces the cap
+        $this->actingAs($owner, 'sanctum')->postJson("/api/settlements/{$record->id}/pay", [
+            'amount_paid' => '1500.51', 'paid_to_representative' => 'Rep', 'payment_method' => 'cash',
+        ])->assertStatus(422);
 
         $body = ['amount_paid' => '1500.50', 'paid_to_representative' => 'Rep', 'payment_method' => 'cash'];
         $this->actingAs($owner, 'sanctum')->postJson("/api/settlements/{$record->id}/pay", $body)->assertStatus(200);

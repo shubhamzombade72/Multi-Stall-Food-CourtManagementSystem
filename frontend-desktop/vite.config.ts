@@ -16,6 +16,7 @@ const contentSecurityPolicy = (): Plugin => ({
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: http: https:",
       "font-src 'self' data:",
+      "media-src 'self'",
       "connect-src 'self' http: https: ws: wss:",
       "object-src 'none'",
       "base-uri 'none'",

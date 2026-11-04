@@ -20,4 +20,20 @@ contextBridge.exposeInMainWorld('desktop', {
   log: (level, message) => ipcRenderer.invoke('desktop:log', String(level), String(message).slice(0, 2000)),
   listPrinters: () => ipcRenderer.invoke('desktop:list-printers'),
   print: (options) => ipcRenderer.invoke('desktop:print', options && typeof options === 'object' ? { deviceName: options.deviceName } : {}),
+  // Thermal printing (electron/printing/*). Inputs are validated again in the main process.
+  getPrintConfig: () => ipcRenderer.invoke('printing:get-config'),
+  setPrintConfig: (config) => ipcRenderer.invoke('printing:set-config', config),
+  getPrinterStatus: (role) => ipcRenderer.invoke('printing:status', role === 'kot' ? 'kot' : 'receipt'),
+  enqueuePrintJob: (request) => ipcRenderer.invoke('printing:enqueue', request),
+  listPrintJobs: (limit) => ipcRenderer.invoke('printing:jobs', typeof limit === 'number' ? limit : 100),
+  retryPrintJob: (id) => ipcRenderer.invoke('printing:retry', String(id)),
+  reprintPrintJob: (id) => ipcRenderer.invoke('printing:reprint', String(id)),
+  previewPrintDocument: (request) => ipcRenderer.invoke('printing:preview', request),
+  sendTestPrint: (role) => ipcRenderer.invoke('printing:test', role === 'kot' ? 'kot' : 'receipt'),
+  onPrintJobsChanged: (callback) => {
+    if (typeof callback !== 'function') return () => undefined;
+    const listener = (_event, jobs) => callback(jobs);
+    ipcRenderer.on('printing:jobs-changed', listener);
+    return () => ipcRenderer.removeListener('printing:jobs-changed', listener);
+  },
 });

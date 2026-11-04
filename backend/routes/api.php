@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BillingController;
+use App\Http\Controllers\Api\BulkDeleteController;
 use App\Http\Controllers\Api\CashierClosingController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DiningTableController;
@@ -12,6 +13,8 @@ use App\Http\Controllers\Api\MenuController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\PairingController;
+use App\Http\Controllers\Api\PayoutController;
+use App\Http\Controllers\Api\StallOwnerController;
 use App\Http\Controllers\Api\PurchaseController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SettingsController;
@@ -48,6 +51,7 @@ Route::get('/system/ready', [SystemController::class, 'ready'])->middleware('thr
 
 Route::prefix('public')->group(function () {
     Route::get('/stalls', [StallController::class, 'index']);
+    Route::get('/tax', [SettingsController::class, 'publicTax']);
     Route::get('/tables', [DiningTableController::class, 'index']);
     Route::get('/qr/{qrToken}', [DiningTableController::class, 'showByQrToken']);
     Route::post('/orders', [OrderController::class, 'createOrder'])->middleware('throttle:public-orders');
@@ -74,6 +78,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     // Stalls
     Route::get('/stalls', [StallController::class, 'index']);
     Route::post('/stalls', [StallController::class, 'store']);
+    Route::post('/stalls/bulk-delete', [BulkDeleteController::class, 'stalls'])->middleware('throttle:60,1');
     Route::get('/stalls/{id}', [StallController::class, 'show']);
     Route::put('/stalls/{id}', [StallController::class, 'update']);
 
@@ -101,6 +106,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     // Menu Management
     Route::get('/menu', [MenuController::class, 'index']);
     Route::post('/menu', [MenuController::class, 'store']);
+    Route::post('/menu/bulk-delete', [BulkDeleteController::class, 'menuItems'])->middleware('throttle:60,1');
     Route::put('/menu/{id}', [MenuController::class, 'update']);
     Route::post('/menu/{id}/toggle', [MenuController::class, 'toggleAvailability']);
     Route::get('/menu-categories', [MenuController::class, 'categories']);
@@ -138,6 +144,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/billing/pending', [BillingController::class, 'getPendingBills']);
     Route::post('/billing/pay', [BillingController::class, 'processPayment']);
     Route::get('/billing/receipt/{orderId}', [BillingController::class, 'getOrderReceipt']);
+    Route::post('/billing/orders/{orderId}/upi-request', [BillingController::class, 'upiRequest'])->whereNumber('orderId');
     Route::get('/billing/payments', [BillingController::class, 'paymentHistory']);
 
     // Stall Purchases
@@ -160,7 +167,27 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/settlements/daily-summary', [SettlementController::class, 'getDailySummary']);
     Route::post('/settlements/close-day', [SettlementController::class, 'closeDay']);
     Route::get('/settlements/closings', [SettlementController::class, 'closings']);
-    Route::post('/settlements/{recordId}/pay', [SettlementController::class, 'recordSettlementPayment']);
+    Route::post('/settlements/{recordId}/pay', [SettlementController::class, 'recordSettlementPayment'])->whereNumber('recordId');
+
+    // Payout ledger: permanent payout transactions, history, owner-wise consolidated payouts, reconciliation (owner only)
+    Route::get('/settlements/payouts', [PayoutController::class, 'history']);
+    Route::get('/settlements/payouts/{id}', [PayoutController::class, 'show'])->whereNumber('id');
+    Route::get('/settlements/payouts/{id}/receipt', [PayoutController::class, 'receipt'])->whereNumber('id');
+    Route::post('/settlements/payouts/{id}/reverse', [PayoutController::class, 'reverse'])->whereNumber('id');
+    Route::get('/settlements/owners', [PayoutController::class, 'owners']);
+    Route::get('/settlements/owners/{ownerId}/outstanding', [PayoutController::class, 'ownerOutstanding'])->whereNumber('ownerId');
+    Route::post('/settlements/owners/{ownerId}/payouts', [PayoutController::class, 'storeConsolidated'])->whereNumber('ownerId');
+    Route::get('/settlements/consolidated-payouts/{id}', [PayoutController::class, 'showConsolidated'])->whereNumber('id');
+    Route::post('/settlements/consolidated-payouts/{id}/reverse', [PayoutController::class, 'reverseConsolidated'])->whereNumber('id');
+    Route::get('/settlements/reconciliation', [PayoutController::class, 'reconciliation']);
+    Route::get('/settlements/{recordId}/payouts', [PayoutController::class, 'settlementDetail'])->whereNumber('recordId');
+    Route::post('/settlements/{recordId}/payouts', [PayoutController::class, 'store'])->whereNumber('recordId');
+    Route::post('/settlements/{recordId}/adjustments', [PayoutController::class, 'adjust'])->whereNumber('recordId');
+
+    // Who owns which stall (settlement money is paid to the owner)
+    Route::get('/stall-owners', [StallOwnerController::class, 'index']);
+    Route::post('/stall-owners', [StallOwnerController::class, 'store']);
+    Route::put('/stall-owners/{id}', [StallOwnerController::class, 'update'])->whereNumber('id');
 
     // Cashier-wise closing (cash count against the cashier's own cash payments)
     Route::get('/cashier-closings', [CashierClosingController::class, 'index']);

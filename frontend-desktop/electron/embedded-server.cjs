@@ -142,6 +142,21 @@ function ensureAppKey(dataDir) {
   return key;
 }
 
+/**
+ * DEMO installer only: it ships a ready-made database (`server/demo/foodcourt-demo.sqlite`, dummy stalls, sales,
+ * closings and payouts). It is copied in exactly once, on the first start, when this PC has no database yet. A clean
+ * installer ships no `demo` file, so this does nothing there; an existing database is never overwritten.
+ */
+function installDemoDatabaseIfFirstRun(runtime, dataDir, log) {
+  const db = path.join(dataDir, 'foodcourt.sqlite');
+  const demo = path.join(runtime.serverDir, 'demo', 'foodcourt-demo.sqlite');
+  if (!fs.existsSync(demo)) return false;
+  if (fs.existsSync(db) && fs.statSync(db).size > 0) return false;
+  fs.copyFileSync(demo, db);
+  if (log) log('INFO', 'First start: installed the demo-data database');
+  return true;
+}
+
 /** Copy the database aside before the first start of a new program version (migrations may change it). */
 function backupBeforeUpgrade(dataDir, version, log) {
   const db = path.join(dataDir, 'foodcourt.sqlite');
@@ -321,6 +336,7 @@ async function startEmbeddedServer({ runtime, dataDir, version, log, onStatus, p
       env = buildServerEnv(dataDir, ensureAppKey(dataDir));
       await reclaimOrphan(dataDir, log);
       backupBeforeUpgrade(dataDir, version, log);
+      installDemoDatabaseIfFirstRun(runtime, dataDir, log);
       fs.closeSync(fs.openSync(path.join(dataDir, 'foodcourt.sqlite'), 'a')); // create the empty database file on first run
     } catch (err) {
       throw new StartupError('data_folder', String(err && err.message));
@@ -509,6 +525,7 @@ module.exports = {
   buildServerEnv,
   ensureAppKey,
   backupBeforeUpgrade,
+  installDemoDatabaseIfFirstRun,
   isOurProcess,
   reclaimOrphan,
   classifyMigrationFailure,

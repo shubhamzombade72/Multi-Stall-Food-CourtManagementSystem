@@ -6,9 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\DiningTable;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\UpiPaymentRequest;
+use App\Services\AuditService;
+use App\Services\UpiPaymentService;
 use App\Support\Sql;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class BillingController extends Controller
 {
@@ -50,16 +55,41 @@ class BillingController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized. Cashier or Owner privileges required to process payments.'], 403);
         }
 
-        $validated = $request->validate([
+        // With UPI QR configured, a UPI payment is only recorded after the cashier verifies the money: the QR's
+        // reference and an explicit "I verified it" confirmation are mandatory. The bank reference (UTR) is optional,
+        // but when the cashier does enter one it must be well-formed and not used by another payment.
+        $upiVerified = $request->input('payment_method') === 'upi_qr' && UpiPaymentService::isActive();
+        $upiRules = $upiVerified ? [
+            'upi_reference' => 'required|string|max:40',
+            'transaction_reference' => ['nullable', 'string', 'regex:/^[A-Za-z0-9]{6,40}$/'],
+            'payment_verified' => 'accepted',
+        ] : [
+            'upi_reference' => 'nullable|string|max:40',
+        ];
+
+        $validated = $request->validate(array_merge([
             'order_id' => 'required|exists:orders,id',
             // Only the methods the owner has enabled in Settings (all supported methods by default)
             'payment_method' => 'required|in:' . implode(',', SettingsController::enabledPaymentMethods()),
             'amount' => 'required|numeric|min:0.01',
             'cash_tendered' => 'nullable|numeric|min:0',
             'transaction_reference' => 'nullable|string|max:100',
+        ], $upiRules), [
+            'payment_verified.accepted' => 'Confirm that you have verified the payment in the merchant UPI app or bank statement.',
+            'transaction_reference.regex' => 'Enter the UPI transaction / bank reference (UTR): 6-40 letters or digits.',
+            'upi_reference.required' => 'Generate the UPI QR for this bill first.',
         ]);
 
-        return DB::transaction(function () use ($validated, $cashier) {
+        try {
+            return $this->settle($validated, $cashier, $upiVerified);
+        } catch (UniqueConstraintViolationException $e) {
+            throw ValidationException::withMessages(['transaction_reference' => 'This UPI reference was already used for another payment.']);
+        }
+    }
+
+    private function settle(array $validated, $cashier, bool $upiVerified)
+    {
+        return DB::transaction(function () use ($validated, $cashier, $upiVerified) {
             $order = Order::where('id', $validated['order_id'])->lockForUpdate()->firstOrFail();
 
             if ($order->payment_status === 'paid') {
@@ -86,6 +116,23 @@ class BillingController extends Controller
                 $changeReturned = bcsub($cashTendered, $amount, 2);
             }
 
+            $upiRequest = null;
+            if ($upiVerified) {
+                // The QR must be this order's own, still-current request for exactly this amount
+                $upiRequest = UpiPaymentRequest::where('reference', $validated['upi_reference'])
+                    ->where('order_id', $order->id)->lockForUpdate()->first();
+                if (!$upiRequest || $upiRequest->status !== 'pending') {
+                    abort(422, 'This UPI QR is not valid for this bill any more. Generate a fresh QR and try again.');
+                }
+                if (bccomp((string) $upiRequest->amount, $amount, 2) !== 0 || $upiRequest->vpa !== strtolower((string) UpiPaymentService::config()['vpa'])) {
+                    abort(422, 'The UPI QR does not match the bill amount or the merchant UPI ID. Generate a fresh QR and try again.');
+                }
+                if (!empty($validated['transaction_reference'])
+                    && Payment::where('payment_method', 'upi_qr')->where('transaction_reference', $validated['transaction_reference'])->exists()) {
+                    throw ValidationException::withMessages(['transaction_reference' => 'This UPI reference was already used for another payment.']);
+                }
+            }
+
             $payment = Payment::create([
                 'order_id' => $order->id,
                 'cashier_id' => $cashier->id,
@@ -96,6 +143,20 @@ class BillingController extends Controller
                 'transaction_reference' => $validated['transaction_reference'] ?? null,
                 'status' => 'success',
             ]);
+
+            if ($upiRequest) {
+                $upiRequest->update(['status' => 'paid', 'payment_id' => $payment->id]);
+                AuditService::log('upi_payment_confirmed', 'UpiPaymentRequest', $upiRequest->id, null, ['status' => 'pending'], [
+                    'status' => 'paid',
+                    'order_id' => $order->id,
+                    'payment_id' => $payment->id,
+                    'reference' => $upiRequest->reference,
+                    'vpa' => $upiRequest->vpa,
+                    'amount' => (string) $upiRequest->amount,
+                    'transaction_reference' => $payment->transaction_reference,
+                    'verified_by_user_id' => $cashier->id,
+                ], $cashier->id);
+            }
 
             $order->update([
                 'payment_status' => 'paid',
@@ -175,8 +236,45 @@ class BillingController extends Controller
             'data' => [
                 'order' => $order,
                 'stall_breakdown' => $itemsByStall,
+                'upi_enabled' => UpiPaymentService::isActive(),
+                'upi' => $this->receiptUpi($order),
             ]
         ]);
+    }
+
+    /**
+     * The UPI details a receipt prints. A paid UPI bill always shows its original (snapshotted) request; an unpaid
+     * bill shows its pending request only while UPI QR is on and the request still matches the configured UPI ID.
+     */
+    private function receiptUpi(Order $order): ?array
+    {
+        $paid = UpiPaymentRequest::where('order_id', $order->id)->where('status', 'paid')->latest('id')->first();
+        if ($paid) {
+            return $paid->toReceiptArray();
+        }
+        if ($order->payment_status === 'paid' || $order->status === 'cancelled' || !UpiPaymentService::isActive()) {
+            return null;
+        }
+        $pending = UpiPaymentRequest::where('order_id', $order->id)->where('status', 'pending')->latest('id')->first();
+        if ($pending && $pending->vpa === strtolower((string) UpiPaymentService::config()['vpa'])
+            && bccomp((string) $pending->amount, (string) $order->total_amount, 2) === 0) {
+            return $pending->toReceiptArray();
+        }
+
+        return null;
+    }
+
+    /** Get-or-create the UPI payment request (QR payload) for an unpaid bill. Never marks anything paid. */
+    public function upiRequest(Request $request, $orderId, UpiPaymentService $upi)
+    {
+        $user = $request->user();
+        if (!$user->isOwner() && !$user->isCashier()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Only Cashier or Owner can create a UPI QR.'], 403);
+        }
+
+        $upiRequest = $upi->requestFor(Order::findOrFail($orderId), $user);
+
+        return response()->json(['success' => true, 'data' => $upiRequest->toReceiptArray()]);
     }
 }
 

@@ -4,7 +4,10 @@ import { App } from './App';
 import { StartupScreen } from './components/StartupScreen';
 import { initApiBaseUrl } from './api/client';
 import { isDesktopApp, logError } from './desktop/bridge';
+import { startSound } from './lib/sound/index';
 import './index.css';
+
+startSound();
 
 window.addEventListener('error', (e) => logError(`Uncaught: ${e.message} at ${e.filename}:${e.lineno}`));
 window.addEventListener('unhandledrejection', (e) => logError(`Unhandled rejection: ${e.reason?.message || e.reason}`));

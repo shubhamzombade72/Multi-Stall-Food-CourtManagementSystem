@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { apiClient } from '../api/client';
+import { taxLines } from '../lib/tax';
 import {
   Store,
   Receipt,
@@ -134,14 +135,12 @@ export const OrderTrackPage: React.FC = () => {
         </div>
 
         <div className="pt-2 border-t border-slate-200 space-y-1 font-medium">
-          <div className="flex justify-between text-slate-500">
-            <span>Subtotal:</span>
-            <span>₹{order.subtotal}</span>
-          </div>
-          <div className="flex justify-between text-slate-500">
-            <span>GST (5%):</span>
-            <span>₹{order.tax_amount}</span>
-          </div>
+          {taxLines(order).map((line) => (
+            <div key={line.label} className="flex justify-between text-slate-500">
+              <span>{line.label}:</span>
+              <span>₹{line.value}</span>
+            </div>
+          ))}
           <div className="flex justify-between text-slate-900 font-extrabold text-sm pt-1">
             <span>Total:</span>
             <span className="text-brand-600">₹{order.total_amount}</span>

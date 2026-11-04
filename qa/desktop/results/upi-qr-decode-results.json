@@ -1,0 +1,116 @@
+{
+  "decoder": "jsQR 1.4.0 (independent)",
+  "failed": 0,
+  "results": [
+    {
+      "paper": "58mm",
+      "version": 6,
+      "modules": 41,
+      "moduleMm": 0.625,
+      "qrMm": 30.625,
+      "dotsPerModule": 5,
+      "payload": "upi://pay?pa=mangalmurti@upi&pn=MangalMurti%20Food%20Court&am=200.00&cu=INR&tn=ORD-20261104-ABCDE",
+      "decoded": "upi://pay?pa=mangalmurti@upi&pn=MangalMurti%20Food%20Court&am=200.00&cu=INR&tn=ORD-20261104-ABCDE",
+      "result": "PASS"
+    },
+    {
+      "paper": "80mm",
+      "version": 6,
+      "modules": 41,
+      "moduleMm": 0.875,
+      "qrMm": 42.875,
+      "dotsPerModule": 7,
+      "payload": "upi://pay?pa=mangalmurti@upi&pn=MangalMurti%20Food%20Court&am=200.00&cu=INR&tn=ORD-20261104-ABCDE",
+      "decoded": "upi://pay?pa=mangalmurti@upi&pn=MangalMurti%20Food%20Court&am=200.00&cu=INR&tn=ORD-20261104-ABCDE",
+      "result": "PASS"
+    },
+    {
+      "paper": "58mm",
+      "version": 6,
+      "modules": 41,
+      "moduleMm": 0.625,
+      "qrMm": 30.625,
+      "dotsPerModule": 5,
+      "payload": "upi://pay?pa=mangalmurti@upi&pn=MangalMurti%20Food%20Court&am=500.00&cu=INR&tn=ORD-20261104-FGHIJ",
+      "decoded": "upi://pay?pa=mangalmurti@upi&pn=MangalMurti%20Food%20Court&am=500.00&cu=INR&tn=ORD-20261104-FGHIJ",
+      "result": "PASS"
+    },
+    {
+      "paper": "80mm",
+      "version": 6,
+      "modules": 41,
+      "moduleMm": 0.875,
+      "qrMm": 42.875,
+      "dotsPerModule": 7,
+      "payload": "upi://pay?pa=mangalmurti@upi&pn=MangalMurti%20Food%20Court&am=500.00&cu=INR&tn=ORD-20261104-FGHIJ",
+      "decoded": "upi://pay?pa=mangalmurti@upi&pn=MangalMurti%20Food%20Court&am=500.00&cu=INR&tn=ORD-20261104-FGHIJ",
+      "result": "PASS"
+    },
+    {
+      "paper": "58mm",
+      "version": 6,
+      "modules": 41,
+      "moduleMm": 0.625,
+      "qrMm": 30.625,
+      "dotsPerModule": 5,
+      "payload": "upi://pay?pa=shop.name-1@okhdfcbank&pn=Urban%20Food%20Court&am=1234567.89&cu=INR&tn=ORD-20261104-KLMNO-2",
+      "decoded": "upi://pay?pa=shop.name-1@okhdfcbank&pn=Urban%20Food%20Court&am=1234567.89&cu=INR&tn=ORD-20261104-KLMNO-2",
+      "result": "PASS"
+    },
+    {
+      "paper": "80mm",
+      "version": 6,
+      "modules": 41,
+      "moduleMm": 0.875,
+      "qrMm": 42.875,
+      "dotsPerModule": 7,
+      "payload": "upi://pay?pa=shop.name-1@okhdfcbank&pn=Urban%20Food%20Court&am=1234567.89&cu=INR&tn=ORD-20261104-KLMNO-2",
+      "decoded": "upi://pay?pa=shop.name-1@okhdfcbank&pn=Urban%20Food%20Court&am=1234567.89&cu=INR&tn=ORD-20261104-KLMNO-2",
+      "result": "PASS"
+    },
+    {
+      "paper": "58mm",
+      "version": 4,
+      "modules": 33,
+      "moduleMm": 0.875,
+      "qrMm": 35.875,
+      "dotsPerModule": 7,
+      "payload": "upi://pay?pa=a1@ybl&pn=A&am=0.01&cu=INR&tn=ORD-1",
+      "decoded": "upi://pay?pa=a1@ybl&pn=A&am=0.01&cu=INR&tn=ORD-1",
+      "result": "PASS"
+    },
+    {
+      "paper": "80mm",
+      "version": 4,
+      "modules": 33,
+      "moduleMm": 1,
+      "qrMm": 41,
+      "dotsPerModule": 8,
+      "payload": "upi://pay?pa=a1@ybl&pn=A&am=0.01&cu=INR&tn=ORD-1",
+      "decoded": "upi://pay?pa=a1@ybl&pn=A&am=0.01&cu=INR&tn=ORD-1",
+      "result": "PASS"
+    },
+    {
+      "paper": "58mm",
+      "version": 9,
+      "modules": 53,
+      "moduleMm": 0.5,
+      "qrMm": 30.5,
+      "dotsPerModule": 4,
+      "payload": "upi://pay?pa=long.merchant_name123@paytm&pn=The%20Very%20Long%20Business%20Name%20Of%20A%20Food%20Court%20Pvt&am=99999.99&cu=INR&tn=ORD-20261104-ZZZZZ-12",
+      "decoded": "upi://pay?pa=long.merchant_name123@paytm&pn=The%20Very%20Long%20Business%20Name%20Of%20A%20Food%20Court%20Pvt&am=99999.99&cu=INR&tn=ORD-20261104-ZZZZZ-12",
+      "result": "PASS"
+    },
+    {
+      "paper": "80mm",
+      "version": 9,
+      "modules": 53,
+      "moduleMm": 0.625,
+      "qrMm": 38.125,
+      "dotsPerModule": 5,
+      "payload": "upi://pay?pa=long.merchant_name123@paytm&pn=The%20Very%20Long%20Business%20Name%20Of%20A%20Food%20Court%20Pvt&am=99999.99&cu=INR&tn=ORD-20261104-ZZZZZ-12",
+      "decoded": "upi://pay?pa=long.merchant_name123@paytm&pn=The%20Very%20Long%20Business%20Name%20Of%20A%20Food%20Court%20Pvt&am=99999.99&cu=INR&tn=ORD-20261104-ZZZZZ-12",
+      "result": "PASS"
+    }
+  ]
+}

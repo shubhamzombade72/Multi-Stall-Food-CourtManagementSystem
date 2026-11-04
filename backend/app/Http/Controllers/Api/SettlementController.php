@@ -9,6 +9,8 @@ use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\Stall;
 use App\Models\StallSettlementRecord;
+use App\Services\PayoutException;
+use App\Services\PayoutService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -32,6 +34,8 @@ class SettlementController extends Controller
         $totalGrossSales = $completedOrders->sum('subtotal');
         $totalDiscounts = $completedOrders->sum('discount_amount');
         $totalNetSales = $completedOrders->sum('total_amount');
+        // GST exactly as each bill was priced (stored per bill), so a later rate change never alters a past day
+        $totalTax = $completedOrders->sum('tax_amount');
 
         // Cash vs Digital Payments
         $payments = Payment::whereDate('created_at', $date)
@@ -57,7 +61,21 @@ class SettlementController extends Controller
             ->get();
 
         // Check if day is already closed
-        $existingClosing = DailyClosing::with('settlements.stall')->where('closing_date', $date)->first();
+        $existingClosing = DailyClosing::with('settlements.stall.owner')->where('closing_date', $date)->first();
+
+        // Four separate numbers, never merged: sales calculated, settlement payable, payout actually made, still outstanding.
+        // The closing snapshot (payable_at_close) stays fixed; paid/outstanding move only with confirmed payouts.
+        $settlements = $existingClosing?->settlements ?? collect();
+        $payoutSummary = [
+            'sales_calculated' => PayoutService::money($stallSales->sum('stall_gross_sales')),
+            'settlement_payable_at_close' => PayoutService::money($settlements->sum(fn ($s) => (float) $s->payable_at_close)),
+            'settlement_payable_now' => PayoutService::money($settlements->sum(fn ($s) => (float) $s->net_payable)),
+            'payout_made' => PayoutService::money($settlements->sum(fn ($s) => (float) $s->paid_amount)),
+            'outstanding' => PayoutService::money($settlements->sum(fn ($s) => (float) $s->remaining_amount)),
+            'stalls_paid' => $settlements->where('payout_status', 'paid')->count(),
+            'stalls_partially_paid' => $settlements->where('payout_status', 'partially_paid')->count(),
+            'stalls_pending' => $settlements->where('payout_status', 'pending')->count(),
+        ];
 
         return response()->json([
             'success' => true,
@@ -65,11 +83,13 @@ class SettlementController extends Controller
                 'date' => $date,
                 'is_closed' => (bool) $existingClosing,
                 'closing' => $existingClosing,
+                'payout_summary' => $payoutSummary,
                 'summary' => [
                     'total_orders' => $totalOrdersCount,
                     'gross_sales' => number_format($totalGrossSales, 2, '.', ''),
                     'discounts' => number_format($totalDiscounts, 2, '.', ''),
                     'net_sales' => number_format($totalNetSales, 2, '.', ''),
+                    'tax_collected' => number_format($totalTax, 2, '.', ''),
                     'cash_collected' => number_format($cashCollected, 2, '.', ''),
                     'digital_collected' => number_format($digitalCollected, 2, '.', ''),
                 ],
@@ -85,7 +105,7 @@ class SettlementController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized. Owner access required.'], 403);
         }
 
-        $closings = DailyClosing::with(['settlements.stall:id,name,code'])
+        $closings = DailyClosing::with(['settlements.stall:id,name,code,stall_owner_id'])
             ->orderByDesc('closing_date')
             ->paginate($request->integer('per_page', 30));
 
@@ -151,8 +171,9 @@ class SettlementController extends Controller
                 $stallGross = $stallItems->sum('subtotal');
                 $itemCount = $stallItems->count();
 
-                // The settlement formula is an UNRESOLVED owner decision: no payable amount is derived here.
-                // Gross sales are recorded as fact; the owner enters the amount actually paid (recordSettlementPayment).
+                // Approved rule: the payable is the stall's recorded sales for the day (no commission or deduction is invented;
+                // later deductions or corrections are explicit, audited adjustments). Closing records what is OWED. It never
+                // marks anything paid: money is paid only when the owner confirms a payout (PayoutService).
                 StallSettlementRecord::create([
                     'closing_id' => $closing->id,
                     'stall_id' => $stall->id,
@@ -160,6 +181,12 @@ class SettlementController extends Controller
                     'stall_item_count' => $itemCount,
                     'settlement_amount' => 0,
                     'settlement_status' => 'calculated',
+                    'payable_at_close' => $stallGross,
+                    'adjustment_amount' => 0,
+                    'net_payable' => $stallGross,
+                    'paid_amount' => 0,
+                    'remaining_amount' => $stallGross,
+                    'payout_status' => PayoutService::deriveStatus(PayoutService::money($stallGross), '0.00'),
                 ]);
             }
 
@@ -178,37 +205,35 @@ class SettlementController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
+        // Legacy single-shot endpoint, kept for older clients. It now records an ordinary ledger payout, so every
+        // guard (no overpayment, audit trail, permanent record) applies. New clients use POST /settlements/{id}/payouts.
         $validated = $request->validate([
-            'amount_paid' => 'required|decimal:0,2|min:0|max:9999999999.99',
+            'amount_paid' => 'required|decimal:0,2|min:0.01|max:9999999999.99',
             'paid_to_representative' => 'required|string|max:100',
             'payment_method' => 'required|in:cash,bank_transfer,upi',
             'notes' => 'nullable|string',
         ]);
 
-        $record = DB::transaction(function () use ($recordId, $validated) {
-            $record = StallSettlementRecord::with('stall')->where('id', $recordId)->lockForUpdate()->firstOrFail();
-
-            // A recorded settlement payment is history; it must never be silently overwritten
-            if ($record->settlement_status === 'paid') {
-                abort(422, 'This stall settlement has already been recorded as paid.');
-            }
-
-            $record->update([
-                'settlement_amount' => $validated['amount_paid'],
-                'settlement_status' => 'paid',
-                'paid_to_representative' => $validated['paid_to_representative'],
+        try {
+            [$payout] = app(PayoutService::class)->record($user, (int) $recordId, [
+                'amount' => $validated['amount_paid'],
                 'payment_method' => $validated['payment_method'],
-                'paid_at' => now(),
+                'transaction_reference' => $validated['payment_method'] === 'cash' ? null : ($validated['notes'] ?? 'legacy-entry'),
+                'received_by' => $validated['paid_to_representative'],
                 'notes' => $validated['notes'] ?? null,
+                'idempotency_key' => $request->header('Idempotency-Key'),
             ]);
+        } catch (PayoutException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], $e->status);
+        }
 
-            return $record;
-        });
+        $record = StallSettlementRecord::with('stall')->findOrFail($recordId);
 
         return response()->json([
             'success' => true,
             'message' => "Settlement payment recorded for stall {$record->stall->name}",
             'data' => $record,
+            'payout' => $payout,
         ]);
     }
 }

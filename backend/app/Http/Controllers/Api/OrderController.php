@@ -10,6 +10,7 @@ use App\Models\OrderItem;
 use App\Models\StallKitchenTicket;
 use App\Models\StallTicketItem;
 use App\Services\FulfillmentService;
+use App\Services\TaxService;
 use App\Support\Sql;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
@@ -219,9 +220,8 @@ class OrderController extends Controller
                 $itemsByStall[$menuItem->stall_id][] = count($preparedItems) - 1;
             }
 
-            // Standard 5% GST on food court sales
-            $taxAmount = bcmul($subtotal, '0.05', 2);
-            $totalAmount = bcadd($subtotal, $taxAmount, 2);
+            // GST comes from Food Court Settings through the one tax service; the bill keeps the rate and mode it was priced with
+            $priced = TaxService::calculate((string) $subtotal);
 
             // Create Consolidated Parent Order
             $order = Order::create([
@@ -235,10 +235,12 @@ class OrderController extends Controller
                 'waiter_id' => $waiterId,
                 'cashier_id' => $cashierId,
                 'status' => 'confirmed',
-                'subtotal' => $subtotal,
-                'tax_amount' => $taxAmount,
+                'subtotal' => $priced['subtotal'],
+                'tax_amount' => $priced['tax_amount'],
+                'tax_rate_percent' => $priced['tax_rate_percent'],
+                'tax_mode' => $priced['tax_mode'],
                 'discount_amount' => 0,
-                'total_amount' => $totalAmount,
+                'total_amount' => $priced['total_amount'],
                 'payment_status' => 'unpaid',
                 'notes' => $validated['notes'] ?? null,
             ]);
@@ -370,6 +372,8 @@ class OrderController extends Controller
             }),
             'subtotal' => $order->subtotal,
             'tax_amount' => $order->tax_amount,
+            'tax_rate_percent' => $order->tax_rate_percent,
+            'tax_mode' => $order->tax_mode,
             'total_amount' => $order->total_amount,
         ];
     }
@@ -415,6 +419,8 @@ class OrderController extends Controller
             // Tickets, ticket items (versioned + audited) and order_items are cancelled by the single
             // fulfilment writer, inside this transaction and under the order lock taken above.
             app(FulfillmentService::class)->cancelOrderItems($order, $user);
+            // Any UPI QR already shown for this bill can no longer confirm a payment
+            \App\Models\UpiPaymentRequest::where('order_id', $order->id)->where('status', 'pending')->update(['status' => 'cancelled']);
 
             // Release the table only if no other open order is still using it
             if ($order->table_id) {

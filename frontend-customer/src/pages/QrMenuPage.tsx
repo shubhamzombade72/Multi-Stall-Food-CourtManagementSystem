@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { createCheckoutSession, PostOrderFn } from '../lib/checkoutSession';
+import { calculateTax, taxLines, type TaxConfig } from '../lib/tax';
 import {
   Store,
   ShoppingBag,
@@ -47,6 +48,15 @@ export const QrMenuPage: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   // Duplicate-order guard: one in-flight submission, one idempotency key per checkout (see checkoutSession.ts)
   const checkoutRef = useRef(createCheckoutSession());
+
+  // GST configuration from Food Court Settings (public, read-only). No GST is estimated until it arrives; the server prices the order.
+  const [taxConfig, setTaxConfig] = useState<TaxConfig>({ enabled: false, rate_percent: '0.00', mode: 'exclusive' });
+  useEffect(() => {
+    apiClient
+      .get('/public/tax')
+      .then((res) => setTaxConfig(res.data.data))
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     loadMenu();
@@ -100,9 +110,10 @@ export const QrMenuPage: React.FC = () => {
     );
   };
 
-  const subtotal = cart.reduce((sum, ci) => sum + Number(ci.item.price) * ci.quantity, 0);
-  const tax = subtotal * 0.05;
-  const total = subtotal + tax;
+  const itemsTotal = cart.reduce((sum, ci) => sum + Number(ci.item.price) * ci.quantity, 0);
+  const estimate = calculateTax(itemsTotal, taxConfig);
+  const estimateLines = taxLines(estimate);
+  const total = Number(estimate.total_amount);
   const totalItemCount = cart.reduce((sum, ci) => sum + ci.quantity, 0);
 
   // Reports the HTTP status for any server reply; throws only when no reply arrived (offline / timeout)
@@ -426,14 +437,12 @@ export const QrMenuPage: React.FC = () => {
 
               {/* Bill Details */}
               <div className="bg-slate-50 p-3.5 rounded-xl space-y-1.5 text-xs text-slate-600 font-medium">
-                <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span className="font-bold text-slate-900">₹{subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>GST (5%):</span>
-                  <span className="font-bold text-slate-900">₹{tax.toFixed(2)}</span>
-                </div>
+                {estimateLines.map((line) => (
+                  <div key={line.label} className="flex justify-between">
+                    <span>{line.label}:</span>
+                    <span className="font-bold text-slate-900">₹{line.value}</span>
+                  </div>
+                ))}
                 <div className="flex justify-between text-sm font-extrabold text-slate-900 pt-1 border-t border-slate-200">
                   <span>Total Payable:</span>
                   <span className="text-brand-600">₹{total.toFixed(2)}</span>

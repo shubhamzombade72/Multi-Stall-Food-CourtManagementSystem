@@ -56,7 +56,7 @@ const REPORTS: Record<Tab, ReportDef> = {
       { header: 'Cancelled', value: (r) => r.cancelled_count, align: 'right', numeric: true },
       { header: 'Paid orders', value: (r) => r.paid_count, align: 'right', numeric: true },
       { header: 'Paid subtotal (₹)', value: (r) => amt(r.paid_subtotal), align: 'right', numeric: true },
-      { header: 'Tax (₹)', value: (r) => amt(r.paid_tax), align: 'right', numeric: true },
+      { header: 'GST (₹)', value: (r) => amt(r.paid_tax), align: 'right', numeric: true },
       { header: 'Paid total (₹)', value: (r) => amt(r.paid_total), align: 'right', numeric: true },
     ],
     load: async ({ start, end }) => (await get('/reports/sales-summary', { start_date: start, end_date: end })).days,

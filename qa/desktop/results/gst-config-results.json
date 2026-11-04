@@ -1,0 +1,164 @@
+[
+  {
+    "id": "G-00",
+    "desc": "Fresh profile: built-in server started and owner created",
+    "result": "PASS",
+    "evidence": "http://127.0.0.1:56569/api"
+  },
+  {
+    "id": "G-01",
+    "desc": "Tax & GST Settings opens with the saved configuration (default: GST on, 5, exclusive, all items; individual items unavailable)",
+    "result": "PASS",
+    "evidence": "{\"enabled\":true,\"rate\":\"5.00\",\"excl\":true,\"applyTo\":\"all\",\"individualDisabled\":true}"
+  },
+  {
+    "id": "G-02",
+    "desc": "Invalid GST rates (text, negative, > 40, 3 decimals, empty) show a message and cannot be saved",
+    "result": "PASS",
+    "evidence": "abc:true -1:true 41:true 5.123:true :true"
+  },
+  {
+    "id": "G-03",
+    "desc": "Live example follows the form: exclusive 12% adds Rs 12.00; inclusive 12% extracts Rs 10.71 and keeps the total",
+    "result": "PASS",
+    "evidence": "Example for a ₹100.00 item total: GST (12%) is ₹12.00, total ₹112.00. | Example for a ₹100.00 item total: GST included (12%) is ₹10.71, total stays ₹100.00."
+  },
+  {
+    "id": "G-04",
+    "desc": "Owner saves GST 12% exclusive: success message, server stores it",
+    "result": "PASS",
+    "evidence": "{\"enabled\":true,\"rate_percent\":\"12.00\",\"mode\":\"exclusive\",\"apply_to\":\"all\",\"editable\":true,\"item_level_supported\":false}"
+  },
+  {
+    "id": "G-05",
+    "desc": "Server rules: a cashier cannot change GST (403); an absurd rate is refused by the backend (422)",
+    "result": "PASS",
+    "evidence": "403 422"
+  },
+  {
+    "id": "G-06",
+    "desc": "POS cart at 12% exclusive: \"Subtotal 100.00\", \"GST (12%) 12.00\", Grand Total 112.00",
+    "result": "PASS",
+    "evidence": "Subtotal: ₹100.00 | GST (12%): ₹12.00 | Grand Total: ₹112.00"
+  },
+  {
+    "id": "G-07",
+    "desc": "Payment modal total equals the cart total (Rs 112.00)",
+    "result": "PASS",
+    "evidence": "112.00 Consolidated Bill Settlement Order #ORD-20261104-BOV8Z • Takeaway ✕ Total Bill Amount ₹112.00 Covers 1 dishes across participating kitchens Select Tender Method"
+  },
+  {
+    "id": "G-08",
+    "desc": "Stored bill: subtotal 100.00, GST 12.00 @ 12.00 exclusive, total 112.00, cash payment 112.00",
+    "result": "PASS",
+    "evidence": "100.00/12.00/112.00 cash 112.00"
+  },
+  {
+    "id": "G-09",
+    "desc": "Receipt 80 mm: Subtotal 100.00, GST (12%) 12.00, TOTAL 112.00 - no fixed 5%",
+    "result": "PASS",
+    "evidence": "URBAN FOOD COURTConsolidated BillBill: ORD-20261104-BOV8ZDate: 11/4/2026, 1:27:30 PMTakeaway1 x Thali100.00Subtotal100.00GST (12%)12.00TOTAL112.00Paid (CASH)112.00Tendered112.00Change0.00Receipt: PAY-20261104-PTFLPCashier: GST OwnerThank you! Visit again.Power"
+  },
+  {
+    "id": "G-10",
+    "desc": "Receipt 58 mm: same GST lines, 48 mm wide, nothing overflows",
+    "result": "PASS",
+    "evidence": "48.0mm over=0"
+  },
+  {
+    "id": "G-10b",
+    "desc": "Both receipts end with the fixed \"Powered by MangalMurti Tech Solution\" line, after the footer",
+    "result": "PASS",
+    "evidence": ": GST OwnerThank you! Visit again.Powered by MangalMurti Tech Solution || : GST OwnerThank you! Visit again.Powered by MangalMurti Tech Solution"
+  },
+  {
+    "id": "G-11",
+    "desc": "After the owner changes GST to 18%, the new bill uses 18%: cart GST (18%) 18.00 / total 118.00",
+    "result": "PASS",
+    "evidence": "Subtotal: ₹100.00 | GST (18%): ₹18.00 | Grand Total: ₹118.00"
+  },
+  {
+    "id": "G-12",
+    "desc": "UPI QR amount is the GST-inclusive payable amount: panel Pay Rs 118.00 and QR am=118.00",
+    "result": "PASS",
+    "evidence": "₹118.00 upi://pay?pa=gst.shop@upi&pn=Urban%20Food%20Court&am=118.00&cu=INR&tn=ORD-20261104-SOFMX"
+  },
+  {
+    "id": "G-13",
+    "desc": "A client still using the old 5% total (105.00) is refused by the server",
+    "result": "PASS",
+    "evidence": "422 Payment amount 105.00 does not match the bill total 118.00."
+  },
+  {
+    "id": "G-14",
+    "desc": "UPI payment settles Rs 118.00; receipt shows GST (18%) 18.00 and TOTAL 118.00",
+    "result": "PASS",
+    "evidence": "URBAN FOOD COURTConsolidated BillBill: ORD-20261104-SOFMXDate: 11/4/2026, 1:27:32 PMTakeaway1 x Thali100.00Subtotal100.00GST (18%)18.00TOTAL118.00Paid (UPI_QR)118.00Receipt: PAY-20261104-GU4WMUPI Ref:"
+  },
+  {
+    "id": "G-15",
+    "desc": "POS cart inclusive 5%: \"Subtotal (including GST) 105.00\", \"GST Included (5%) 5.00\", Grand Total 105.00 (GST not added again)",
+    "result": "PASS",
+    "evidence": "Subtotal (including GST): ₹105.00 | GST Included (5%): ₹5.00 | Grand Total: ₹105.00"
+  },
+  {
+    "id": "G-16",
+    "desc": "Inclusive receipts (80 mm and 58 mm): Subtotal (including GST) 105.00, GST Included (5%) 5.00, TOTAL 105.00",
+    "result": "PASS",
+    "evidence": "4 PMTakeaway1 x Combo105.00Subtotal (including GST)105.00GST Included (5%)5.00TOTAL105.00Paid (CARD)105.00Receipt: PAY-20261104-KZJ3QCashier: GST OwnerThank you"
+  },
+  {
+    "id": "G-17",
+    "desc": "GST disabled: the cart shows only Subtotal 100.00 and Grand Total 100.00; payment modal 100.00",
+    "result": "PASS",
+    "evidence": "Subtotal: ₹100.00 | Grand Total: ₹100.00"
+  },
+  {
+    "id": "G-18",
+    "desc": "GST-disabled receipt: no GST line, no percentage, TOTAL 100.00",
+    "result": "PASS",
+    "evidence": "URBAN FOOD COURTConsolidated BillBill: ORD-20261104-JSBAYDate: 11/4/2026, 1:27:35 PMTakeaway1 x Thali100.00Subtotal100.00TOTAL100.00Paid (SPLIT)100.00Receipt: PAY-20261104-UCWJXCashier: GST OwnerThank"
+  },
+  {
+    "id": "G-19",
+    "desc": "GST is now disabled, but the first bill still shows its own GST (12%) 12.00 and total 112.00 in Orders and on a reprint",
+    "result": "PASS",
+    "evidence": "Subtotal ₹100.00 | GST (12%) ₹12.00 || e: 11/4/2026, 1:27:30 PMTakeaway1 x Thali100.00Subtotal100.00GST (12%)12.00TOTAL112.00Paid (CASH)112.00Tendered112.00Change0.00Receipt: PAY-20261104-PTFLPCashie"
+  },
+  {
+    "id": "G-20",
+    "desc": "Daily closing figures: GST as billed 35.00 (12 + 18 + 5 + 0), net sales 435.00, taxable gross 400.00",
+    "result": "PASS",
+    "evidence": "{\"total_orders\":4,\"gross_sales\":\"400.00\",\"discounts\":\"0.00\",\"net_sales\":\"435.00\",\"tax_collected\":\"35.00\",\"cash_collected\":\"112.00\",\"digital_collected\":\"323.00\"}"
+  },
+  {
+    "id": "G-21",
+    "desc": "Sales report agrees: paid GST 35.00, paid subtotal 400.00, paid total 435.00",
+    "result": "PASS",
+    "evidence": "{\"day\":\"2026-11-04\",\"orders_count\":4,\"cancelled_count\":0,\"paid_count\":4,\"paid_subtotal\":400,\"paid_tax\":35,\"paid_total\":435}"
+  },
+  {
+    "id": "G-22",
+    "desc": "Daily Closing screen shows \"Includes GST ₹35.00 as billed\" (no fixed 5% text)",
+    "result": "PASS",
+    "evidence": "Includes GST ₹35.00 as billed"
+  },
+  {
+    "id": "G-23",
+    "desc": "All four bills kept their own mode/rate/GST after every configuration change",
+    "result": "PASS",
+    "evidence": "100.00:none:0.00:0.00 105.00:inclusive:5.00:5.00 112.00:exclusive:12.00:12.00 118.00:exclusive:18.00:18.00"
+  },
+  {
+    "id": "G-24",
+    "desc": "Every successful GST change (4) is in the audit log with old and new values; refused changes are not",
+    "result": "PASS",
+    "evidence": "4 entries"
+  },
+  {
+    "id": "G-25",
+    "desc": "No unexpected renderer errors",
+    "result": "PASS",
+    "evidence": ""
+  }
+]

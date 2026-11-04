@@ -1,0 +1,206 @@
+{
+  "ranAt": "2026-11-04T07:56:51.572Z",
+  "total": 33,
+  "passed": 33,
+  "failed": 0,
+  "results": [
+    {
+      "id": "P-00",
+      "desc": "Fresh profile: built-in server (SQLite) started and the owner created",
+      "result": "PASS",
+      "evidence": "http://127.0.0.1:59517/api"
+    },
+    {
+      "id": "P-01",
+      "desc": "8 stalls under 3 owners (one owner holds 5 stalls), each with one paid bill",
+      "result": "PASS",
+      "evidence": "total sales 26000"
+    },
+    {
+      "id": "P-02",
+      "desc": "Before closing: stalls show their sales but no payable and no payout action",
+      "result": "PASS",
+      "evidence": "8 rows"
+    },
+    {
+      "id": "P-03",
+      "desc": "Day closing: every stall is Pending with Net Payable = sales, Paid ₹0.00, Remaining = payable (closing does not mark anything paid)",
+      "result": "PASS",
+      "evidence": "{\"payable\":\"₹5,000.00\",\"paid\":\"₹0.00\",\"remaining\":\"₹5,000.00\",\"status\":\"pending\"}"
+    },
+    {
+      "id": "P-04",
+      "desc": "The four numbers are shown separately: Sales calculated, Settlement payable, Payout actually made (₹0.00), Outstanding",
+      "result": "PASS",
+      "evidence": "{\"sales\":\"₹26,000.00\",\"payable\":\"₹26,000.00\",\"paid\":\"₹0.00\",\"outstanding\":\"₹26,000.00\"}"
+    },
+    {
+      "id": "P-05",
+      "desc": "Record Payout shows the settlement breakdown (sales, net payable, already paid, outstanding)",
+      "result": "PASS",
+      "evidence": "Business date 04-11-2026 Stall sales (closing) ₹5,000.00 Net payable ₹5,000.00 Already paid ₹0.00 Outstanding ₹5,000.00"
+    },
+    {
+      "id": "P-06",
+      "desc": "Payout receipt generated: PAY-000001, ₹5,000.00 cash, balance ₹0.00, manual-record disclaimer",
+      "result": "PASS",
+      "evidence": "Urban Food Court STALL PAYOUT RECEIPT Receipt PAY-000001 Business date 04-11-2026 Paid at 04/11/2026, 01:26 pm Stall Pizza Corner Owner Rajesh Patil Net payable ₹5,000.00 Amount paid now ₹5,000.00 Paid so far ₹5,000.00 Balance remaining ₹0.00 Method "
+    },
+    {
+      "id": "P-07",
+      "desc": "Pizza Corner is Paid: paid ₹5,000.00, remaining ₹0.00, no Record Payout button",
+      "result": "PASS",
+      "evidence": "{\"payable\":\"₹5,000.00\",\"paid\":\"₹5,000.00\",\"remaining\":\"₹0.00\",\"status\":\"paid\"}"
+    },
+    {
+      "id": "P-08",
+      "desc": "UPI payout without a transaction reference is refused with a clear message (nothing saved)",
+      "result": "PASS",
+      "evidence": "A transaction reference is required for UPI payouts."
+    },
+    {
+      "id": "P-09",
+      "desc": "Misal House ₹8,000 payable, ₹3,000 UPI paid -> Partially Paid, remaining ₹5,000.00",
+      "result": "PASS",
+      "evidence": "{\"payable\":\"₹8,000.00\",\"paid\":\"₹3,000.00\",\"remaining\":\"₹5,000.00\",\"status\":\"partially_paid\"}"
+    },
+    {
+      "id": "P-10",
+      "desc": "One stall paid, one partial, one untouched: Biryani Point stays Pending ₹6,000.00",
+      "result": "PASS",
+      "evidence": "{\"payable\":\"₹6,000.00\",\"paid\":\"₹0.00\",\"remaining\":\"₹6,000.00\",\"status\":\"pending\"}"
+    },
+    {
+      "id": "P-10b",
+      "desc": "Summary after payouts: paid ₹8,000.00, outstanding ₹18,000.00 (payable unchanged ₹26,000.00)",
+      "result": "PASS",
+      "evidence": "{\"sales\":\"₹26,000.00\",\"payable\":\"₹26,000.00\",\"paid\":\"₹8,000.00\",\"outstanding\":\"₹18,000.00\"}"
+    },
+    {
+      "id": "P-11",
+      "desc": "Over-payment refused in the form AND by the server (422); balance unchanged",
+      "result": "PASS",
+      "evidence": "The amount exceeds the outstanding balance of ₹6,000.00. | 422"
+    },
+    {
+      "id": "P-12a",
+      "desc": "Second payout (₹2,000 bank transfer) -> still Partially Paid, remaining ₹3,000.00",
+      "result": "PASS",
+      "evidence": ""
+    },
+    {
+      "id": "P-12",
+      "desc": "Third payout (₹3,000 cash) completes it: three transactions, PAID, remaining ₹0.00",
+      "result": "PASS",
+      "evidence": "{\"payable\":\"₹8,000.00\",\"paid\":\"₹8,000.00\",\"remaining\":\"₹0.00\",\"status\":\"paid\"}"
+    },
+    {
+      "id": "P-12b",
+      "desc": "Stall payout history lists the 3 transactions in order with methods/references, plus the audit trail",
+      "result": "PASS",
+      "evidence": "3 rows | Payout recorded · 04/11/2026, 01:26 pm · Payout Owner ₹3,000.00 · UPI · ref UPI123456789 · balance after ₹5,000.00 Payout recorded · 04/11/2026, 01:26 pm · Payo"
+    },
+    {
+      "id": "P-13",
+      "desc": "Duplicate submission (same idempotency key): second call returns the first payout, exactly one ledger row, balance reduced once",
+      "result": "PASS",
+      "evidence": "201/200 paid=1000.00"
+    },
+    {
+      "id": "P-14",
+      "desc": "Reversal keeps the original payout (marked Reversed) and adds a reversal entry; both stay in the ledger",
+      "result": "PASS",
+      "evidence": "PAY-000001 04/11/2026, 01:26 pm Cash ₹5,000.00 ₹0.00 Payout Owner Reversed Receipt || PAY-000006 04/11/2026, 01:26 pm Cash −₹5,000.00 ₹5,000.00 Payout Owner Reversal Receipt"
+    },
+    {
+      "id": "P-15",
+      "desc": "After the reversal Pizza Corner is Pending again (paid ₹0.00, remaining ₹5,000.00)",
+      "result": "PASS",
+      "evidence": "{\"payable\":\"₹5,000.00\",\"paid\":\"₹0.00\",\"remaining\":\"₹5,000.00\",\"status\":\"pending\"}"
+    },
+    {
+      "id": "P-15b",
+      "desc": "The balance can be paid again correctly (UPI with reference) -> Paid",
+      "result": "PASS",
+      "evidence": ""
+    },
+    {
+      "id": "P-16",
+      "desc": "Payout History filters by payment method (UPI only)",
+      "result": "PASS",
+      "evidence": "2/7 rows"
+    },
+    {
+      "id": "P-17",
+      "desc": "Payout History filters by status (Reversed shows only the reversed payout)",
+      "result": "PASS",
+      "evidence": "PAY-000001 04-11-2026 Pizza Corner Rajesh Patil ₹5,000.00 ₹5,000.00 Cash — 04/11/2026, 01:26 pm Payo"
+    },
+    {
+      "id": "P-17b",
+      "desc": "Filter by stall: Misal House shows its 3 payouts totalling ₹8,000.00",
+      "result": "PASS",
+      "evidence": "3 rows, total ₹8,000.00"
+    },
+    {
+      "id": "P-18",
+      "desc": "Opening a payout shows every field and its complete audit history",
+      "result": "PASS",
+      "evidence": "Payout recorded · 04/11/2026, 01:26 pm · Payout Owner ₹5,000.00 · UPI · ref UPI-REPAID-0001 · balance after ₹0.00"
+    },
+    {
+      "id": "P-19",
+      "desc": "Owner-wise view: Anand Kulkarni, 5 stalls, payable ₹7,000.00, paid ₹0.00, outstanding ₹7,000.00 with per-stall breakdown",
+      "result": "PASS",
+      "evidence": "{\"payable\":\"₹7,000.00\",\"paid\":\"₹0.00\",\"outstanding\":\"₹7,000.00\"}"
+    },
+    {
+      "id": "P-20",
+      "desc": "Consolidated payout: allocations that do not add up to the payment are refused",
+      "result": "PASS",
+      "evidence": "Allocations add up to ₹1,000.00 but the payment is ₹3,500.00. They must match exactly."
+    },
+    {
+      "id": "P-21",
+      "desc": "One ₹3,500 bank transfer allocated oldest-first across stalls; owner paid ₹3,500.00 (counted once), outstanding ₹3,500.00",
+      "result": "PASS",
+      "evidence": "{\"payable\":\"₹7,000.00\",\"paid\":\"₹3,500.00\",\"outstanding\":\"₹3,500.00\"}"
+    },
+    {
+      "id": "P-22",
+      "desc": "Allocations equal the payment exactly (Dosa 1000 + Chaat 1200 + Kebab 1300 = 3500); grand total paid counts it once (₹17,500.00: Pizza 5,000 + Misal 8,000 + Biryani 1,000 + Anand 3,500)",
+      "result": "PASS",
+      "evidence": "{\"Dosa Dhaba\":\"1000.00\",\"Chaat Chowk\":\"1200.00\",\"Kebab Kingdom\":\"1300.00\",\"Juice Junction\":\"0.00\",\"Sweet Tooth\":\"0.00\"} grand paid 17500.00"
+    },
+    {
+      "id": "P-23",
+      "desc": "Reconciliation: payable = paid + outstanding; every settlement matches its ledger (0 discrepancies)",
+      "result": "PASS",
+      "evidence": "{\"net_payable\":\"26000.00\",\"paid\":\"17500.00\",\"outstanding\":\"8500.00\"}"
+    },
+    {
+      "id": "P-24",
+      "desc": "After an application restart the payout history is identical (same payout numbers, amounts, statuses)",
+      "result": "PASS",
+      "evidence": "10 rows"
+    },
+    {
+      "id": "P-25",
+      "desc": "After the restart every stall shows the same payable / paid / remaining / status",
+      "result": "PASS",
+      "evidence": "8 stalls"
+    },
+    {
+      "id": "P-26",
+      "desc": "Day closing history unchanged after later payouts: the closed day is still closed, payables fixed, history screen shows the ledger",
+      "result": "PASS",
+      "evidence": ""
+    },
+    {
+      "id": "P-99",
+      "desc": "No uncaught page errors during the run",
+      "result": "PASS",
+      "evidence": "The Content Security Policy directive 'frame-ancestors' is ignored when delivered via a <meta> element. | The Content Security Policy directive 'frame-ancestors' is ignored when delivered via a <meta> element. | The Content Security Policy directive 'frame-ancestors' is ignored when delivered via a <meta> element."
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "decoder": "jsQR 1.4.0 (independent of the app encoder)",
+  "generatedAt": "2026-11-04T09:20:58.943Z",
+  "configuredUpi": {
+    "enabled": true,
+    "vpa": "sh*************8@oksb",
+    "syntaxValid": true,
+    "handle": "oksb",
+    "handleKnown": false,
+    "closestKnownHandle": "oksbi"
+  },
+  "requests": [
+    {
+      "id": 1,
+      "order": "ORD-20261104-FO3DL",
+      "status": "paid",
+      "orderPaymentStatus": "paid",
+      "linkedPaymentId": 4,
+      "decodedPayload": "upi://pay?pa=sh*************8@oksb&pn=Urban%20Food%20Court&am=26.25&cu=INR&tn=ORD-20261104-FO3DL",
+      "qrVersion": 6,
+      "qrModules": 41,
+      "checks": {
+        "decodedEqualsStoredUri": true,
+        "schemeIsUpiPay": true,
+        "noDuplicateParams": true,
+        "noSpacesInRawUri": true,
+        "notDoubleEncoded": true,
+        "paEqualsStoredVpa": true,
+        "paEqualsCurrentSetting": true,
+        "pnEqualsBusinessName": false,
+        "amEqualsBillTotal": true,
+        "amFormat2dp": true,
+        "cuIsINR": true,
+        "tnEqualsReference": true
+      },
+      "allChecksPass": false
+    },
+    {
+      "id": 2,
+      "order": "ORD-20261104-SOSMI",
+      "status": "paid",
+      "orderPaymentStatus": "paid",
+      "linkedPaymentId": 5,
+      "decodedPayload": "upi://pay?pa=sh*************8@oksb&pn=Urban%20Food%20Court&am=26.25&cu=INR&tn=ORD-20261104-SOSMI",
+      "qrVersion": 6,
+      "qrModules": 41,
+      "checks": {
+        "decodedEqualsStoredUri": true,
+        "schemeIsUpiPay": true,
+        "noDuplicateParams": true,
+        "noSpacesInRawUri": true,
+        "notDoubleEncoded": true,
+        "paEqualsStoredVpa": true,
+        "paEqualsCurrentSetting": true,
+        "pnEqualsBusinessName": false,
+        "amEqualsBillTotal": true,
+        "amFormat2dp": true,
+        "cuIsINR": true,
+        "tnEqualsReference": true
+      },
+      "allChecksPass": false
+    }
+  ],
+  "upiPayments": [
+    {
+      "id": 4,
+      "order_id": 4,
+      "payment_method": "upi_qr",
+      "amount": 26.25,
+      "transaction_reference": null,
+      "status": "success",
+      "cashier_id": 1,
+      "created_at": "2026-11-04 08:53:57"
+    },
+    {
+      "id": 5,
+      "order_id": 5,
+      "payment_method": "upi_qr",
+      "amount": 26.25,
+      "transaction_reference": null,
+      "status": "success",
+      "cashier_id": 1,
+      "created_at": "2026-11-04 09:09:12"
+    }
+  ]
+}

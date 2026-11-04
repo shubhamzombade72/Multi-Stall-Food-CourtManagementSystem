@@ -25,6 +25,8 @@ export interface BoardOrder {
   order_type: 'dine_in' | 'takeaway';
   table: { id: number; table_number: string } | null;
   guest_count: number | null;
+  /** Order notes typed at the counter (may also carry cancellation text; never shown for a cancelled card). */
+  notes?: string | null;
   created_at: string;
   status: string;
   payment_status: string;
@@ -90,6 +92,25 @@ export function nextItemAction(status: ItemStatus, canMarkReady: boolean): 'read
 
 export function applyOptimistic(order: BoardOrder, itemId: number, to: ItemStatus): BoardOrder {
   return { ...order, items: order.items.map((i) => (i.id === itemId ? { ...i, status: to } : i)) };
+}
+
+/**
+ * Detail lines under the card title: "Table : T-04" (or "Order : Takeaway"), "Stall : Pizza" (several stalls become
+ * "Stalls : Pizza, Burger", cancelled items ignored) and the order notes. A cancelled card shows only the table line.
+ */
+export function cardDetails(order: BoardOrder): { label: string; value: string }[] {
+  const lines: { label: string; value: string }[] = [
+    order.table ? { label: 'Table', value: order.table.table_number } : { label: 'Order', value: 'Takeaway' },
+  ];
+  if (cardState(order.items) === 'empty') return lines;
+  const stalls: string[] = [];
+  for (const i of order.items) {
+    if (i.status !== 'cancelled' && i.stall?.name && !stalls.includes(i.stall.name)) stalls.push(i.stall.name);
+  }
+  if (stalls.length > 0) lines.push({ label: stalls.length === 1 ? 'Stall' : 'Stalls', value: stalls.join(', ') });
+  const notes = (order.notes ?? '').trim();
+  if (notes) lines.push({ label: 'Notes', value: notes });
+  return lines;
 }
 
 export function cardLabel(order: BoardOrder, nowMs: number): string {

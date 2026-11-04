@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Services\AuditService;
+use App\Services\TaxService;
+use App\Services\UpiPaymentService;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Http\Request;
 
 /**
  * Food court settings. Any signed-in user can read them (the POS needs the enabled payment methods and the
- * receipt text); only the owner can change them. Tax is reported read-only: the 5% rate is hard-coded in
- * OrderController and stays that way until the owner confirms the rate and inclusive/exclusive pricing.
+ * receipt text); only the owner can change them. GST ("tax") is configured here and calculated only by TaxService.
  */
 class SettingsController extends Controller
 {
@@ -39,6 +41,20 @@ class SettingsController extends Controller
         'order_tracking' => [
             'delay_minutes' => 15,
         ],
+        // Merchant UPI ID for the per-bill payment QR. A UPI ID is public by nature (it is printed on the QR),
+        // so any signed-in user may read it; only the owner may change it.
+        'upi' => [
+            'enabled' => false,
+            'vpa' => null,
+        ],
+        // GST. These are the values an installation that never opened the setting keeps using (the rule it always had:
+        // GST on, 5%, added on top of item prices). The owner changes them in Food Court Settings; nothing else holds a rate.
+        'tax' => [
+            'enabled' => true,
+            'rate_percent' => '5.00',
+            'mode' => 'exclusive',
+            'apply_to' => 'all',
+        ],
     ];
 
     public static function current(string $key): array
@@ -65,13 +81,26 @@ class SettingsController extends Controller
                     'available' => self::PAYMENT_METHODS,
                 ],
                 'order_tracking' => self::current('order_tracking'),
-                'tax' => [
-                    'rate_percent' => '5.00',
-                    'editable' => false,
-                    'note' => 'Fixed 5% GST on every item, pending owner confirmation of the rate and of inclusive/exclusive pricing.',
+                'upi' => self::current('upi'),
+                'tax' => self::current('tax') + [
+                    'editable' => true,
+                    // Menu items carry no tax setting of their own, so GST can only apply to all items
+                    'item_level_supported' => false,
                 ],
             ],
         ]);
+    }
+
+    /** GET /public/tax: what the customer QR menu needs to show an estimate (the server prices the real order). */
+    public function publicTax()
+    {
+        $tax = self::current('tax');
+
+        return response()->json(['success' => true, 'data' => [
+            'enabled' => (bool) $tax['enabled'],
+            'rate_percent' => $tax['rate_percent'],
+            'mode' => $tax['mode'],
+        ]]);
     }
 
     public function update(Request $request, string $key)
@@ -103,6 +132,16 @@ class SettingsController extends Controller
             'order_tracking' => [
                 'delay_minutes' => 'required|integer|min:1|max:120',
             ],
+            'upi' => [
+                'enabled' => 'required|boolean',
+                'vpa' => ['nullable', 'string', 'max:320', 'regex:' . UpiPaymentService::VPA_PATTERN],
+            ],
+            'tax' => [
+                'enabled' => 'required|boolean',
+                'rate_percent' => ['required', 'regex:/^\d{1,2}(\.\d{1,2})?$/', 'numeric', 'between:0,' . TaxService::MAX_RATE_PERCENT],
+                'mode' => 'required|in:exclusive,inclusive',
+                'apply_to' => 'required|in:all',
+            ],
             default => null,
         };
 
@@ -112,7 +151,22 @@ class SettingsController extends Controller
 
         $validated = $request->validate($rules, [
             'gstin.regex' => 'GSTIN must be 15 characters: digits and capital letters.',
+            'vpa.regex' => 'Enter a valid UPI ID such as name@bank (letters, digits, dot, dash, underscore, then @ and the provider handle).',
         ]);
+
+        if ($key === 'tax') {
+            $validated['rate_percent'] = number_format((float) $validated['rate_percent'], 2, '.', '');
+        }
+
+        if ($key === 'upi') {
+            $validated['vpa'] = isset($validated['vpa']) && trim($validated['vpa']) !== '' ? strtolower(trim($validated['vpa'])) : null;
+            if ($validated['enabled'] && $validated['vpa'] === null) {
+                throw ValidationException::withMessages(['vpa' => 'Enter the merchant UPI ID before turning on UPI QR payments.']);
+            }
+            if ($validated['enabled'] && !in_array('upi_qr', self::enabledPaymentMethods(), true)) {
+                throw ValidationException::withMessages(['enabled' => 'Turn on "UPI / QR" under Payment methods first, then enable UPI QR payments.']);
+            }
+        }
 
         $old = self::current($key);
         $new = array_merge($old, $validated);

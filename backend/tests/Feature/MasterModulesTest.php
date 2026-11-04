@@ -62,7 +62,7 @@ class MasterModulesTest extends TestCase
 
         $this->actingAs($cashier, 'sanctum')->getJson('/api/settings')
             ->assertStatus(200)
-            ->assertJsonPath('data.tax.editable', false)
+            ->assertJsonPath('data.tax.editable', true)
             ->assertJsonPath('data.payment_methods.available', ['cash', 'upi_qr', 'card', 'split']);
 
         $this->actingAs($cashier, 'sanctum')->putJson('/api/settings/business_profile', ['name' => 'Hacked'])->assertStatus(403);
@@ -76,7 +76,9 @@ class MasterModulesTest extends TestCase
         ])->assertStatus(200)->assertJsonPath('data.name', 'Test Food Court');
         $this->assertNotNull(AuditLog::where('action', 'settings_updated')->where('entity_id', 'business_profile')->first());
 
-        $this->actingAs($owner, 'sanctum')->putJson('/api/settings/tax', ['rate' => 18])->assertStatus(404);
+        // GST is owner-configurable now (details in GstConfigurationTest); the old ad-hoc 'rate' body is not a valid payload
+        $this->actingAs($owner, 'sanctum')->putJson('/api/settings/tax', ['rate' => 18])->assertStatus(422);
+        $this->actingAs($cashier, 'sanctum')->putJson('/api/settings/tax', ['enabled' => true, 'rate_percent' => 18, 'mode' => 'exclusive', 'apply_to' => 'all'])->assertStatus(403);
     }
 
     public function test_disabled_payment_method_is_refused_at_billing(): void

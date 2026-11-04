@@ -498,6 +498,7 @@ class FulfillmentService
             'order_type' => $order->order_type,
             'table' => $order->table ? ['id' => $order->table->id, 'table_number' => $order->table->table_number] : null,
             'guest_count' => $order->guest_count,
+            'notes' => $order->notes,
             'created_at' => $order->created_at?->toIso8601String(),
             'status' => $order->status,
             'payment_status' => $order->payment_status,

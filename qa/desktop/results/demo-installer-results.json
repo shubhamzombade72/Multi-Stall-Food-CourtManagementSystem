@@ -1,0 +1,64 @@
+{
+  "ranAt": "2026-11-04T08:08:12.852Z",
+  "mode": "packaged exe",
+  "exe": "D:\\New folder\\Multi-Stall-Food-CourtManagementSystem\\frontend-desktop\\installers\\1.2.0\\win-unpacked\\Multi-Stall Food Court Management System.exe",
+  "total": 9,
+  "passed": 9,
+  "failed": 0,
+  "results": [
+    {
+      "id": "D-00",
+      "desc": "Packaged build ships the dummy-data database (packaged exe)",
+      "result": "PASS",
+      "evidence": "D:\\New folder\\Multi-Stall-Food-CourtManagementSystem\\frontend-desktop\\installers\\1.2.0\\win-unpacked\\resources\\server\\demo\\foodcourt-demo.sqlite"
+    },
+    {
+      "id": "D-01",
+      "desc": "First start on a new profile goes straight to Login: the demo database (with its owner) was installed, no Welcome / owner setup",
+      "result": "PASS",
+      "evidence": ""
+    },
+    {
+      "id": "D-02",
+      "desc": "Signs in with the demo owner account (owner@foodcourt.com)",
+      "result": "PASS",
+      "evidence": ""
+    },
+    {
+      "id": "D-03",
+      "desc": "Today (2026-11-04) is closed with the example scenario: Pizza Corner PAID ₹5,000; Misal House PARTIALLY PAID ₹3,000 of ₹8,000; Biryani Point PENDING ₹6,000",
+      "result": "PASS",
+      "evidence": "{\"pizza\":{\"paid\":\"₹5,000.00\",\"remaining\":\"₹0.00\",\"status\":\"paid\"},\"misal\":{\"paid\":\"₹3,000.00\",\"remaining\":\"₹5,000.00\",\"status\":\"partially_paid\"},\"biryani\":{\"paid\":\"₹0.00\",\"remaining\":\"₹6,000.00\",\"status\":\"pending\"}}"
+    },
+    {
+      "id": "D-04",
+      "desc": "Payout history holds the demo ledger: multi-transaction stall, UPI + bank references, a reversed payout with its reversal entry, a failed attempt and consolidated owner payouts",
+      "result": "PASS",
+      "evidence": "21 ledger rows"
+    },
+    {
+      "id": "D-05",
+      "desc": "Owner-wise view: Anand Kulkarni holds 5 stalls with consolidated payout allocations",
+      "result": "PASS",
+      "evidence": "Anand Kulkarni 5 stalls · paid by Bank Transfer, UPI TOTAL PAYABLE ₹30,800.00 PAID ₹15,300.00 OUTSTANDING ₹15,500.00 Record consolidated payout STALL SALES PAYA"
+    },
+    {
+      "id": "D-06",
+      "desc": "Reconciliation on the demo data: payable = paid + outstanding, 0 discrepancies",
+      "result": "PASS",
+      "evidence": "{\"net_payable\":\"94600.00\",\"paid\":\"52000.00\",\"outstanding\":\"42600.00\"}"
+    },
+    {
+      "id": "D-07",
+      "desc": "2026-11-01 has demo sales but is NOT closed: the \"Execute End-of-Day Closing\" button is offered so closing can be tried live",
+      "result": "PASS",
+      "evidence": ""
+    },
+    {
+      "id": "D-08",
+      "desc": "After a restart the payout made in the demo is still there (the demo database is installed once, never over the owner's data)",
+      "result": "PASS",
+      "evidence": "22 -> 22 rows, Biryani paid 1500.00"
+    }
+  ]
+}

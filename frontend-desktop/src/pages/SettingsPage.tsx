@@ -5,6 +5,8 @@ import { useConnection } from '../hooks/useConnection';
 import {
   desktop,
   getReceiptPrinter,
+  getReceiptWidth,
+  setReceiptWidth,
   isDesktopApp,
   setReceiptPrinter,
   type BackupStatus,
@@ -13,6 +15,7 @@ import {
   type DesktopPrinter,
 } from '../desktop/bridge';
 import { RecoveryKeyPanel } from '../components/RecoveryKeyPanel';
+import { SoundSettingsSection } from '../components/SoundSettingsSection';
 import { Printer, Info, DatabaseBackup, Network, LifeBuoy, KeyRound, CheckCircle2, XCircle } from 'lucide-react';
 
 const mb = (bytes: number) => `${(bytes / 1048576).toFixed(1)} MB`;
@@ -30,6 +33,7 @@ export const SettingsPage: React.FC = () => {
   const [info, setInfo] = useState<DesktopAppInfo | null>(null);
   const [printers, setPrinters] = useState<DesktopPrinter[] | null>(null);
   const [receiptPrinter, setReceiptPrinterState] = useState(getReceiptPrinter());
+  const [receiptWidth, setReceiptWidthState] = useState<58 | 80>(getReceiptWidth());
   const { state: liveState } = useConnection();
   const mode = getDesktopConfig()?.mode;
 
@@ -95,8 +99,28 @@ export const SettingsPage: React.FC = () => {
                 <p className="text-xs text-muted">Preselected in the print dialog for receipts. Reports use the default printer.</p>
               </>
             )}
+            <label className="block text-xs font-semibold text-fg pt-2" htmlFor="receipt-width">
+              Receipt paper width on this computer
+            </label>
+            <select
+              id="receipt-width"
+              data-testid="receipt-width"
+              value={receiptWidth}
+              onChange={(e) => {
+                const w = Number(e.target.value) === 58 ? 58 : 80;
+                setReceiptWidthState(w);
+                setReceiptWidth(w);
+              }}
+              className="w-full px-3 py-2 rounded-lg border border-line text-sm"
+            >
+              <option value={80}>80 mm roll (default)</option>
+              <option value={58}>58 mm roll</option>
+            </select>
+            <p className="text-xs text-muted">Bills and the UPI QR are laid out for this width. Choose the roll loaded in this computer's receipt printer.</p>
           </section>
         )}
+
+        <SoundSettingsSection />
 
         {isOwner && isDesktopApp() && mode === 'embedded' && <BackupSection />}
         {isOwner && isDesktopApp() && mode === 'embedded' && <RecoveryKeySection />}

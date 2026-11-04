@@ -289,10 +289,10 @@ export const WaiterPage: React.FC = () => {
             )}
             <textarea aria-label="Order notes" rows={2} maxLength={500} placeholder="Notes for the kitchen (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
             <div className="flex justify-between text-sm">
-              <span className="text-muted">Items (before tax)</span>
+              <span className="text-muted">Items total</span>
               <span className="font-bold">{money(estimate)}</span>
             </div>
-            <p className="text-[11px] text-muted">Final total with tax is calculated by the server.</p>
+            <p className="text-[11px] text-muted">The final bill, with GST as set in Food Court Settings, is calculated by the server.</p>
             <button onClick={submit} disabled={submitting || cartLines.length === 0} className={`${buttonClass.primary} w-full justify-center`}>
               {submitting ? 'Sending…' : 'Send to kitchens'}
             </button>

@@ -1,9 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { statusChip } from '../lib/status';
 import { apiClient } from '../api/client';
-import { PrintReceiptButton } from '../components/Receipt';
+import { PrintReceiptButton, ReceiptPreviewButton } from '../components/Receipt';
+import { UpiQr } from '../components/UpiQr';
+import { isValidVpa } from '../lib/receiptModel';
+import { calculateTax, taxLines } from '../lib/tax';
 import { useSettings } from '../context/SettingsContext';
 import { apiError } from '../lib/format';
+import { sound } from '../lib/sound/index';
 import { Modal, Field, inputClass } from '../components/ui';
 import {
   Search,
@@ -49,7 +53,6 @@ const METHOD_META: Record<string, { label: string; icon: React.ElementType; colo
 export const PosPage: React.FC = () => {
   const { settings } = useSettings();
   const enabledMethods = settings.payment_methods.enabled;
-  const taxRate = Number(settings.tax.rate_percent) / 100;
   const [posMode, setPosMode] = useState<'new_order' | 'pending_bills'>('new_order');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -85,6 +88,16 @@ export const PosPage: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<string>('cash');
   const [cashTendered, setCashTendered] = useState<number>(0);
   const [settledReceipt, setSettledReceipt] = useState<any | null>(null);
+  // UPI QR: a payment REQUEST for this bill. The bill stays unpaid until the cashier verifies the money.
+  const [upiRequest, setUpiRequest] = useState<{ reference: string; vpa: string; amount: string; upi_uri: string } | null>(null);
+  const [upiLoading, setUpiLoading] = useState(false);
+  const [upiError, setUpiError] = useState<string | null>(null);
+  const [upiUtr, setUpiUtr] = useState('');
+  const [upiVerified, setUpiVerified] = useState(false);
+  const upiConfigured = !!(settings.upi?.enabled && settings.upi.vpa && isValidVpa(settings.upi.vpa));
+  const upiMode = paymentMethod === 'upi_qr' && upiConfigured;
+  // The bank reference (UTR) is optional; if the cashier types one it must be 6-40 letters/digits.
+  const upiUtrValid = upiUtr.trim() === '' || /^[A-Za-z0-9]{6,40}$/.test(upiUtr.trim());
 
   useEffect(() => {
     loadData();
@@ -158,13 +171,15 @@ export const PosPage: React.FC = () => {
     orderKey.current = newOrderKey();
   }, [cart, orderType, selectedTableId, customerName, customerPhone, orderNotes]);
 
-  // Display estimate only: the server prices the order with the configured tax rule
-  const subtotal = cart.reduce(
+  // Display estimate only: the server prices the order. Same rules and same Food Court Settings as the server
+  // (GST on/off, rate, inclusive/exclusive), so the cart, the payment amount and the receipt agree.
+  const itemsTotal = cart.reduce(
     (sum, item) => sum + Number(item.menuItem.price) * item.quantity,
     0
   );
-  const tax = subtotal * taxRate;
-  const total = subtotal + tax;
+  const estimate = calculateTax(itemsTotal, settings.tax);
+  const estimateLines = taxLines(estimate);
+  const total = Number(estimate.total_amount);
 
   /** Fill the customer name from the directory when a known phone number is entered. */
   const lookupCustomer = async () => {
@@ -187,10 +202,39 @@ export const PosPage: React.FC = () => {
 
   const openPayment = (order: any) => {
     setPayError(null);
+    setUpiRequest(null);
+    setUpiError(null);
+    setUpiUtr('');
+    setUpiVerified(false);
     setPaymentMethod((enabledMethods[0] as any) || 'cash');
     setCashTendered(Number(order.total_amount));
     setActivePaymentOrder(order);
   };
+
+  // Generate (or reuse) the QR for the bill being paid. The server computes the amount from the order itself.
+  const payingOrderId = activePaymentOrder?.id;
+  const upiVpa = settings.upi?.vpa;
+  useEffect(() => {
+    if (!payingOrderId || !upiMode) {
+      setUpiRequest(null);
+      return;
+    }
+    let cancelled = false;
+    setUpiLoading(true);
+    setUpiError(null);
+    apiClient
+      .post(`/billing/orders/${payingOrderId}/upi-request`)
+      .then((res) => !cancelled && setUpiRequest(res.data.data))
+      .catch((err) => {
+        if (cancelled) return;
+        setUpiRequest(null);
+        setUpiError(apiError(err, 'Could not create the UPI QR for this bill.'));
+      })
+      .finally(() => !cancelled && setUpiLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [payingOrderId, upiMode, upiVpa]);
 
   const handleCreateOrder = async (autoPay: boolean = false) => {
     if (cart.length === 0 || isSubmitting) return;
@@ -255,16 +299,22 @@ export const PosPage: React.FC = () => {
         payment_method: paymentMethod,
         amount: Number(activePaymentOrder.total_amount),
         cash_tendered: paymentMethod === 'cash' ? cashTendered : Number(activePaymentOrder.total_amount),
+        ...(upiMode && upiRequest
+          ? { upi_reference: upiRequest.reference, payment_verified: upiVerified, ...(upiUtr.trim() ? { transaction_reference: upiUtr.trim() } : {}) }
+          : {}),
       });
 
       if (res.data.success) {
         setSettledReceipt(res.data.data);
         setActivePaymentOrder(null);
+        // Same key as the owner's "payment" notification, so one payment is one chime on any screen
+        void sound.play('payment_success', { key: `payment:${res.data.data?.payment?.id ?? activePaymentOrder.id}` });
         loadData();
         loadPendingBills();
       }
     } catch (err: any) {
       setPayError(apiError(err, 'Payment processing failed.'));
+      void sound.play('payment_failed');
       loadPendingBills();
     } finally {
       setIsPaying(false);
@@ -731,14 +781,12 @@ export const PosPage: React.FC = () => {
             {/* Cart Footer & Financial Summary */}
             <div className="p-4 border-t border-line bg-canvas space-y-3">
               <div className="space-y-1.5 text-xs">
-                <div className="flex justify-between text-muted">
-                  <span>Subtotal:</span>
-                  <span className="font-semibold text-fg">₹{subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-muted">
-                  <span>GST ({Number(settings.tax.rate_percent)}%, est.):</span>
-                  <span className="font-semibold text-fg">₹{tax.toFixed(2)}</span>
-                </div>
+                {estimateLines.map((line) => (
+                  <div key={line.label} data-testid="cart-tax-line" className="flex justify-between text-muted">
+                    <span>{line.label}:</span>
+                    <span className="font-semibold text-fg">₹{line.value}</span>
+                  </div>
+                ))}
                 <div className="flex justify-between items-baseline text-sm font-extrabold text-fg pt-1.5 border-t border-line">
                   <span>Grand Total:</span>
                   <span className="text-primary text-2xl font-black tabular-nums">₹{total.toFixed(2)}</span>
@@ -783,30 +831,39 @@ export const PosPage: React.FC = () => {
 
       {/* ================= PAYMENT MODAL ================= */}
       {activePaymentOrder && (
-        <div className="fixed inset-0 !m-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-lg max-w-md w-full p-4 shadow-2xl border border-line space-y-4">
-            <div className="flex items-center justify-between border-b border-line pb-3">
-              <div>
-                <h3 className="font-semibold text-base text-fg">Consolidated Bill Settlement</h3>
-                <p className="text-xs text-muted font-mono">
+        <div className="fixed inset-0 !m-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+          {/* Header and action buttons stay put; only the middle scrolls, so the dialog never overflows the window */}
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Consolidated bill settlement"
+            className="bg-surface rounded-xl w-full max-w-md max-h-[calc(100vh-1.5rem)] flex flex-col shadow-2xl border border-line overflow-hidden"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
+              <div className="min-w-0">
+                <h3 className="font-semibold text-base text-fg leading-tight">Consolidated Bill Settlement</h3>
+                <p className="mt-0.5 text-xs text-muted font-mono break-all">
                   Order #{activePaymentOrder.order_number} • {activePaymentOrder.table ? `Table ${activePaymentOrder.table.table_number}` : 'Takeaway'}
                 </p>
               </div>
               <button
+                type="button"
+                aria-label="Close"
                 onClick={() => setActivePaymentOrder(null)}
-                className="text-muted hover:text-fg text-lg font-bold"
+                className="shrink-0 -mr-1 -mt-1 w-8 h-8 rounded-lg text-muted hover:text-fg hover:bg-surface-2 text-base font-bold"
               >
                 ✕
               </button>
             </div>
 
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-4">
             {/* Bill Summary */}
-            <div className="bg-canvas p-4 rounded-lg space-y-2 text-xs">
-              <div className="flex justify-between items-baseline">
-                <span className="text-sm font-bold text-fg">Total Bill Amount:</span>
+            <div className="bg-canvas px-4 py-3 rounded-lg border border-line">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-bold text-fg">Total Bill Amount</span>
                 <span className="text-2xl font-black text-primary tabular-nums">₹{Number(activePaymentOrder.total_amount).toFixed(2)}</span>
               </div>
-              <div className="text-[11px] text-muted">
+              <div className="mt-1 text-[11px] text-muted">
                 Covers {activePaymentOrder.items?.length || 0} dishes across participating kitchens
               </div>
             </div>
@@ -815,7 +872,8 @@ export const PosPage: React.FC = () => {
             <div>
               <label className="block text-xs font-bold text-fg mb-2">Select Tender Method</label>
               {/* Only the methods the owner enabled in Food Court Settings */}
-              <div className="grid grid-cols-3 gap-2">
+              {/* One even row for up to 4 methods (a 3-column grid left the 4th button orphaned on its own row) */}
+              <div className={`grid gap-2 ${enabledMethods.length >= 4 ? 'grid-cols-2 sm:grid-cols-4' : enabledMethods.length === 3 ? 'grid-cols-3' : enabledMethods.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 {enabledMethods.map((m) => {
                   const meta = METHOD_META[m] || METHOD_META.split;
                   const Icon = meta.icon;
@@ -825,8 +883,8 @@ export const PosPage: React.FC = () => {
                       type="button"
                       onClick={() => setPaymentMethod(m)}
                       aria-pressed={paymentMethod === m}
-                      className={`p-3 rounded-lg border text-xs font-bold flex flex-col items-center space-y-1.5 transition ${
-                        paymentMethod === m ? 'border-primary bg-primary/10 text-primary shadow-sm' : 'border-line text-muted hover:bg-surface-2'
+                      className={`px-2 py-3 min-w-0 rounded-lg border text-xs font-bold flex flex-col items-center justify-center gap-1.5 transition ${
+                        paymentMethod === m ? 'border-primary bg-primary/10 text-primary shadow-sm ring-1 ring-primary' : 'border-line text-muted hover:bg-surface-2'
                       }`}
                     >
                       <Icon className={`w-5 h-5 ${meta.color}`} />
@@ -861,23 +919,106 @@ export const PosPage: React.FC = () => {
               </div>
             )}
 
+            {paymentMethod === 'upi_qr' && !upiConfigured && (
+              <div data-testid="upi-not-configured" className="bg-canvas p-3 rounded-lg border border-line text-xs text-muted">
+                UPI QR is not set up, so no payment QR can be shown. Ask the owner to add the UPI ID and enable UPI QR payments in Food Court Settings.
+                You can still record a UPI payment you have already received.
+              </div>
+            )}
+
+            {/* UPI QR: a payment request for exactly this bill. It is NOT proof of payment. */}
+            {upiMode && (
+              <div data-testid="upi-panel" className="bg-canvas p-4 rounded-lg border border-line space-y-4">
+                {upiLoading && <p className="text-xs text-muted text-center">Generating UPI QR…</p>}
+                {upiError && (
+                  <p role="alert" data-testid="upi-error" className="text-xs text-danger-fg">
+                    {upiError}
+                  </p>
+                )}
+                {upiRequest && (
+                  <>
+                    <div className="flex flex-col items-center gap-3">
+                      <p className="text-xs font-bold text-fg text-center">Customer scans this QR to pay</p>
+                      {/* Fixed black-on-white square with its own quiet zone: stays sharp and scannable in every theme */}
+                      <div className="rounded-lg border border-line p-1.5 shadow-sm" style={{ background: '#fff', maxWidth: '100%' }}>
+                        <UpiQr text={upiRequest.upi_uri} sizePx={200} />
+                      </div>
+                    </div>
+
+                    <dl className="rounded-lg border border-line bg-surface divide-y divide-line text-xs">
+                      <div className="flex items-baseline justify-between gap-3 px-3 py-2">
+                        <dt className="text-muted shrink-0">UPI ID</dt>
+                        <dd data-testid="upi-panel-vpa" className="font-mono font-semibold text-fg break-all text-right">{upiRequest.vpa}</dd>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-3 px-3 py-2">
+                        <dt className="text-muted shrink-0">Payable amount</dt>
+                        <dd data-testid="upi-panel-amount" className="text-base font-black text-primary tabular-nums">₹{Number(upiRequest.amount).toFixed(2)}</dd>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-3 px-3 py-2">
+                        <dt className="text-muted shrink-0">Order reference</dt>
+                        <dd data-testid="upi-panel-ref" className="font-mono text-fg break-all text-right">{upiRequest.reference}</dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 px-3 py-2">
+                        <dt className="text-muted shrink-0">Payment status</dt>
+                        <dd data-testid="upi-panel-status" className="inline-flex items-center gap-1.5 rounded-full border border-st-ready bg-st-ready-soft px-2 py-0.5 text-[11px] font-bold text-st-ready-fg">
+                          <span aria-hidden="true">●</span> Pending
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <div className="text-[11px] leading-snug text-st-ready-fg bg-st-ready-soft border border-st-ready rounded-lg p-2.5">
+                      <strong>Payment is still PENDING.</strong> A scanned or shown QR is not proof of payment. Open the merchant UPI app or bank statement, find
+                      a credit of exactly ₹{Number(upiRequest.amount).toFixed(2)}, then tick the confirmation below. You can also note its UPI transaction / UTR number.
+                    </div>
+
+                    <Field label="UPI transaction / UTR number (optional)">
+                      <input
+                        data-testid="upi-utr"
+                        className={`${inputClass} font-mono tracking-wide`}
+                        value={upiUtr}
+                        onChange={(e) => setUpiUtr(e.target.value.replace(/s/g, ''))}
+                        placeholder="Optional, e.g. 412345678901"
+                        aria-invalid={!upiUtrValid}
+                        autoComplete="off"
+                        inputMode="text"
+                        maxLength={40}
+                      />
+                    </Field>
+
+                    <label className="flex items-start gap-2.5 rounded-lg border border-line bg-surface p-3 text-xs leading-snug text-fg cursor-pointer">
+                      <input data-testid="upi-verified" type="checkbox" className="mt-0.5 h-4 w-4 shrink-0" checked={upiVerified} onChange={(e) => setUpiVerified(e.target.checked)} />
+                      <span>I have verified that ₹{Number(upiRequest.amount).toFixed(2)} was received in the merchant account for this bill.</span>
+                    </label>
+                  </>
+                )}
+              </div>
+            )}
+
             {payError && (
-              <div role="alert" className="p-2 rounded-lg bg-danger/10 border border-danger/30 text-danger-fg text-xs">
+              <div role="alert" className="p-2.5 rounded-lg bg-danger/10 border border-danger/30 text-danger-fg text-xs">
                 {payError}
               </div>
             )}
-            <div className="flex space-x-3 pt-2">
+            </div>
+
+            <div className="grid grid-cols-[1fr_2fr] gap-3 border-t border-line bg-surface px-5 py-3">
               <button
+                type="button"
                 onClick={() => setActivePaymentOrder(null)}
                 disabled={isPaying}
-                className="flex-1 py-2 rounded-lg border border-line text-xs font-semibold text-muted hover:bg-surface-2 disabled:opacity-50"
+                className="py-2.5 rounded-lg border border-line text-xs font-semibold text-muted hover:bg-surface-2 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleConfirmPayment}
-                disabled={isPaying || (paymentMethod === 'cash' && cashTendered < Number(activePaymentOrder.total_amount))}
-                className="flex-1 py-2 rounded-lg bg-success-fg hover:opacity-90 text-surface text-xs font-extrabold shadow-md shadow-success/20 disabled:opacity-50"
+                disabled={
+                  isPaying ||
+                  (paymentMethod === 'cash' && cashTendered < Number(activePaymentOrder.total_amount)) ||
+                  (upiMode && (!upiRequest || !upiUtrValid || !upiVerified))
+                }
+                className="py-2.5 rounded-lg bg-success-fg hover:opacity-90 text-surface text-xs font-extrabold shadow-md shadow-success/20 disabled:opacity-50"
               >
                 {isPaying ? 'Processing…' : 'Confirm Payment & Settle'}
               </button>
@@ -925,6 +1066,11 @@ export const PosPage: React.FC = () => {
             </div>
 
             <div className="flex space-x-2 pt-2">
+              <ReceiptPreviewButton
+                orderId={settledReceipt.order.id}
+                label="Preview"
+                className="flex-1 py-2 px-3 border border-line rounded-lg text-xs font-bold text-fg flex items-center justify-center space-x-1 hover:bg-surface-2"
+              />
               <PrintReceiptButton
                 orderId={settledReceipt.order.id}
                 label="Print Receipt"

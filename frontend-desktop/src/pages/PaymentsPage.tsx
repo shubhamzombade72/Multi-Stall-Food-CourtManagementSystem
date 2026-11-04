@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiClient } from '../api/client';
-import { PrintReceiptButton } from '../components/Receipt';
+import { PrintReceiptButton, ReceiptPreviewButton } from '../components/Receipt';
 import { CreditCard } from 'lucide-react';
 
 const METHODS = [
@@ -86,7 +86,8 @@ export const PaymentsPage: React.FC = () => {
                 <td className="px-3 py-2 uppercase text-xs font-bold">{p.payment_method}</td>
                 <td className="px-3 py-2 text-right font-bold">₹{Number(p.amount).toFixed(2)}</td>
                 <td className="px-3 py-2">{p.cashier?.name}</td>
-                <td className="px-3 py-2 text-right">
+                <td className="px-3 py-2 text-right space-x-3">
+                  <ReceiptPreviewButton orderId={p.order_id} label="Preview" className="text-xs font-bold text-primary" />
                   <PrintReceiptButton orderId={p.order_id} label="Reprint" className="text-xs font-bold text-primary" />
                 </td>
               </tr>

@@ -1,8 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { apiClient } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { apiError } from '../lib/format';
-import { Field, inputClass, Modal } from '../components/ui';
+import { Field, inputClass, Modal, Pagination } from '../components/ui';
+import { BulkCheckbox, BulkDeleteDialog, BulkToolbar, useBulkDelete } from '../components/BulkDelete';
+import { clampPage, pageCount, pageSlice, pageState, pruneSelection, selectAllFiltered, toggleId, togglePage, type BulkSummary } from '../lib/bulkSelection';
+
+const PAGE_SIZE = 25;
 import {
   CheckCircle2,
   XCircle,
@@ -19,6 +23,9 @@ export const MenuPage: React.FC = () => {
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedStall, setSelectedStall] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  // Bulk selection lives outside the paged slice, so it survives page changes
+  const [selected, setSelected] = useState<Set<number>>(new Set());
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -185,6 +192,22 @@ export const MenuPage: React.FC = () => {
 
   const canManage = isOwner || user?.role === 'stall_manager';
 
+  const currentPage = clampPage(page, filteredItems.length, PAGE_SIZE);
+  const pageRows = pageSlice(filteredItems, currentPage, PAGE_SIZE);
+  const pageIds = pageRows.map((i) => i.id as number);
+
+  const onBulkFinished = useCallback((summary: BulkSummary) => {
+    const gone = new Set(summary.deletedIds);
+    setSelected((prev) => new Set([...prev].filter((id) => !gone.has(id))));
+    fetchData();
+  }, []);
+  const bulk = useBulkDelete('/menu/bulk-delete', onBulkFinished);
+
+  // Rows that no longer exist cannot stay selected
+  useEffect(() => {
+    setSelected((prev) => (prev.size ? pruneSelection(prev, items.map((i) => i.id)) : prev));
+  }, [items]);
+
   return (
     <div className="p-4 max-w-7xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
@@ -219,13 +242,19 @@ export const MenuPage: React.FC = () => {
             type="text"
             placeholder="Search dish or category..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             className="w-full pl-9 pr-4 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-focus"
           />
         </div>
         <select
           value={selectedStall}
-          onChange={(e) => setSelectedStall(e.target.value)}
+          onChange={(e) => {
+            setSelectedStall(e.target.value);
+            setPage(1);
+          }}
           className="py-2 px-3 rounded-lg border border-line text-sm font-medium"
         >
           <option value="all">All Stalls ({stalls.length})</option>
@@ -237,10 +266,28 @@ export const MenuPage: React.FC = () => {
         </select>
       </div>
 
+      {isOwner && (
+        <BulkToolbar
+          noun="Items"
+          selectedCount={selected.size}
+          filteredCount={filteredItems.length}
+          pageState={pageState(selected, pageIds)}
+          onTogglePage={() => setSelected((s) => togglePage(s, pageIds))}
+          onSelectAllFiltered={() => setSelected(selectAllFiltered(filteredItems.map((i) => i.id)))}
+          onClear={() => setSelected(new Set())}
+          onDelete={() => bulk.open([...selected])}
+        />
+      )}
+
       <div className="bg-surface rounded-lg border border-line overflow-hidden shadow-sm">
         <table className="w-full text-left text-sm">
           <thead className="bg-canvas text-muted text-xs uppercase tracking-wider">
             <tr>
+              {isOwner && (
+                <th className="py-2 px-3 w-8">
+                  <BulkCheckbox state={pageState(selected, pageIds)} onChange={() => setSelected((s) => togglePage(s, pageIds))} label="Select all dishes on this page" testId="menu-select-page" />
+                </th>
+              )}
               <th className="py-2 px-3">Dish Name</th>
               <th className="py-2 px-3">Stall Owner</th>
               <th className="py-2 px-3">Category</th>
@@ -252,8 +299,13 @@ export const MenuPage: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {filteredItems.map((item) => (
-              <tr key={item.id} className="hover:bg-surface-2 transition">
+            {pageRows.map((item) => (
+              <tr key={item.id} data-testid="menu-row" className={`hover:bg-surface-2 transition ${selected.has(item.id) ? 'bg-primary/5' : ''}`}>
+                {isOwner && (
+                  <td className="py-2 px-3">
+                    <BulkCheckbox state={selected.has(item.id)} onChange={() => setSelected((s) => toggleId(s, item.id))} label={`Select ${item.name}`} testId="menu-select" />
+                  </td>
+                )}
                 <td className="py-2 px-3 font-bold text-fg">{item.name}</td>
                 <td className="py-2 px-3 text-xs text-primary font-semibold">{item.stall?.name}</td>
                 <td className="py-2 px-3 text-xs text-muted">{item.category?.name}</td>
@@ -310,7 +362,19 @@ export const MenuPage: React.FC = () => {
             ))}
           </tbody>
         </table>
+        <Pagination page={currentPage} lastPage={pageCount(filteredItems.length, PAGE_SIZE)} total={filteredItems.length} onPage={setPage} />
       </div>
+
+      {isOwner && (
+        <BulkDeleteDialog
+          state={bulk.state}
+          noun="Items"
+          confirmLabel="Delete Selected Items"
+          warning="Dishes that appear on past orders are never deleted - they stay and are listed with the reason (mark them Sold Out instead). This cannot be undone."
+          onCancel={bulk.close}
+          onConfirm={bulk.confirm}
+        />
+      )}
 
       {/* CREATE / EDIT DISH MODAL */}
       {showModal && (

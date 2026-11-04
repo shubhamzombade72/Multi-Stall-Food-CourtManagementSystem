@@ -1,0 +1,138 @@
+{
+    "stalls (owner, include inactive)": {
+        "status": 200,
+        "queries": 6,
+        "db_ms": 4.6,
+        "median_ms": 159.7,
+        "kb": 620.4,
+        "repeated_queries(>=10x)": []
+    },
+    "menu (all dishes)": {
+        "status": 200,
+        "queries": 5,
+        "db_ms": 7.1,
+        "median_ms": 205.1,
+        "kb": 773.3,
+        "repeated_queries(>=10x)": []
+    },
+    "menu (POS: available only)": {
+        "status": 200,
+        "queries": 6,
+        "db_ms": 18.1,
+        "median_ms": 244.7,
+        "kb": 734.5,
+        "repeated_queries(>=10x)": []
+    },
+    "menu (one stall)": {
+        "status": 200,
+        "queries": 5,
+        "db_ms": 2.5,
+        "median_ms": 22.3,
+        "kb": 15.6,
+        "repeated_queries(>=10x)": []
+    },
+    "tables (500)": {
+        "status": 200,
+        "queries": 3,
+        "db_ms": 5.6,
+        "median_ms": 179.7,
+        "kb": 111.5,
+        "repeated_queries(>=10x)": []
+    },
+    "order board (live orders)": {
+        "status": 200,
+        "queries": 10,
+        "db_ms": 24.3,
+        "median_ms": 137.8,
+        "kb": 55.6,
+        "repeated_queries(>=10x)": []
+    },
+    "orders list (page 1 of 100)": {
+        "status": 200,
+        "queries": 12,
+        "db_ms": 10.5,
+        "median_ms": 132.2,
+        "kb": 111.2,
+        "repeated_queries(>=10x)": []
+    },
+    "kitchen tickets (one stall)": {
+        "status": 200,
+        "queries": 7,
+        "db_ms": 6.4,
+        "median_ms": 17.7,
+        "kb": 2.7,
+        "repeated_queries(>=10x)": []
+    },
+    "dashboard stats": {
+        "status": 200,
+        "queries": 21,
+        "db_ms": 20.8,
+        "median_ms": 73.2,
+        "kb": 24.7,
+        "repeated_queries(>=10x)": []
+    },
+    "sales summary": {
+        "status": 200,
+        "queries": 4,
+        "db_ms": 4.7,
+        "median_ms": 10.1,
+        "kb": 1.3,
+        "repeated_queries(>=10x)": []
+    },
+    "stall sales report": {
+        "status": 200,
+        "queries": 3,
+        "db_ms": 6.3,
+        "median_ms": 13.4,
+        "kb": 6.7,
+        "repeated_queries(>=10x)": []
+    },
+    "menu performance report": {
+        "status": 200,
+        "queries": 3,
+        "db_ms": 7.2,
+        "median_ms": 53.8,
+        "kb": 67.5,
+        "repeated_queries(>=10x)": []
+    },
+    "inventory (all stalls)": {
+        "status": 200,
+        "queries": 4,
+        "db_ms": 6.1,
+        "median_ms": 297.1,
+        "kb": 166.2,
+        "repeated_queries(>=10x)": []
+    },
+    "purchases (all stalls)": {
+        "status": 200,
+        "queries": 9,
+        "db_ms": 8.2,
+        "median_ms": 103.4,
+        "kb": 51.1,
+        "repeated_queries(>=10x)": []
+    },
+    "suppliers (100)": {
+        "status": 200,
+        "queries": 4,
+        "db_ms": 12.3,
+        "median_ms": 60.9,
+        "kb": 41.7,
+        "repeated_queries(>=10x)": []
+    },
+    "customers": {
+        "status": 200,
+        "queries": 4,
+        "db_ms": 7.2,
+        "median_ms": 23.9,
+        "kb": 9.9,
+        "repeated_queries(>=10x)": []
+    },
+    "payments history": {
+        "status": 404,
+        "queries": 0,
+        "db_ms": 0,
+        "median_ms": 1.5,
+        "kb": 9.8,
+        "repeated_queries(>=10x)": []
+    }
+}

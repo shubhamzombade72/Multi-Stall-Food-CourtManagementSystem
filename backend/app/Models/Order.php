@@ -28,6 +28,8 @@ class Order extends Model
         'status',
         'subtotal',
         'tax_amount',
+        'tax_rate_percent',
+        'tax_mode',
         'discount_amount',
         'total_amount',
         'payment_status',
@@ -38,6 +40,7 @@ class Order extends Model
     protected $casts = [
         'subtotal' => 'decimal:2',
         'tax_amount' => 'decimal:2',
+        'tax_rate_percent' => 'decimal:2',
         'discount_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'guest_count' => 'integer',

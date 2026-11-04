@@ -59,7 +59,7 @@ export const RecoverOwnerPage: React.FC = () => {
 
   if (newKey) return <RecoveryKeyPanel title="Access restored: save your NEW recovery key" recoveryKey={newKey} onDone={() => navigate('/login', { replace: true })} />;
 
-  const input = 'w-full px-3 py-2 rounded-lg border border-line bg-surface text-fg placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-focus text-sm';
+  const input = 'w-full px-3 py-2 rounded-lg border border-line bg-surface text-fg placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-focus text-sm';
   return (
     <div className="min-h-screen bg-canvas flex flex-col justify-center items-center p-4">
       <div className="w-full max-w-md bg-surface rounded-lg shadow-2xl p-4 border border-line">

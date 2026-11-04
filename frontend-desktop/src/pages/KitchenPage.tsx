@@ -2,7 +2,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { onPrivate, realtimeConfigured } from '../realtime/echo';
-import { columnFor, elapsed, newTicketIds, nextKitchenAction, urgency, type TicketStatus } from '../lib/kds';
+import { columnFor, elapsed, nextKitchenAction, urgency, type TicketStatus } from '../lib/kds';
+import { sound as soundService } from '../lib/sound/index';
+import { FreshTracker } from '../lib/sound/tracker';
+import { useSoundSettings } from '../hooks/useSoundSettings';
 import { isoDate, humanize, timeOnly } from '../lib/format';
 import { statusChip, statusClasses, statusKind } from '../lib/status';
 import { LateBadge } from '../components/ui';
@@ -20,24 +23,8 @@ interface Ticket {
 
 const POLL_MS = 4000;
 
-/** Short two-tone chime via Web Audio (no sound file needed). */
-const chime = () => {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    [880, 1175].forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.frequency.value = freq;
-      gain.gain.value = 0.15;
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(ctx.currentTime + i * 0.18);
-      osc.stop(ctx.currentTime + i * 0.18 + 0.15);
-    });
-    setTimeout(() => ctx.close(), 800);
-  } catch {
-    // audio unavailable
-  }
-};
+/** A ticket only counts as news if it was created recently (a slow first load must not announce yesterday's tickets). */
+const TICKET_FRESH_MS = 15 * 60_000;
 
 export const KitchenPage: React.FC = () => {
   const { user, isOwner } = useAuth();
@@ -48,10 +35,12 @@ export const KitchenPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
-  const [sound, setSound] = useState(true);
+  // New-ticket sound goes through the shared sound service (volume, mute, de-duplication live there)
+  const { settings: soundSettings, setCategory, update: updateSound } = useSoundSettings();
+  const sound = soundSettings.enabled && soundSettings.categories.kitchen;
   const [fullscreen, setFullscreen] = useState(false);
   const [now, setNow] = useState(Date.now());
-  const seen = useRef<Set<number> | null>(null);
+  const tracker = useRef(new FreshTracker<Ticket>({ idOf: (t) => String(t.id), timeOf: (t) => Date.parse(t.created_at), maxAgeMs: TICKET_FRESH_MS }));
   const [view, setView] = useState<'board' | 'history'>('board');
   const [historyDate, setHistoryDate] = useState(isoDate());
   const [history, setHistory] = useState<any[] | null>(null);
@@ -83,9 +72,8 @@ export const KitchenPage: React.FC = () => {
         apiClient.get('/kitchen/tickets', { params: { ...params, status: 'picked_up', date: isoDate() } }),
       ]);
       const list: Ticket[] = active.data.data;
-      const ids = list.map((t) => t.id);
-      if (seen.current && sound && newTicketIds(seen.current, ids).length > 0) chime();
-      seen.current = new Set(ids);
+      // First list after opening the board / switching stall is only a baseline; later arrivals ring once per ticket
+      for (const t of tracker.current.observe(list)) void soundService.play('kitchen_ticket', { key: `ticket:${t.id}` });
       setTickets(list);
       setServed((done.data.data as Ticket[]).slice(0, 12));
       setError(null);
@@ -93,10 +81,10 @@ export const KitchenPage: React.FC = () => {
     } catch (err: any) {
       setError(err.response?.data?.message || 'Cannot reach the server. Retrying…');
     }
-  }, [stallId, isOwner, sound]);
+  }, [stallId, isOwner]);
 
   useEffect(() => {
-    seen.current = null;
+    tracker.current.reset();
     load();
     const t = setInterval(load, POLL_MS);
     const unsubscribe = stallId
@@ -187,7 +175,13 @@ export const KitchenPage: React.FC = () => {
           <button onClick={() => load()} className="p-2 rounded-lg bg-surface-2 border border-line hover:bg-line" title="Refresh">
             <RefreshCw className="w-4 h-4" />
           </button>
-          <button onClick={() => setSound((s) => !s)} className="p-2 rounded-lg bg-surface-2 border border-line hover:bg-line" title="New-ticket sound">
+          <button
+            onClick={() => (soundSettings.enabled ? setCategory('kitchen', !soundSettings.categories.kitchen) : updateSound({ enabled: true, categories: { kitchen: true } }))}
+            className="p-2 rounded-lg bg-surface-2 border border-line hover:bg-line"
+            title={sound ? 'New-ticket sound is on (volume and other sounds: Settings â†’ Sound)' : 'New-ticket sound is off'}
+            aria-pressed={sound}
+            data-testid="kitchen-sound-toggle"
+          >
             {sound ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
           <button onClick={toggleFullscreen} className="p-2 rounded-lg bg-surface-2 border border-line hover:bg-line" title="Full screen">

@@ -17,6 +17,7 @@ class Stall extends Model
         'description',
         'logo_url',
         'contact_phone',
+        'stall_owner_id',
         'is_active',
     ];
 
@@ -32,6 +33,11 @@ class Stall extends Model
                 $model->uuid = (string) Str::uuid();
             }
         });
+    }
+
+    public function owner()
+    {
+        return $this->belongsTo(StallOwner::class, 'stall_owner_id');
     }
 
     public function users()

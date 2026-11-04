@@ -20,7 +20,7 @@ class StallController extends Controller
 
         // Assigned stall managers, for the owner's stall directory only (this endpoint is also public)
         if ($request->user('sanctum')?->isOwner()) {
-            $stalls->load(['users' => fn ($q) => $q->where('role', 'stall_manager')->select('id', 'name', 'stall_id', 'is_active')]);
+            $stalls->load(['users' => fn ($q) => $q->where('role', 'stall_manager')->select('id', 'name', 'stall_id', 'is_active'), 'owner:id,name']);
         }
 
         return response()->json([
@@ -57,6 +57,7 @@ class StallController extends Controller
             'description' => 'nullable|string',
             'contact_phone' => 'nullable|string|max:20',
             'logo_url' => 'nullable|string',
+            'stall_owner_id' => 'nullable|integer|exists:stall_owners,id',
         ]);
 
         $stall = Stall::create($validated);
@@ -90,7 +91,13 @@ class StallController extends Controller
             'contact_phone' => 'nullable|string|max:20',
             'logo_url' => 'nullable|url|max:500',
             'is_active' => 'sometimes|boolean',
+            'stall_owner_id' => 'nullable|integer|exists:stall_owners,id',
         ]);
+
+        // Who owns a stall decides who its settlements are paid to: owner only
+        if (array_key_exists('stall_owner_id', $validated) && !$user->isOwner()) {
+            return response()->json(['success' => false, 'message' => 'Only the owner can assign a stall owner'], 403);
+        }
 
         $old = $stall->only(array_keys($validated));
         $stall->update($validated);

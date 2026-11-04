@@ -1,0 +1,325 @@
+{
+  "about": "Shared GST test vectors computed independently (Python Decimal, round half up to 2 places on the whole bill). Used by backend/tests/Feature/GstConfigurationTest.php and frontend-desktop/tests/tax.test.ts so the server and every screen agree. subtotal is the taxable value: items total for exclusive, items total minus the GST component for inclusive (so subtotal + tax_amount = total_amount in every mode).",
+  "cases": [
+    {
+      "name": "GST disabled adds nothing",
+      "config": {
+        "enabled": false,
+        "rate_percent": "5.00",
+        "mode": "exclusive"
+      },
+      "items_total": "123.45",
+      "expect": {
+        "subtotal": "123.45",
+        "tax_amount": "0.00",
+        "total_amount": "123.45",
+        "tax_mode": "none",
+        "tax_rate_percent": "0.00"
+      }
+    },
+    {
+      "name": "GST disabled ignores inclusive mode",
+      "config": {
+        "enabled": false,
+        "rate_percent": "18.00",
+        "mode": "inclusive"
+      },
+      "items_total": "99.99",
+      "expect": {
+        "subtotal": "99.99",
+        "tax_amount": "0.00",
+        "total_amount": "99.99",
+        "tax_mode": "none",
+        "tax_rate_percent": "0.00"
+      }
+    },
+    {
+      "name": "exclusive 5% on 100",
+      "config": {
+        "enabled": true,
+        "rate_percent": "5.00",
+        "mode": "exclusive"
+      },
+      "items_total": "100.00",
+      "expect": {
+        "subtotal": "100.00",
+        "tax_amount": "5.00",
+        "total_amount": "105.00",
+        "tax_mode": "exclusive",
+        "tax_rate_percent": "5.00"
+      }
+    },
+    {
+      "name": "exclusive 12% on 100",
+      "config": {
+        "enabled": true,
+        "rate_percent": "12.00",
+        "mode": "exclusive"
+      },
+      "items_total": "100.00",
+      "expect": {
+        "subtotal": "100.00",
+        "tax_amount": "12.00",
+        "total_amount": "112.00",
+        "tax_mode": "exclusive",
+        "tax_rate_percent": "12.00"
+      }
+    },
+    {
+      "name": "exclusive 18% on 100",
+      "config": {
+        "enabled": true,
+        "rate_percent": "18.00",
+        "mode": "exclusive"
+      },
+      "items_total": "100.00",
+      "expect": {
+        "subtotal": "100.00",
+        "tax_amount": "18.00",
+        "total_amount": "118.00",
+        "tax_mode": "exclusive",
+        "tax_rate_percent": "18.00"
+      }
+    },
+    {
+      "name": "exclusive 5% on 1000 (receipt example)",
+      "config": {
+        "enabled": true,
+        "rate_percent": "5.00",
+        "mode": "exclusive"
+      },
+      "items_total": "1000.00",
+      "expect": {
+        "subtotal": "1000.00",
+        "tax_amount": "50.00",
+        "total_amount": "1050.00",
+        "tax_mode": "exclusive",
+        "tax_rate_percent": "5.00"
+      }
+    },
+    {
+      "name": "exclusive 5% on 190.48 gives a Rs 200 bill",
+      "config": {
+        "enabled": true,
+        "rate_percent": "5.00",
+        "mode": "exclusive"
+      },
+      "items_total": "190.48",
+      "expect": {
+        "subtotal": "190.48",
+        "tax_amount": "9.52",
+        "total_amount": "200.00",
+        "tax_mode": "exclusive",
+        "tax_rate_percent": "5.00"
+      }
+    },
+    {
+      "name": "exclusive 5% rounds half up (0.505 -> 0.51)",
+      "config": {
+        "enabled": true,
+        "rate_percent": "5.00",
+        "mode": "exclusive"
+      },
+      "items_total": "10.10",
+      "expect": {
+        "subtotal": "10.10",
+        "tax_amount": "0.51",
+        "total_amount": "10.61",
+        "tax_mode": "exclusive",
+        "tax_rate_percent": "5.00"
+      }
+    },
+    {
+      "name": "exclusive 18% on 99.99",
+      "config": {
+        "enabled": true,
+        "rate_percent": "18.00",
+        "mode": "exclusive"
+      },
+      "items_total": "99.99",
+      "expect": {
+        "subtotal": "99.99",
+        "tax_amount": "18.00",
+        "total_amount": "117.99",
+        "tax_mode": "exclusive",
+        "tax_rate_percent": "18.00"
+      }
+    },
+    {
+      "name": "exclusive 12.5% fractional rate",
+      "config": {
+        "enabled": true,
+        "rate_percent": "12.50",
+        "mode": "exclusive"
+      },
+      "items_total": "80.00",
+      "expect": {
+        "subtotal": "80.00",
+        "tax_amount": "10.00",
+        "total_amount": "90.00",
+        "tax_mode": "exclusive",
+        "tax_rate_percent": "12.50"
+      }
+    },
+    {
+      "name": "exclusive 0% rate",
+      "config": {
+        "enabled": true,
+        "rate_percent": "0.00",
+        "mode": "exclusive"
+      },
+      "items_total": "250.00",
+      "expect": {
+        "subtotal": "250.00",
+        "tax_amount": "0.00",
+        "total_amount": "250.00",
+        "tax_mode": "exclusive",
+        "tax_rate_percent": "0.00"
+      }
+    },
+    {
+      "name": "exclusive 5% on a large bill",
+      "config": {
+        "enabled": true,
+        "rate_percent": "5.00",
+        "mode": "exclusive"
+      },
+      "items_total": "1234567.89",
+      "expect": {
+        "subtotal": "1234567.89",
+        "tax_amount": "61728.39",
+        "total_amount": "1296296.28",
+        "tax_mode": "exclusive",
+        "tax_rate_percent": "5.00"
+      }
+    },
+    {
+      "name": "inclusive 5% on 1050 (receipt example)",
+      "config": {
+        "enabled": true,
+        "rate_percent": "5.00",
+        "mode": "inclusive"
+      },
+      "items_total": "1050.00",
+      "expect": {
+        "subtotal": "1000.00",
+        "tax_amount": "50.00",
+        "total_amount": "1050.00",
+        "tax_mode": "inclusive",
+        "tax_rate_percent": "5.00"
+      }
+    },
+    {
+      "name": "inclusive 12% on 112",
+      "config": {
+        "enabled": true,
+        "rate_percent": "12.00",
+        "mode": "inclusive"
+      },
+      "items_total": "112.00",
+      "expect": {
+        "subtotal": "100.00",
+        "tax_amount": "12.00",
+        "total_amount": "112.00",
+        "tax_mode": "inclusive",
+        "tax_rate_percent": "12.00"
+      }
+    },
+    {
+      "name": "inclusive 18% on 118",
+      "config": {
+        "enabled": true,
+        "rate_percent": "18.00",
+        "mode": "inclusive"
+      },
+      "items_total": "118.00",
+      "expect": {
+        "subtotal": "100.00",
+        "tax_amount": "18.00",
+        "total_amount": "118.00",
+        "tax_mode": "inclusive",
+        "tax_rate_percent": "18.00"
+      }
+    },
+    {
+      "name": "inclusive 5% on 100 (tax component extracted, not added)",
+      "config": {
+        "enabled": true,
+        "rate_percent": "5.00",
+        "mode": "inclusive"
+      },
+      "items_total": "100.00",
+      "expect": {
+        "subtotal": "95.24",
+        "tax_amount": "4.76",
+        "total_amount": "100.00",
+        "tax_mode": "inclusive",
+        "tax_rate_percent": "5.00"
+      }
+    },
+    {
+      "name": "inclusive 18% on 99.99",
+      "config": {
+        "enabled": true,
+        "rate_percent": "18.00",
+        "mode": "inclusive"
+      },
+      "items_total": "99.99",
+      "expect": {
+        "subtotal": "84.74",
+        "tax_amount": "15.25",
+        "total_amount": "99.99",
+        "tax_mode": "inclusive",
+        "tax_rate_percent": "18.00"
+      }
+    },
+    {
+      "name": "inclusive 12.5% on 225.00",
+      "config": {
+        "enabled": true,
+        "rate_percent": "12.50",
+        "mode": "inclusive"
+      },
+      "items_total": "225.00",
+      "expect": {
+        "subtotal": "200.00",
+        "tax_amount": "25.00",
+        "total_amount": "225.00",
+        "tax_mode": "inclusive",
+        "tax_rate_percent": "12.50"
+      }
+    },
+    {
+      "name": "inclusive 0% rate",
+      "config": {
+        "enabled": true,
+        "rate_percent": "0.00",
+        "mode": "inclusive"
+      },
+      "items_total": "250.00",
+      "expect": {
+        "subtotal": "250.00",
+        "tax_amount": "0.00",
+        "total_amount": "250.00",
+        "tax_mode": "inclusive",
+        "tax_rate_percent": "0.00"
+      }
+    },
+    {
+      "name": "inclusive 5% on 0.01",
+      "config": {
+        "enabled": true,
+        "rate_percent": "5.00",
+        "mode": "inclusive"
+      },
+      "items_total": "0.01",
+      "expect": {
+        "subtotal": "0.01",
+        "tax_amount": "0.00",
+        "total_amount": "0.01",
+        "tax_mode": "inclusive",
+        "tax_rate_percent": "5.00"
+      }
+    }
+  ]
+}

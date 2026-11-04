@@ -158,6 +158,23 @@
   #print-root[data-paper='receipt'] {
     page: receipt;
   }
+  /* 58 mm rolls: 48 mm printable width. The paper width is chosen per computer (Settings -> Printers). */
+  @page receipt58 {
+    size: 58mm auto;
+    margin: 5mm;
+  }
+  #print-root[data-paper='receipt'][data-width='58'] {
+    page: receipt58;
+    width: 48mm;
+    font-size: 10px;
+  }
+  /* The UPI QR is never clipped, split across pages or recoloured */
+  #print-root svg {
+    max-width: 100%;
+    break-inside: avoid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   body * {
     visibility: hidden !important;
   }

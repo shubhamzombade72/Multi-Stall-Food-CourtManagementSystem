@@ -1,0 +1,110 @@
+[
+  {
+    "id": "B-00",
+    "desc": "Fresh profile: built-in (SQLite) server started and owner created",
+    "result": "PASS",
+    "evidence": "http://127.0.0.1:49228/api"
+  },
+  {
+    "id": "B-01",
+    "desc": "Test data created through the API: 14 stalls, 40 dishes, 1 historic order",
+    "result": "PASS",
+    "evidence": "dishes=40"
+  },
+  {
+    "id": "B-02",
+    "desc": "Menu Catalog shows 25 rows per page with a pager (40 dishes = 2 pages) and the bulk toolbar",
+    "result": "PASS",
+    "evidence": "rows=25"
+  },
+  {
+    "id": "B-03",
+    "desc": "Ticking two row checkboxes only counts them - nothing is deleted",
+    "result": "PASS",
+    "evidence": "Selected: 2 Items"
+  },
+  {
+    "id": "B-04",
+    "desc": "Selection persists across pagination (2 on page 1 + 1 on page 2 = 3, page 1 boxes still ticked)",
+    "result": "PASS",
+    "evidence": "Selected: 3 Items stillChecked=true"
+  },
+  {
+    "id": "B-05",
+    "desc": "Clear selection empties it",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "B-06",
+    "desc": "Header checkbox selects the 25 rows of the page",
+    "result": "PASS",
+    "evidence": "Selected: 25 Items"
+  },
+  {
+    "id": "B-07",
+    "desc": "\"Select all 40 filtered\" selects every filtered dish across both pages",
+    "result": "PASS",
+    "evidence": "Selected: 40 Items"
+  },
+  {
+    "id": "B-08",
+    "desc": "Confirmation dialog shows the exact count and \"Delete Selected Items\"; Cancel deletes nothing",
+    "result": "PASS",
+    "evidence": "Selected: 40 Items / Delete Selected Items"
+  },
+  {
+    "id": "B-09",
+    "desc": "Summary: 39 deleted, 1 failed with a reason; only the dish on a past order remains",
+    "result": "PASS",
+    "evidence": "Successfully deleted: 39 | Failed: 1 | Ordered Thali Used on 1 past order line(s); deleting it would erase order history. Mark it Sold Out instead."
+  },
+  {
+    "id": "B-10",
+    "desc": "After the delete the list refreshed and the selection of deleted rows is gone",
+    "result": "PASS",
+    "evidence": "Selected: 1 Items"
+  },
+  {
+    "id": "B-11",
+    "desc": "Stall Directory shows 12 cards per page (14 stalls = 2 pages) with the bulk toolbar",
+    "result": "PASS",
+    "evidence": "cards=12"
+  },
+  {
+    "id": "B-12",
+    "desc": "Stall selection persists across pages (1 + 1 = 2) and ticking never deletes",
+    "result": "PASS",
+    "evidence": "Selected: 2 Stalls"
+  },
+  {
+    "id": "B-13",
+    "desc": "Stall confirmation shows \"Selected: 14 Stalls\" and \"Delete Selected Stalls\"",
+    "result": "PASS",
+    "evidence": "Selected: 14 Stalls / Delete Selected Stalls"
+  },
+  {
+    "id": "B-14",
+    "desc": "Summary: 13 stalls deleted; the stall with order history is refused with the reason and stays",
+    "result": "PASS",
+    "evidence": "Successfully deleted: 13 | Failed: 1 | BD Stall Ordered (BDOL7D4) Linked to business records (1 order line(s), 1 kitchen ticket(s)). Deactivate the stall instead of deleting it."
+  },
+  {
+    "id": "B-15",
+    "desc": "The historic order, its line and its dish are intact after both bulk deletes",
+    "result": "PASS",
+    "evidence": "items=1"
+  },
+  {
+    "id": "B-16",
+    "desc": "A cashier is refused by both bulk endpoints (403)",
+    "result": "PASS",
+    "evidence": "403/403"
+  },
+  {
+    "id": "B-17",
+    "desc": "No unexpected renderer errors during the whole run",
+    "result": "PASS",
+    "evidence": ""
+  }
+]

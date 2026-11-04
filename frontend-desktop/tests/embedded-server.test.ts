@@ -107,3 +107,34 @@ test('the database is copied aside before a new program version first starts, an
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('demo database is installed once on the first start, never over an existing database, and a clean build ignores it', () => {
+  const { installDemoDatabaseIfFirstRun } = require('../electron/embedded-server.cjs');
+  const root = mkdtempSync(join(tmpdir(), 'fc-demo-'));
+  try {
+    const serverDir = join(root, 'server');
+    const dataDir = join(root, 'data');
+    mkdirSync(join(serverDir, 'demo'), { recursive: true });
+    mkdirSync(dataDir, { recursive: true });
+    const runtime = { serverDir };
+
+    // Clean installer: no demo file shipped -> nothing happens
+    assert.equal(installDemoDatabaseIfFirstRun(runtime, dataDir, null), false);
+
+    // Demo installer, first start -> copied
+    writeFileSync(join(serverDir, 'demo', 'foodcourt-demo.sqlite'), 'DEMO-DB');
+    assert.equal(installDemoDatabaseIfFirstRun(runtime, dataDir, null), true);
+    assert.equal(readFileSync(join(dataDir, 'foodcourt.sqlite'), 'utf8'), 'DEMO-DB');
+
+    // The owner then works in it; a restart must keep their data, not reinstall the demo
+    writeFileSync(join(dataDir, 'foodcourt.sqlite'), 'OWNER-DATA');
+    assert.equal(installDemoDatabaseIfFirstRun(runtime, dataDir, null), false);
+    assert.equal(readFileSync(join(dataDir, 'foodcourt.sqlite'), 'utf8'), 'OWNER-DATA');
+
+    // An empty placeholder file (first-run marker) does not count as a database
+    writeFileSync(join(dataDir, 'foodcourt.sqlite'), '');
+    assert.equal(installDemoDatabaseIfFirstRun(runtime, dataDir, null), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

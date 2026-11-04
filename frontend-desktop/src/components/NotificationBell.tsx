@@ -4,6 +4,9 @@ import { Bell } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { timeOnly } from '../lib/format';
+import { sound } from '../lib/sound/index';
+import { FreshTracker } from '../lib/sound/tracker';
+import { NOTICE_MAX_AGE_MS, soundForNotice } from '../lib/sound/notifications';
 
 interface Notice {
   id: string;
@@ -39,11 +42,19 @@ export const NotificationBell: React.FC = () => {
   const [seenAt, setSeenAt] = useState(() => readSeen(user?.id));
   const [failed, setFailed] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
+  // Decides which polled notifications are genuinely new. The bell lives in the navbar, so it is mounted on every
+  // screen: sounds keep working while the user is elsewhere, and opening a page never replays old items.
+  const fresh = useRef(new FreshTracker<Notice>({ idOf: (n) => n.id, timeOf: (n) => Date.parse(n.at), maxAgeMs: NOTICE_MAX_AGE_MS }));
 
   const load = useCallback(async () => {
     try {
       const res = await apiClient.get('/notifications');
-      setItems(res.data.data.items);
+      const list: Notice[] = res.data.data.items;
+      for (const n of fresh.current.observe(list)) {
+        const s = soundForNotice(n);
+        if (s) void sound.play(s.event, { key: s.key });
+      }
+      setItems(list);
       setFailed(false);
     } catch {
       setFailed(true);
@@ -52,6 +63,7 @@ export const NotificationBell: React.FC = () => {
 
   useEffect(() => {
     setSeenAt(readSeen(user?.id));
+    fresh.current.reset(); // another user (or role) sees a different feed: start from a new baseline
     load();
     const t = setInterval(load, POLL_MS);
     return () => clearInterval(t);
