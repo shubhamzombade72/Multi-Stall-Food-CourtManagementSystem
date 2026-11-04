@@ -1,3 +1,5 @@
+import type { EnqueueResult, PreviewResult, PrintConfig, PrintDocument, PrintJob, PrinterRole, PrinterStatus, PrintReference } from '../lib/print/types';
+
 /**
  * Typed access to the Electron preload bridge (electron/preload.cjs). In a plain browser build
  * `window.desktop` is undefined and every helper degrades gracefully.
@@ -92,6 +94,18 @@ interface DesktopBridge {
   log(level: 'INFO' | 'WARN' | 'ERROR', message: string): Promise<boolean>;
   listPrinters(): Promise<DesktopPrinter[]>;
   print(options?: { deviceName?: string }): Promise<{ ok: boolean; error: string | null }>;
+  /** Thermal printing service (electron/printing). Main validates every argument again. */
+  getPrintConfig(): Promise<PrintConfig>;
+  setPrintConfig(config: PrintConfig): Promise<{ ok: true; config: PrintConfig } | { ok: false; code: string; message: string }>;
+  getPrinterStatus(role: PrinterRole): Promise<PrinterStatus>;
+  enqueuePrintJob(request: { role: PrinterRole; doc: PrintDocument; dedupeKey?: string | null; reprint?: boolean; reference?: PrintReference }): Promise<EnqueueResult>;
+  listPrintJobs(limit?: number): Promise<PrintJob[]>;
+  retryPrintJob(id: string): Promise<{ ok: true; job: PrintJob } | { ok: false; code: string; message: string }>;
+  reprintPrintJob(id: string): Promise<{ ok: true; job: PrintJob } | { ok: false; code: string; message: string }>;
+  previewPrintDocument(request: { role: PrinterRole; doc: PrintDocument }): Promise<PreviewResult>;
+  sendTestPrint(role: PrinterRole): Promise<{ ok: true; job: PrintJob } | { ok: false; code: string; message: string }>;
+  /** Calls back with the newest jobs whenever any job changes; returns an unsubscribe function. */
+  onPrintJobsChanged(callback: (jobs: PrintJob[]) => void): () => void;
 }
 
 declare global {

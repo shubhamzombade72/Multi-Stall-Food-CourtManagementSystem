@@ -16,6 +16,7 @@ import {
 } from '../desktop/bridge';
 import { RecoveryKeyPanel } from '../components/RecoveryKeyPanel';
 import { SoundSettingsSection } from '../components/SoundSettingsSection';
+import { PrintersSection } from '../components/PrintersSection';
 import { Printer, Info, DatabaseBackup, Network, LifeBuoy, KeyRound, CheckCircle2, XCircle } from 'lucide-react';
 
 const mb = (bytes: number) => `${(bytes / 1048576).toFixed(1)} MB`;
@@ -119,6 +120,8 @@ export const SettingsPage: React.FC = () => {
             <p className="text-xs text-muted">Bills and the UPI QR are laid out for this width. Choose the roll loaded in this computer's receipt printer.</p>
           </section>
         )}
+
+        <PrintersSection />
 
         <SoundSettingsSection />
 

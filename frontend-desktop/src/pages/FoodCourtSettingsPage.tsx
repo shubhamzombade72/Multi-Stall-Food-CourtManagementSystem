@@ -6,6 +6,7 @@ import { apiClient } from '../api/client';
 import { useSettings, type BusinessProfile } from '../context/SettingsContext';
 import { apiError, humanize } from '../lib/format';
 import { Card, ErrorBanner, Field, inputClass, PageHeader, SuccessBanner } from '../components/ui';
+import { UpiIdCheck } from '../components/UpiIdCheck';
 
 /**
  * Owner-only food court settings: business profile, operating hours, receipt text and which of the
@@ -256,6 +257,7 @@ export const FoodCourtSettingsPage: React.FC = () => {
               {upiError}
             </p>
           )}
+          <UpiIdCheck savedVpa={settings.upi?.vpa ?? null} check={settings.upi?.check} dirty={upiTrimmed.toLowerCase() !== (settings.upi?.vpa ?? '').toLowerCase()} />
           {upiMethodOff && upiEnabled && (
             <p className="text-xs text-warning-fg">"UPI / QR" is switched off under Payment methods. Turn it on and save there first.</p>
           )}

@@ -29,6 +29,7 @@ import { FirstRunPage } from './pages/FirstRunPage';
 import { RecoverOwnerPage } from './pages/RecoverOwnerPage';
 import { ConnectHostPage } from './pages/ConnectHostPage';
 import { BackupNotice } from './components/BackupNotice';
+import { PrintFailureBanner } from './components/PrintFailureBanner';
 
 /** First screen per role (the server still authorizes every request). */
 export const homeFor = (role: string): string => {
@@ -71,6 +72,7 @@ const ProtectedLayout: React.FC = () => {
         <Navbar />
         <ConnectionBanner />
         <BackupNotice />
+        <PrintFailureBanner />
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
           <main className="flex-1 overflow-y-auto">

@@ -8,6 +8,8 @@ import { calculateTax, taxLines } from '../lib/tax';
 import { useSettings } from '../context/SettingsContext';
 import { apiError } from '../lib/format';
 import { sound } from '../lib/sound/index';
+import { PrintOrderKotButton } from '../components/PrintKotButtons';
+import { upiConfigWarnings, upiStatusView } from '../lib/upiStatus';
 import { Modal, Field, inputClass } from '../components/ui';
 import {
   Search,
@@ -60,6 +62,7 @@ export const PosPage: React.FC = () => {
   const [saveCustomer, setSaveCustomer] = useState(false);
   const [orderNotes, setOrderNotes] = useState('');
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [kotOrderId, setKotOrderId] = useState<number | null>(null); // last order sent to the kitchen, for the paper-KOT button
   const [isPaying, setIsPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   const [cancelBill, setCancelBill] = useState<any | null>(null);
@@ -89,7 +92,9 @@ export const PosPage: React.FC = () => {
   const [cashTendered, setCashTendered] = useState<number>(0);
   const [settledReceipt, setSettledReceipt] = useState<any | null>(null);
   // UPI QR: a payment REQUEST for this bill. The bill stays unpaid until the cashier verifies the money.
-  const [upiRequest, setUpiRequest] = useState<{ reference: string; vpa: string; amount: string; upi_uri: string } | null>(null);
+  const [upiRequest, setUpiRequest] = useState<{ reference: string; vpa: string; amount: string; upi_uri: string; status: string } | null>(null);
+  const [upiNonce, setUpiNonce] = useState(0); // bumped to ask the server for a fresh QR after a failed/cancelled one
+  const [upiBusy, setUpiBusy] = useState(false);
   const [upiLoading, setUpiLoading] = useState(false);
   const [upiError, setUpiError] = useState<string | null>(null);
   const [upiUtr, setUpiUtr] = useState('');
@@ -234,7 +239,30 @@ export const PosPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [payingOrderId, upiMode, upiVpa]);
+  }, [payingOrderId, upiMode, upiVpa, upiNonce]);
+
+  // Record what happened with the QR. These are notes only: none of them marks the bill paid.
+  const markUpi = async (status: 'initiated' | 'failed' | 'cancelled') => {
+    if (!upiRequest || upiBusy) return;
+    setUpiBusy(true);
+    setUpiError(null);
+    try {
+      const res = await apiClient.post(`/billing/upi-requests/${upiRequest.reference}/status`, { status });
+      if (status === 'initiated') {
+        setUpiRequest(res.data.data);
+      } else {
+        // Closed without payment: that QR can never settle this bill; show a brand-new one (new reference)
+        setUpiRequest(null);
+        setUpiVerified(false);
+        setUpiUtr('');
+        setUpiNonce((n) => n + 1);
+      }
+    } catch (err) {
+      setUpiError(apiError(err, 'Could not update the UPI request.'));
+    } finally {
+      setUpiBusy(false);
+    }
+  };
 
   const handleCreateOrder = async (autoPay: boolean = false) => {
     if (cart.length === 0 || isSubmitting) return;
@@ -245,6 +273,7 @@ export const PosPage: React.FC = () => {
 
     setIsSubmitting(true);
     setNotice(null);
+    setKotOrderId(null);
     try {
       const payload = {
         table_id: orderType === 'dine_in' ? selectedTableId : null,
@@ -279,6 +308,7 @@ export const PosPage: React.FC = () => {
           openPayment(createdOrder);
         } else {
           setNotice({ ok: true, text: `Order ${createdOrder.order_number} sent to ${createdOrder.kitchen_tickets?.length ?? 0} stall kitchen(s).` });
+          setKotOrderId(createdOrder.id);
         }
       }
     } catch (err: any) {
@@ -798,6 +828,11 @@ export const PosPage: React.FC = () => {
                   {notice.text}
                 </div>
               )}
+              {notice?.ok && kotOrderId && (
+                <div className="flex flex-wrap gap-2">
+                  <PrintOrderKotButton orderId={kotOrderId} label="Print KOTs" className="px-3 py-1.5 border border-line rounded-lg text-xs font-bold text-fg hover:bg-surface-2" />
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <button
                   disabled={cart.length === 0 || isSubmitting}
@@ -929,6 +964,11 @@ export const PosPage: React.FC = () => {
             {/* UPI QR: a payment request for exactly this bill. It is NOT proof of payment. */}
             {upiMode && (
               <div data-testid="upi-panel" className="bg-canvas p-4 rounded-lg border border-line space-y-4">
+                {upiConfigWarnings(settings.upi?.vpa, settings.upi?.check).map((w) => (
+                  <p key={w.code} role="alert" data-testid={`upi-pos-warning-${w.code}`} className={`text-[11px] leading-snug ${w.level === 'danger' ? 'text-danger-fg' : 'text-warning-fg'}`}>
+                    <strong>{w.title}</strong> {w.text}
+                  </p>
+                ))}
                 {upiLoading && <p className="text-xs text-muted text-center">Generating UPI QR…</p>}
                 {upiError && (
                   <p role="alert" data-testid="upi-error" className="text-xs text-danger-fg">
@@ -960,15 +1000,29 @@ export const PosPage: React.FC = () => {
                       </div>
                       <div className="flex items-center justify-between gap-3 px-3 py-2">
                         <dt className="text-muted shrink-0">Payment status</dt>
-                        <dd data-testid="upi-panel-status" className="inline-flex items-center gap-1.5 rounded-full border border-st-ready bg-st-ready-soft px-2 py-0.5 text-[11px] font-bold text-st-ready-fg">
-                          <span aria-hidden="true">●</span> Pending
+                        <dd data-testid="upi-panel-status" data-status={upiRequest.status} className="inline-flex items-center gap-1.5 rounded-full border border-st-ready bg-st-ready-soft px-2 py-0.5 text-[11px] font-bold text-st-ready-fg">
+                          <span aria-hidden="true">●</span> {upiStatusView(upiRequest.status).label}
                         </dd>
                       </div>
                     </dl>
 
                     <div className="text-[11px] leading-snug text-st-ready-fg bg-st-ready-soft border border-st-ready rounded-lg p-2.5">
-                      <strong>Payment is still PENDING.</strong> A scanned or shown QR is not proof of payment. Open the merchant UPI app or bank statement, find
+                      <strong>Payment is still PENDING.</strong> A scanned or shown QR, an opened UPI app, or a customer's screenshot is not proof of payment. Open the merchant UPI app or bank statement, find
                       a credit of exactly ₹{Number(upiRequest.amount).toFixed(2)}, then tick the confirmation below. You can also note its UPI transaction / UTR number.
+                    </div>
+
+                    <div className="flex flex-wrap gap-2" data-testid="upi-lifecycle">
+                      {upiRequest.status === 'pending' && (
+                        <button type="button" data-testid="upi-mark-initiated" onClick={() => markUpi('initiated')} disabled={upiBusy} className="px-2.5 py-1.5 border border-line rounded-lg text-[11px] font-bold text-fg hover:bg-surface-2 disabled:opacity-50">
+                          Customer started paying
+                        </button>
+                      )}
+                      <button type="button" data-testid="upi-mark-failed" onClick={() => markUpi('failed')} disabled={upiBusy} className="px-2.5 py-1.5 border border-line rounded-lg text-[11px] font-bold text-fg hover:bg-surface-2 disabled:opacity-50">
+                        Payment failed - new QR
+                      </button>
+                      <button type="button" data-testid="upi-mark-cancelled" onClick={() => markUpi('cancelled')} disabled={upiBusy} className="px-2.5 py-1.5 border border-line rounded-lg text-[11px] font-bold text-fg hover:bg-surface-2 disabled:opacity-50">
+                        Customer cancelled - new QR
+                      </button>
                     </div>
 
                     <Field label="UPI transaction / UTR number (optional)">
@@ -976,7 +1030,7 @@ export const PosPage: React.FC = () => {
                         data-testid="upi-utr"
                         className={`${inputClass} font-mono tracking-wide`}
                         value={upiUtr}
-                        onChange={(e) => setUpiUtr(e.target.value.replace(/s/g, ''))}
+                        onChange={(e) => setUpiUtr(e.target.value.replace(/\s/g, ''))}
                         placeholder="Optional, e.g. 412345678901"
                         aria-invalid={!upiUtrValid}
                         autoComplete="off"
@@ -987,7 +1041,7 @@ export const PosPage: React.FC = () => {
 
                     <label className="flex items-start gap-2.5 rounded-lg border border-line bg-surface p-3 text-xs leading-snug text-fg cursor-pointer">
                       <input data-testid="upi-verified" type="checkbox" className="mt-0.5 h-4 w-4 shrink-0" checked={upiVerified} onChange={(e) => setUpiVerified(e.target.checked)} />
-                      <span>I have verified that ₹{Number(upiRequest.amount).toFixed(2)} was received in the merchant account for this bill.</span>
+                      <span>I have verified that ₹{Number(upiRequest.amount).toFixed(2)} was received in the merchant account for this bill. (Recorded as a manual verification by me; this is not an automatic bank confirmation.)</span>
                     </label>
                   </>
                 )}
@@ -1074,6 +1128,11 @@ export const PosPage: React.FC = () => {
               <PrintReceiptButton
                 orderId={settledReceipt.order.id}
                 label="Print Receipt"
+                className="flex-1 py-2 px-3 border border-line rounded-lg text-xs font-bold text-fg flex items-center justify-center space-x-1 hover:bg-surface-2"
+              />
+              <PrintOrderKotButton
+                orderId={settledReceipt.order.id}
+                label="Print KOTs"
                 className="flex-1 py-2 px-3 border border-line rounded-lg text-xs font-bold text-fg flex items-center justify-center space-x-1 hover:bg-surface-2"
               />
               <button

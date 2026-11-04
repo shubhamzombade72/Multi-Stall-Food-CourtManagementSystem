@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { onPrivate, realtimeConfigured } from '../realtime/echo';
 import { columnFor, elapsed, nextKitchenAction, urgency, type TicketStatus } from '../lib/kds';
 import { sound as soundService } from '../lib/sound/index';
+import { autoPrintKot } from '../lib/print/autoPrint';
+import { PrintTicketButton } from '../components/PrintKotButtons';
 import { FreshTracker } from '../lib/sound/tracker';
 import { useSoundSettings } from '../hooks/useSoundSettings';
 import { isoDate, humanize, timeOnly } from '../lib/format';
@@ -73,7 +75,10 @@ export const KitchenPage: React.FC = () => {
       ]);
       const list: Ticket[] = active.data.data;
       // First list after opening the board / switching stall is only a baseline; later arrivals ring once per ticket
-      for (const t of tracker.current.observe(list)) void soundService.play('kitchen_ticket', { key: `ticket:${t.id}` });
+      for (const t of tracker.current.observe(list)) {
+        void soundService.play('kitchen_ticket', { key: `ticket:${t.id}` });
+        void autoPrintKot(t as any); // only when the operator enabled automatic KOT printing on this PC
+      }
       setTickets(list);
       setServed((done.data.data as Ticket[]).slice(0, 12));
       setError(null);
@@ -285,6 +290,7 @@ export const KitchenPage: React.FC = () => {
                         </li>
                       ))}
                     </ul>
+                    <PrintTicketButton ticket={t as any} className="text-[11px] font-bold px-2 py-1 border border-line rounded-lg hover:bg-line" />
                     {action ? (
                       <button
                         onClick={() => advance(t)}

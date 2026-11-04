@@ -1,0 +1,54 @@
+{
+    "generatedBy": "backend UpiPaymentService::buildUri",
+    "cases": [
+        {
+            "vpa": "mangalmurti@oksbi",
+            "name": "MangalMurti Food Court",
+            "amount": "200.00",
+            "reference": "ORD-20261104-ABCDE",
+            "uri": "upi://pay?pa=mangalmurti@oksbi&pn=MangalMurti%20Food%20Court&am=200.00&cu=INR&tn=ORD-20261104-ABCDE"
+        },
+        {
+            "vpa": "shop.name-1@okhdfcbank",
+            "name": "Urban Food Court",
+            "amount": "26.25",
+            "reference": "ORD-20261104-SOSMI",
+            "uri": "upi://pay?pa=shop.name-1@okhdfcbank&pn=Urban%20Food%20Court&am=26.25&cu=INR&tn=ORD-20261104-SOSMI"
+        },
+        {
+            "vpa": "Shop_Name@PAYTM",
+            "name": "Cafe & Grill",
+            "amount": "1587.6",
+            "reference": "ORD-20261104-QGE41-2",
+            "uri": "upi://pay?pa=shop_name@paytm&pn=Cafe%20%26%20Grill&am=1587.60&cu=INR&tn=ORD-20261104-QGE41-2"
+        },
+        {
+            "vpa": "a1@ybl",
+            "name": "A",
+            "amount": "0.01",
+            "reference": "ORD-1",
+            "uri": "upi://pay?pa=a1@ybl&pn=A&am=0.01&cu=INR&tn=ORD-1"
+        },
+        {
+            "vpa": "merchant@okaxis",
+            "name": "Spice Hub = #1 (Best) 100% \"veg\"",
+            "amount": "99999.99",
+            "reference": "ORD 1/2",
+            "uri": "upi://pay?pa=merchant@okaxis&pn=Spice%20Hub%20%3D%20%231%20%28Best%29%20100%25%20%22veg%22&am=99999.99&cu=INR&tn=ORD%201%2F2"
+        },
+        {
+            "vpa": "merchant@okaxis",
+            "name": "Mangal​Murti मराठी गृह",
+            "amount": "12",
+            "reference": "ORD-9",
+            "uri": "upi://pay?pa=merchant@okaxis&pn=Mangal%E2%80%8BMurti%20%E0%A4%AE%E0%A4%B0%E0%A4%BE%E0%A4%A0%E0%A5%80%20%E0%A4%97%E0%A5%83%E0%A4%B9&am=12.00&cu=INR&tn=ORD-9"
+        },
+        {
+            "vpa": "merchant@okaxis",
+            "name": "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+            "amount": "5",
+            "reference": "ORD-LONG",
+            "uri": "upi://pay?pa=merchant@okaxis&pn=NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN&am=5.00&cu=INR&tn=ORD-LONG"
+        }
+    ]
+}

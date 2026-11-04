@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ClipboardList, Eye, Search } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { PrintReceiptButton, ReceiptPreviewButton } from '../components/Receipt';
+import { PrintOrderKotButton } from '../components/PrintKotButtons';
 import { taxLines } from '../lib/tax';
 import { apiError, dateTime, humanize, isoDate, money } from '../lib/format';
 import { Badge, buttonClass, Card, EmptyState, ErrorBanner, Field, inputClass, Loading, Modal, PageHeader, Pagination, statusTone, Tag } from '../components/ui';
@@ -293,6 +294,7 @@ export const OrdersPage: React.FC = () => {
           <div className="flex flex-wrap gap-2">
             <ReceiptPreviewButton orderId={detail.id} className={buttonClass.secondary} label="Preview" />
             <PrintReceiptButton orderId={detail.id} className={buttonClass.secondary} label={detail.payment_status === 'paid' ? 'Print receipt' : 'Print bill'} />
+            {detail.status !== 'cancelled' && <PrintOrderKotButton orderId={detail.id} className={buttonClass.secondary} label="Print KOTs" />}
             {detail.payment_status === 'unpaid' && detail.status !== 'cancelled' && (
               <button onClick={() => navigate('/pos')} className={buttonClass.primary}>
                 Settle at POS

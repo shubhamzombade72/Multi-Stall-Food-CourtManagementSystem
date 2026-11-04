@@ -12,6 +12,20 @@ export interface BusinessProfile {
   closing_time: string | null;
 }
 
+/**
+ * What is honestly known about the merchant UPI ID. `provider_verified` is always false: nothing here asks a bank or
+ * payment provider. `test_confirmed` is the owner's own statement that a real UPI app showed this payee when a test QR was scanned.
+ */
+export interface UpiCheck {
+  syntax_valid: boolean;
+  handle: string | null;
+  handle_known: boolean;
+  suggested_handle: string | null;
+  test_confirmed: boolean;
+  test_confirmed_at: string | null;
+  provider_verified: boolean;
+}
+
 export interface FoodCourtSettings {
   business_profile: BusinessProfile;
   receipt: { header: string | null; footer: string | null; show_gstin: boolean };
@@ -21,7 +35,7 @@ export interface FoodCourtSettings {
   /** D10: minutes after which an order with unserved food is shown as delayed (owner-editable 1–120). */
   order_tracking?: { delay_minutes: number };
   /** Merchant UPI ID for the per-bill payment QR (owner-editable; readable by every signed-in user). */
-  upi?: { enabled: boolean; vpa: string | null };
+  upi?: { enabled: boolean; vpa: string | null; check?: UpiCheck };
 }
 
 const FALLBACK: FoodCourtSettings = {

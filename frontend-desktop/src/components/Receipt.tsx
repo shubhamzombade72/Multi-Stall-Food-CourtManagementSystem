@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { apiClient } from '../api/client';
-import { printPage, logError, getReceiptWidth, setReceiptWidth } from '../desktop/bridge';
+import { printPage, logError, getReceiptWidth, setReceiptWidth, desktop } from '../desktop/bridge';
+import { buildReceiptDocument, receiptDedupeKey } from '../lib/print/receiptDocument';
+import { describeEnqueue, enqueuePrint, receiptUsesQueue } from '../lib/print/printClient';
+import type { PreviewResult } from '../lib/print/types';
+import { ThermalPreview } from './ThermalPreview';
 import type { FoodCourtSettings } from '../context/SettingsContext';
 import { paperProfile, RECEIPT_CREDIT, receiptHeader, receiptTaxLines, upiSection, type PaperWidth } from '../lib/receiptModel';
 import { UpiQr } from './UpiQr';
@@ -80,7 +84,7 @@ export const ReceiptContent: React.FC<{ receipt: any; settings?: FoodCourtSettin
           <div style={{ wordBreak: 'break-all' }}>{upi.vpaLine}</div>
           <div data-testid="receipt-upi-amount" style={{ fontWeight: 700 }}>{upi.amountLine}</div>
           <div style={{ wordBreak: 'break-all' }}>{upi.referenceLine}</div>
-          <div data-testid="receipt-upi-instruction" style={{ marginTop: 2, fontSize: width === 58 ? 9 : 10, wordBreak: 'break-word' }}>{upi.instructionLine}</div>
+          {upi.instructionLine && <div data-testid="receipt-upi-instruction" style={{ marginTop: 2, fontSize: width === 58 ? 9 : 10, wordBreak: 'break-word' }}>{upi.instructionLine}</div>}
         </div>
       )}
       {order.payment_status !== 'paid' && <div style={{ fontWeight: 700, marginTop: 4 }}>*** UNPAID - NOT A RECEIPT ***</div>}
@@ -139,19 +143,52 @@ export const loadReceiptData = async (orderId: number): Promise<{ receipt: any; 
 };
 
 /** Fetches the receipt for an order (plus the food court's receipt settings) and prints it on this PC's paper width. */
-export const printReceipt = async (orderId: number): Promise<void> => {
+export type ReceiptPrintOutcome = ReturnType<typeof describeEnqueue>;
+
+/** Hands loaded receipt data to the print queue (thermal printer configured). Duplicate protection is by order + paid/bill state. */
+const queueReceipt = async (receipt: any, settings: FoodCourtSettings | null, reprint: boolean): Promise<ReceiptPrintOutcome> => {
+  const doc = buildReceiptDocument(receipt, settings);
+  const r = await enqueuePrint('receipt', doc, {
+    dedupeKey: receiptDedupeKey(receipt.order.id, receipt.order.payment_status),
+    reprint,
+    reference: { orderId: receipt.order.id, orderNumber: receipt.order.order_number },
+  });
+  return describeEnqueue(r);
+};
+
+/**
+ * With a thermal printer set up (Settings, Printers) the receipt goes through the print queue; otherwise it opens the
+ * Windows print dialog on this PC's paper width, exactly as before.
+ */
+export const printReceipt = async (orderId: number, opts: { reprint?: boolean } = {}): Promise<ReceiptPrintOutcome> => {
   const { receipt, settings } = await loadReceiptData(orderId);
+  if (await receiptUsesQueue()) return queueReceipt(receipt, settings, opts.reprint === true);
   const width = getReceiptWidth();
   await printContent(<ReceiptContent receipt={receipt} settings={settings} width={width} />, 'receipt', width);
+  return { kind: 'sent', message: '' };
 };
 
 /** Button that prints the receipt for an order and reports failures inline. */
 export const PrintReceiptButton: React.FC<{ orderId: number; className?: string; label?: string }> = ({ orderId, className, label }) => {
   const [busy, setBusy] = useState(false);
+  const [sentNote, setSentNote] = useState(false);
   const onClick = async () => {
     setBusy(true);
     try {
-      await printReceipt(orderId);
+      let out = await printReceipt(orderId);
+      // Already printed: never print a second slip silently; ask, then stamp the copy on paper
+      if (out.kind === 'duplicate-done') {
+        if (!window.confirm(`${out.message} Print another copy marked COPY?`)) return;
+        out = await printReceipt(orderId, { reprint: true });
+      }
+      if (out.kind === 'sent') {
+        if (out.job) {
+          setSentNote(true);
+          setTimeout(() => setSentNote(false), 2500);
+        }
+      } else {
+        alert(out.message);
+      }
     } catch (err: any) {
       logError(`Receipt print failed for order ${orderId}: ${err?.message || err}`);
       alert(err?.response?.data?.message || err?.message || 'Could not print the receipt.');
@@ -160,8 +197,8 @@ export const PrintReceiptButton: React.FC<{ orderId: number; className?: string;
     }
   };
   return (
-    <button type="button" onClick={onClick} disabled={busy} className={className}>
-      {busy ? 'Preparing…' : label || 'Print Receipt'}
+    <button type="button" onClick={onClick} disabled={busy} className={className} data-testid="receipt-print">
+      {busy ? 'Preparing…' : sentNote ? 'Sent to printer' : label || 'Print Receipt'}
     </button>
   );
 };
@@ -172,12 +209,21 @@ export const ReceiptPreviewButton: React.FC<{ orderId: number; className?: strin
   const [busy, setBusy] = useState(false);
   const [width, setWidth] = useState<PaperWidth>(getReceiptWidth());
   const [error, setError] = useState<string | null>(null);
+  // Set when a thermal printer is configured: the preview then shows what that printer receives
+  const [thermal, setThermal] = useState<Extract<PreviewResult, { ok: true; mode: 'text' | 'html' }> | null>(null);
 
   const open = async () => {
     setBusy(true);
     setError(null);
     try {
-      setData(await loadReceiptData(orderId));
+      const loaded = await loadReceiptData(orderId);
+      setThermal(null);
+      if (await receiptUsesQueue()) {
+        const p = await desktop()!.previewPrintDocument({ role: 'receipt', doc: buildReceiptDocument(loaded.receipt, loaded.settings) });
+        if (!p.ok) throw new Error(p.message);
+        if (p.mode === 'text' || p.mode === 'html') setThermal(p);
+      }
+      setData(loaded);
       setWidth(getReceiptWidth());
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || 'Could not load the receipt.');
@@ -198,6 +244,11 @@ export const ReceiptPreviewButton: React.FC<{ orderId: number; className?: strin
           <div className="max-h-full overflow-y-auto rounded-lg bg-surface border border-line shadow-2xl p-4 space-y-3">
             <div className="flex items-center justify-between gap-4">
               <h3 className="font-semibold text-base text-fg">Receipt preview</h3>
+              {thermal ? (
+                <span className="text-xs text-muted" data-testid="receipt-preview-printer">
+                  {thermal.mode === 'text' ? `Thermal text · ${thermal.paperWidthMm} mm · ${thermal.columns} columns` : `Windows printer page · ${thermal.paperWidthMm} mm`}
+                </span>
+              ) : (
               <label className="text-xs text-muted flex items-center gap-2">
                 Paper
                 <select
@@ -214,8 +265,11 @@ export const ReceiptPreviewButton: React.FC<{ orderId: number; className?: strin
                   <option value={58}>58 mm</option>
                 </select>
               </label>
+              )}
             </div>
+            {thermal && <ThermalPreview result={thermal} />}
             <div
+              hidden={!!thermal}
               data-testid="receipt-preview-paper"
               style={{ background: '#fff', color: '#000', fontFamily: "'Courier New', monospace", fontSize: profile.fontPx, width: `${profile.contentMm}mm`, padding: '4mm', margin: '0 auto', boxShadow: '0 0 0 1px #999' }}
             >
@@ -228,7 +282,13 @@ export const ReceiptPreviewButton: React.FC<{ orderId: number; className?: strin
                 className="px-3 py-1.5 border border-line rounded-lg text-xs font-bold text-fg hover:bg-surface-2"
                 onClick={async () => {
                   try {
-                    await printContent(<ReceiptContent receipt={data.receipt} settings={data.settings} width={width} />, 'receipt', width);
+                    if (thermal) {
+                      let out = await queueReceipt(data.receipt, data.settings, false);
+                      if (out.kind === 'duplicate-done' && window.confirm(`${out.message} Print another copy marked COPY?`)) out = await queueReceipt(data.receipt, data.settings, true);
+                      if (out.kind !== 'sent' && out.kind !== 'duplicate-done') setError(out.message);
+                    } else {
+                      await printContent(<ReceiptContent receipt={data.receipt} settings={data.settings} width={width} />, 'receipt', width);
+                    }
                   } catch (err: any) {
                     setError(err?.message || 'Could not print the receipt.');
                   }

@@ -427,7 +427,37 @@ function createWindow() {
     },
   });
 
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    log('INFO', 'ready-to-show fired, showing window');
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.setAlwaysOnTop(true);
+    mainWindow.setAlwaysOnTop(false);
+  });
+  mainWindow.webContents.on('did-finish-load', () => {
+    log('INFO', 'did-finish-load fired');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (!mainWindow.isVisible()) {
+        log('INFO', 'showing window from did-finish-load');
+        mainWindow.show();
+      }
+      mainWindow.focus();
+      mainWindow.setAlwaysOnTop(true);
+      mainWindow.setAlwaysOnTop(false);
+    }
+  });
+  mainWindow.webContents.on('did-fail-load', (_e, errorCode, errorDescription) => {
+    log('ERROR', `Renderer did-fail-load: ${errorCode} ${errorDescription}`);
+  });
+  mainWindow.webContents.on('console-message', (_e, _level, message, line, sourceId) => {
+    log('INFO', `[renderer-console] ${message} (${sourceId}:${line})`);
+  });
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      log('WARN', 'Window not visible after 2s, forcing show');
+      mainWindow.show();
+    }
+  }, 2000);
 
   // No pop-up windows; external links open in the system browser only if http(s)
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {

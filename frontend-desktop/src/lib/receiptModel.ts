@@ -66,12 +66,21 @@ const rfc3986 = (s: string): string => encodeURIComponent(s).replace(/[!'()*]/g,
 
 const stripControl = (s: string): string => s.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim();
 
-/** upi://pay?pa=..&pn=..&am=..&cu=INR&tn=.. exactly as the server builds it (UpiPaymentService::buildUri). */
+/**
+ * upi://pay?pa=..&pn=..&am=..&cu=INR&tn=.. exactly as the server builds it (UpiPaymentService::buildUri; the parity test
+ * compares both byte for byte). It refuses to build a QR for a missing/malformed UPI ID, an amount that is not a positive
+ * number, or an empty reference: a wrong QR is worse than no QR.
+ */
 export function buildUpiUri(vpa: string, payeeName: string, amount: string | number, reference: string): string {
-  const name = Array.from(stripControl(payeeName)).slice(0, 50).join('');
+  if (!isValidVpa(String(vpa ?? '').trim())) throw new RangeError('Invalid or missing UPI ID');
+  const value = typeof amount === 'string' ? Number(amount.trim() === '' ? NaN : amount) : amount;
+  if (!Number.isFinite(value) || value <= 0) throw new RangeError('The UPI amount must be greater than zero');
+  const ref = stripControl(String(reference ?? ''));
+  if (ref === '') throw new RangeError('A UPI payment reference is required');
+  const name = Array.from(stripControl(String(payeeName ?? ''))).slice(0, 50).join('');
   return (
     `upi://pay?pa=${rfc3986(vpa).replace('%40', '@')}` +
-    `&pn=${rfc3986(name)}&am=${Number(amount).toFixed(2)}&cu=INR&tn=${rfc3986(stripControl(reference))}`
+    `&pn=${rfc3986(name)}&am=${value.toFixed(2)}&cu=INR&tn=${rfc3986(ref)}`
   );
 }
 
@@ -82,6 +91,16 @@ export function parseUpiUri(uri: string): Record<string, string> {
   return out;
 }
 
+/** Who verified a paid UPI request and how. There is no gateway: 'manual' means a cashier checked the credit by hand. */
+export interface UpiVerification {
+  method: string;
+  verified_at: string | null;
+  verified_by: string | null;
+}
+
+/** pending -> initiated -> paid | failed | cancelled (superseded/refunded are closed states and never print a QR). */
+export type UpiRequestStatus = 'pending' | 'initiated' | 'paid' | 'failed' | 'cancelled' | 'superseded' | 'refunded';
+
 export interface UpiRequestData {
   reference: string;
   vpa: string;
@@ -89,6 +108,7 @@ export interface UpiRequestData {
   amount: string;
   upi_uri?: string;
   status: string;
+  verification?: UpiVerification | null;
 }
 
 export interface UpiSection {
@@ -100,6 +120,8 @@ export interface UpiSection {
   referenceLine: string;
   /** Short how-to-pay (or paid) note printed under the QR. */
   instructionLine: string;
+  /** Reserved: always null (the verifier and time are stored on the server, not printed on the receipt). */
+  verificationLine: string | null;
   paid: boolean;
 }
 
@@ -112,16 +134,28 @@ export function upiSection(receipt: { upi_enabled?: boolean; upi?: UpiRequestDat
   const upi = receipt?.upi;
   if (!upi) return null;
   const paid = upi.status === 'paid';
+  const open = upi.status === 'pending' || upi.status === 'initiated';
+  // failed / cancelled / superseded / refunded requests are closed: their QR must never be shown again
+  if (!paid && !open) return null;
   if (!paid && !receipt?.upi_enabled) return null;
+  // "Paid" wording only for a request that a cashier really verified (the server marks it paid), never for a pending QR
+  let qrText: string;
+  try {
+    qrText = buildUpiUri(upi.vpa, upi.payee_name, upi.amount, upi.reference);
+  } catch {
+    return null; // invalid payment data never becomes a QR
+  }
   return {
-    title: paid ? 'PAID VIA UPI - PAYMENT RECORD' : 'SCAN & PAY USING UPI',
-    qrText: buildUpiUri(upi.vpa, upi.payee_name, upi.amount, upi.reference),
+    title: paid ? 'PAID VIA UPI - MANUALLY VERIFIED' : 'SCAN & PAY USING UPI',
+    qrText,
     vpaLine: `UPI ID: ${upi.vpa}`,
     amountLine: `Amount: ${money(upi.amount)}`,
     referenceLine: `Ref: ${upi.reference}`,
+    // A paid receipt prints no extra note under the title (who verified it and when is kept on the server, not printed)
     instructionLine: paid
-      ? 'Payment received. Keep this receipt for your records.'
-      : `Scan with any UPI app and pay exactly ${money(upi.amount)}. Show the payment confirmation at the counter.`,
+      ? ''
+      : `Scan with any UPI app and pay exactly ${money(upi.amount)}. Payment is PENDING until the cashier confirms it${upi.status === 'initiated' ? ' (payment started, not yet confirmed)' : ''}.`,
+    verificationLine: null,
     paid,
   };
 }
