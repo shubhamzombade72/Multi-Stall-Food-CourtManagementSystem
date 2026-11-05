@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
-vendor/
+/vendor/
+backend/vendor/
+!frontend-desktop/tests/vendor/
 
 # Environment files
 .env
@@ -13,18 +15,75 @@ local.properties
 mobile-app/android/
 mobile-app/ios/
 
-# Staging QA artefacts (device storage simulations, run results) and DB backups
-qa/staging/results/
-backend/storage/backups/
+# Documentation & Specifications
+docs/
+*.md
+**/*.md
+
+# Preserve essential project documentation and license files
+!README.md
+!**/README.md
+!LICENSE*
+!**/LICENSE*
+!CHANGELOG.md
+!**/CHANGELOG.md
+!CONTRIBUTING.md
+!**/CONTRIBUTING.md
+!.claude/skills/**/SKILL.md
 
 # Build & compiled outputs
 dist/
+**/dist/
 build/
+**/build/
+release/
+**/release/
 .expo/
+
+# Desktop & Electron build outputs and installers
+frontend-desktop/release/
+frontend-desktop/installers/
+frontend-desktop/build-server/
+frontend-desktop/dist-electron/
+frontend-desktop/dist-electron*/
+
+# Compiled binaries, installers & application packages
+*.exe
+*.msi
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.AppImage
+*.appimage
+*.blockmap
 *.apk
 *.aab
-# electron-builder output (installer, unpacked app)
-frontend-desktop/release/
+*.dll
+*.so
+*.dylib
+*.pak
+*.dat
+*.bin
+*.asar
+*.node
+
+# Temporary build caches, buildinfo & debug logs
+.vite/
+**/.vite/
+.turbo/
+**/.turbo/
+*.tsbuildinfo
+*.buildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test and QA execution results
+qa/staging/results/
+coverage/
+**/.nyc_output/
 
 # IDE & OS
 .vscode/
@@ -38,6 +97,7 @@ backend/storage/framework/cache/*
 backend/storage/framework/sessions/*
 backend/storage/framework/views/*
 backend/storage/logs/*
+backend/storage/backups/
 backend/bootstrap/cache/*
 
 # Python cache & logs
@@ -45,10 +105,5 @@ __pycache__/
 *.pyc
 .system_generated/
 
-
-# New desktop installers (frontend-desktop/installers/<version>/): build output, not source
-frontend-desktop/installers/
-# Generated built-in server bundle (scripts/prepare-embedded-server.mjs)
-frontend-desktop/build-server/
 # Added by code-review-graph
 .code-review-graph/
