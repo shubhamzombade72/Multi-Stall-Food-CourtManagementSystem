@@ -78,10 +78,8 @@ export function cardNow(createdAt: string, nowMs: number): number {
 }
 
 /** D10: unserved items and age at or past the delay setting. */
-export function isDelayed(order: BoardOrder, nowMs: number, delayMinutes: number): boolean {
-  const state = cardState(order.items);
-  if (state === 'green' || state === 'empty') return false;
-  return nowMs - Date.parse(order.created_at) >= delayMinutes * MINUTE_MS;
+export function isDelayed(_order: BoardOrder, _nowMs?: number, _delayMinutes?: number): boolean {
+  return false;
 }
 
 export function nextItemAction(status: ItemStatus, canMarkReady: boolean): 'ready' | 'served' | null {
@@ -113,12 +111,12 @@ export function cardDetails(order: BoardOrder): { label: string; value: string }
   return lines;
 }
 
-export function cardLabel(order: BoardOrder, nowMs: number): string {
+export function cardLabel(order: BoardOrder, _nowMs?: number): string {
   const parts: string[] = [order.table ? order.table.table_number : order.order_number];
   if (order.guest_count !== null && order.guest_count !== undefined) {
     parts.push(`${order.guest_count} ${order.guest_count === 1 ? 'Guest' : 'Guests'}`);
   }
-  parts.push(`${elapsedMinutes(order.created_at, nowMs)}m`);
+
   if (cardState(order.items) === 'empty') {
     parts.push('Cancelled');
   } else {

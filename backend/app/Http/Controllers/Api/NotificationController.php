@@ -3,10 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\InventoryItem;
 use App\Models\Order;
 use App\Models\Payment;
-use App\Models\PurchaseOrder;
 use App\Models\StallKitchenTicket;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -31,7 +29,6 @@ class NotificationController extends Controller
 
         $seesAllOrders = in_array($role, ['owner', 'cashier'], true);
         $stallKitchen = in_array($role, ['kitchen_staff', 'stall_manager'], true) && $stallId;
-        $stallStock = in_array($role, ['stall_manager', 'store_staff'], true) && $stallId;
 
         if ($seesAllOrders) {
             Order::with('table:id,table_number')->where('created_at', '>=', $since)->latest()->limit(30)->get()
@@ -53,7 +50,7 @@ class NotificationController extends Controller
             StallKitchenTicket::with('order:id,order_number,table_id', 'order.table:id,table_number')
                 ->where('stall_id', $stallId)->where('created_at', '>=', $since)->latest()->limit(30)->get()
                 ->each(fn ($t) => $items->push($this->item("ticket:{$t->id}", 'kitchen_ticket', "New kitchen ticket {$t->ticket_number}",
-                    ($t->order?->table ? "Table {$t->order->table->table_number}" : 'Takeaway') . ' · ' . ($t->order?->order_number ?? ''), $t->created_at, '/kitchen')));
+                    ($t->order?->table ? "Table {$t->order->table->table_number}" : 'Takeaway') . ' · ' . ($t->order?->order_number ?? ''), $t->created_at, '/tracking')));
         }
 
         if (in_array($role, ['owner', 'cashier', 'waiter'], true)) {
@@ -64,20 +61,7 @@ class NotificationController extends Controller
                     $role === 'waiter' ? '/waiter' : '/orders', 'success')));
         }
 
-        if ($role === 'owner' || $stallStock) {
-            InventoryItem::with('stall:id,name')
-                ->when($role !== 'owner', fn ($q) => $q->where('stall_id', $stallId))
-                ->whereColumn('current_stock', '<=', 'minimum_alert_stock')
-                ->orderBy('current_stock')->limit(20)->get()
-                ->each(fn ($i) => $items->push($this->item("low:{$i->id}:{$i->current_stock}", 'low_stock', "Low stock: {$i->name}",
-                    "{$i->stall?->name} · {$i->current_stock} {$i->unit} left (alert at {$i->minimum_alert_stock})", $i->updated_at, '/inventory', 'warning')));
 
-            PurchaseOrder::with('supplier:id,name', 'stall:id,name')
-                ->when($role !== 'owner', fn ($q) => $q->where('stall_id', $stallId))
-                ->where('status', 'received')->where('updated_at', '>=', $since)->latest('updated_at')->limit(10)->get()
-                ->each(fn ($po) => $items->push($this->item("received:{$po->id}", 'purchase_received', "Goods received {$po->purchase_number}",
-                    "{$po->supplier?->name} · {$po->stall?->name} · ₹{$po->total_amount}", $po->updated_at, '/purchases')));
-        }
 
         /** @var Collection $items */
         $sorted = $items->sortByDesc('at')->values()->take(60);

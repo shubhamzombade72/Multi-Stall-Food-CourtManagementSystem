@@ -81,7 +81,10 @@ function phpArgs(runtime, dataDir) {
     '-d', 'extension=php_fileinfo.dll',
     '-d', 'zend_extension=php_opcache.dll',
     '-d', 'opcache.enable=1',
-    '-d', 'opcache.validate_timestamps=0', // the code never changes while the app runs; updates restart it
+    '-d', 'opcache.validate_timestamps=1',
+    '-d', 'opcache.revalidate_freq=0',
+    '-d', `opcache.file_cache=${path.join(dataDir, 'cache', 'opcache')}`,
+    '-d', 'opcache.file_cache_fallback=1',
     '-d', 'memory_limit=256M',
     '-d', 'date.timezone=UTC',
     '-d', 'display_errors=0',
@@ -120,12 +123,21 @@ function buildServerEnv(dataDir, appKey, baseEnv = process.env) {
 
 function ensureDataDirs(dataDir) {
   [
-    'logs', 'tmp', 'cache', 'backups',
+    'logs', 'tmp', 'cache', 'cache/opcache', 'backups',
     'storage/app/public', 'storage/framework/cache/data', 'storage/framework/sessions', 'storage/framework/views', 'storage/logs',
   ].forEach((d) => fs.mkdirSync(path.join(dataDir, d), { recursive: true }));
   // Stale discovery caches from an older program version would list providers that no longer exist
   const cacheDir = path.join(dataDir, 'cache');
   fs.readdirSync(cacheDir).filter((f) => f.endsWith('.php')).forEach((f) => fs.rmSync(path.join(cacheDir, f), { force: true }));
+  const opcacheDir = path.join(cacheDir, 'opcache');
+  if (fs.existsSync(opcacheDir)) {
+    try {
+      fs.rmSync(opcacheDir, { recursive: true, force: true });
+      fs.mkdirSync(opcacheDir, { recursive: true });
+    } catch {
+      // opcache in use by existing process will be replaced on restart
+    }
+  }
 }
 
 /** A random application key, generated once per installation and kept with the data. */

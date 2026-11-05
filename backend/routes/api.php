@@ -91,6 +91,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     // Food court settings (read: any signed-in user; write: owner)
     Route::get('/settings', [SettingsController::class, 'index']);
+    Route::post('/settings/upi/test-qr', [SettingsController::class, 'upiTestQr']);
+    Route::post('/settings/upi/test-confirmed', [SettingsController::class, 'upiTestConfirmed']);
     Route::put('/settings/{key}', [SettingsController::class, 'update']);
 
     // Customers (owner + cashier)
@@ -128,9 +130,6 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::post('/orders/{id}/serve-remaining', [FulfillmentController::class, 'serveRemaining'])->whereNumber('id');
     Route::post('/orders/{id}/cancel', [OrderController::class, 'cancelOrder']);
 
-    // Kitchen Display System (KDS)
-    Route::get('/kitchen/tickets', [KitchenController::class, 'getTickets']);
-    Route::put('/kitchen/tickets/{id}/status', [KitchenController::class, 'updateTicketStatus']);
 
     // Waiter Android Workflows
     Route::get('/waiter/tables', [WaiterController::class, 'getActiveTables']);
@@ -139,12 +138,15 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     // Item-level fulfilment (single writer: FulfillmentService)
     Route::patch('/ticket-items/{id}/status', [FulfillmentController::class, 'updateItemStatus'])->whereNumber('id');
+    Route::patch('/ticket-items/{id}/quantity', [FulfillmentController::class, 'updateItemQuantity'])->whereNumber('id');
+    Route::post('/orders/{id}/items', [FulfillmentController::class, 'addItem'])->whereNumber('id');
 
     // Cashier POS & Billing
     Route::get('/billing/pending', [BillingController::class, 'getPendingBills']);
     Route::post('/billing/pay', [BillingController::class, 'processPayment']);
     Route::get('/billing/receipt/{orderId}', [BillingController::class, 'getOrderReceipt']);
     Route::post('/billing/orders/{orderId}/upi-request', [BillingController::class, 'upiRequest'])->whereNumber('orderId');
+    Route::post('/billing/upi-requests/{reference}/status', [BillingController::class, 'upiRequestStatus'])->where('reference', '[A-Za-z0-9._-]{1,40}');
     Route::get('/billing/payments', [BillingController::class, 'paymentHistory']);
 
     // Stall Purchases
@@ -165,6 +167,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     // End-of-Day Closing & Stall Settlements
     Route::get('/settlements/daily-summary', [SettlementController::class, 'getDailySummary']);
+    Route::get('/settlements/stall-bills', [SettlementController::class, 'stallBills']);
     Route::post('/settlements/close-day', [SettlementController::class, 'closeDay']);
     Route::get('/settlements/closings', [SettlementController::class, 'closings']);
     Route::post('/settlements/{recordId}/pay', [SettlementController::class, 'recordSettlementPayment'])->whereNumber('recordId');

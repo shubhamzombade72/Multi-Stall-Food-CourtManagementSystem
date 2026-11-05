@@ -333,7 +333,6 @@ try {
   const screens = [
     ['dashboard', 'Dashboard', '#/dashboard', () => page.getByRole('heading', { name: /Dashboard/i }).first().waitFor({ timeout: 15000 })],
     ['pos', 'Cashier POS', '#/pos', () => page.getByText('Margherita').first().waitFor({ timeout: 15000 })],
-    ['kitchen', 'Kitchen Display (tickets: new, preparing incl. LATE, ready at warning)', '#/kitchen', () => page.getByText('LATE', { exact: true }).first().waitFor({ timeout: 20000 })],
     ['tracking', 'Orders & Table Tracking (expanded card)', '#/tracking', async () => {
       const c = page.getByTestId(`order-card-${order1.id}`);
       await c.waitFor({ timeout: 20000 });
@@ -343,11 +342,10 @@ try {
     ['orders', 'Orders & Receipts', '#/orders', () => page.getByText(order1.order_number).first().waitFor({ timeout: 15000 })],
     ['daily-closing', 'Daily Closing', '#/settlements', () => page.getByText(/Closing/).first().waitFor({ timeout: 15000 })],
     ['reports', 'Reports & Audit', '#/reports', () => page.getByText(/Report/).first().waitFor({ timeout: 15000 })],
-    ['food-court-settings', 'Food Court Settings', '#/food-court-settings', () => page.getByTestId('delay-minutes').waitFor({ timeout: 15000 })],
+    ['food-court-settings', 'Food Court Settings', '#/food-court-settings', () => page.getByTestId('gst-settings-form').waitFor({ timeout: 15000 })],
     ['device-settings', 'Device Settings', '#/settings', () => page.getByText('Backup & recovery').waitFor({ timeout: 15000 })],
     ['payments', 'Payment History', '#/payments', () => page.getByText(order2.order_number).first().waitFor({ timeout: 15000 })],
     ['tables', 'Floor & Tables', '#/tables', () => page.getByText(table1.table_number).first().waitFor({ timeout: 15000 })],
-    ['waiter', 'Waiter Station', '#/waiter', () => page.getByText('Waiter Station').first().waitFor({ timeout: 15000 })],
     ['cashier-closing', 'Cashier Closing', '#/cashier-closing', () => page.getByText('Cashier Closing').first().waitFor({ timeout: 15000 })],
     ['menu', 'Menu', '#/menu', () => page.getByText('Garlic Bread').first().waitFor({ timeout: 15000 })],
     ['staff', 'Staff', '#/staff', () => page.getByText('Theme Cashier').first().waitFor({ timeout: 15000 })],
@@ -419,7 +417,7 @@ try {
     }
     if (key === 'tracking') {
       const late = await page.getByTestId(`order-card-${order1.id}`).getByText('LATE', { exact: true }).isVisible().catch(() => false);
-      check(`${theme}-tracking-late`, `Tracking (${theme}): an overdue order shows the explicit LATE label`, late);
+      check(`${theme}-tracking-late`, `Tracking (${theme}): an overdue order does NOT show the LATE label (late indicators removed)`, !late);
     }
     if (key === 'pos') {
       await page.getByRole('button', { name: /Pending Table Bills/ }).click();
@@ -609,7 +607,7 @@ try {
   });
   let tabs = 0;
   let reached = false;
-  for (; tabs < 60 && !reached; ) {
+  for (; tabs < 60 && !reached;) {
     await page.keyboard.press('Tab');
     tabs++;
     reached = await page.evaluate(() => document.activeElement?.getAttribute('data-testid') === 'theme-toggle');
@@ -702,18 +700,18 @@ try {
   try {
     if (page) await page.screenshot({ path: join(shots, 'theme-failure.png') });
     if (page) console.log(`url=${page.url()} body=${(await page.evaluate(() => document.body.innerText)).slice(0, 300).replace(/\s+/g, ' ')}`);
-  } catch {}
+  } catch { }
 } finally {
   try {
     if (app) await app.close();
-  } catch {}
+  } catch { }
   if (pageErrors.length) console.log(`Renderer errors (${pageErrors.length}):\n${pageErrors.slice(-10).join('\n')}`);
   for (const c of contrastLog) if (c.low.length) console.log(`CONTRAST ${c.screen}: ${c.low.length}/${c.checked}\n  ${c.low.slice(0, 12).join('\n  ')}`);
   writeFileSync(join(shots, 'theme-results.json'), JSON.stringify({ results, contrast: contrastLog, whiteScan: { minArea: MIN_AREA, skipTags: SKIP_TAGS } }, null, 2));
   await new Promise((r) => setTimeout(r, 1500));
   try {
     rmSync(profile, { recursive: true, force: true });
-  } catch {}
+  } catch { }
   const fails = results.filter((r) => r.result === 'FAIL').length;
   console.log(`\nTOTAL: ${results.length - fails} PASS, ${fails} FAIL`);
   process.exit(fails ? 1 : 0);

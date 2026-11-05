@@ -1,8 +1,9 @@
 import { memo, useCallback, useState } from 'react';
-import { cardDetails, cardLabel, cardState, isDelayed, progress, type BoardItem, type BoardOrder, type CardState } from '../../lib/fulfillment';
+import { Plus } from 'lucide-react';
+import { cardDetails, cardLabel, cardState, progress, type BoardItem, type BoardOrder, type CardState } from '../../lib/fulfillment';
 import { statusClasses } from '../../lib/status';
 import { ItemRow } from './ItemRow';
-import { LateBadge } from '../ui';
+
 
 const borderTone: Record<CardState, string> = {
   red: statusClasses('cooking').border,
@@ -19,8 +20,8 @@ const barTone: Record<CardState, string> = {
 
 interface Props {
   order: BoardOrder;
-  nowMs: number;
-  delayMinutes: number;
+  nowMs?: number;
+  delayMinutes?: number;
   expanded: boolean;
   canMarkReady: boolean;
   busyItems: ReadonlySet<number>;
@@ -28,17 +29,37 @@ interface Props {
   onToggle: (orderId: number) => void;
   onItemAction: (order: BoardOrder, item: BoardItem, to: 'ready' | 'served') => void;
   onServeAll: (order: BoardOrder, itemIds: number[]) => void;
+  onQuantityChange?: (order: BoardOrder, item: BoardItem, delta: 1 | -1) => void;
+  onOpenAddItem?: (order: BoardOrder) => void;
 }
 
 /**
  * Memoised: the page passes stable callbacks and a per-card clock that only moves when this order's elapsed minute
  * changes (cardNow), so a card re-renders when its own data, minute or busy state changes, not every second.
  */
-export const OrderCard = memo(function OrderCard({ order, nowMs, delayMinutes, expanded, canMarkReady, busyItems, serving, onToggle, onItemAction, onServeAll }: Props) {
+export const OrderCard = memo(function OrderCard({
+  order,
+  nowMs: _nowMs,
+  delayMinutes: _delayMinutes,
+  expanded,
+  canMarkReady,
+  busyItems,
+  serving,
+  onToggle,
+  onItemAction,
+  onServeAll,
+  onQuantityChange,
+  onOpenAddItem,
+}: Props) {
   const [confirming, setConfirming] = useState(false);
   const onAction = useCallback((it: BoardItem, to: 'ready' | 'served') => onItemAction(order, it, to), [order, onItemAction]);
+  const onQtyChange = useCallback(
+    (it: BoardItem, delta: 1 | -1) => onQuantityChange?.(order, it, delta),
+    [order, onQuantityChange]
+  );
+
   const state = cardState(order.items);
-  const delayed = isDelayed(order, nowMs, delayMinutes);
+
   const p = progress(order.items);
   const pct = p.total === 0 ? 0 : Math.round((p.served / p.total) * 100);
   const remaining = order.items.filter((i) => i.status !== 'served' && i.status !== 'cancelled');
@@ -52,14 +73,7 @@ export const OrderCard = memo(function OrderCard({ order, nowMs, delayMinutes, e
   return (
     <div data-testid={`order-card-${order.id}`} className="relative">
       <div data-testid={`card-state-${state}`} className={`relative bg-surface rounded-lg border-2 ${borderTone[state]} shadow-sm overflow-hidden`}>
-        {delayed && (
-          <span
-            data-testid={`delayed-${order.id}`}
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 rounded-lg ring-2 ring-inset ring-st-cooking motion-safe:animate-pulse"
-          />
-        )}
-        <button
+                <button
           type="button"
           aria-expanded={expanded}
           onClick={() => onToggle(order.id)}
@@ -67,9 +81,8 @@ export const OrderCard = memo(function OrderCard({ order, nowMs, delayMinutes, e
         >
           <span className="flex items-center justify-between gap-2">
             <span data-testid={`order-label-${order.id}`} className="block text-sm font-semibold text-fg tabular-nums">
-              {cardLabel(order, nowMs)}
+              {cardLabel(order)}
             </span>
-            {delayed && <LateBadge />}
           </span>
         </button>
         <ul data-testid={`order-details-${order.id}`} className="relative px-3 pb-1.5 space-y-0.5 text-xs text-muted">
@@ -103,43 +116,61 @@ export const OrderCard = memo(function OrderCard({ order, nowMs, delayMinutes, e
                   canMarkReady={canMarkReady}
                   busy={busyItems.has(item.id)}
                   onAction={onAction}
+                  onQuantityChange={onQtyChange}
                 />
               ))}
             </ul>
-            {remaining.length > 0 && (
-              <div className="pt-2 flex items-center justify-end gap-2">
-                {confirming ? (
-                  <>
-                    <span className="text-xs font-semibold text-fg">Serve {remainingIds.length} items?</span>
+
+            {/* Card Footer Actions: Add Item & Serve All */}
+            <div className="pt-2 mt-2 border-t border-line flex items-center justify-between gap-2 flex-wrap">
+              {onOpenAddItem && order.status !== 'cancelled' && order.payment_status !== 'paid' && (
+                <button
+                  type="button"
+                  data-testid={`add-item-${order.id}`}
+                  onClick={() => onOpenAddItem(order)}
+                  className="px-2.5 py-1 rounded-lg text-xs font-bold border border-line bg-surface hover:bg-surface-2 text-fg flex items-center gap-1.5 shadow-xs transition hover:border-primary/50"
+                  title="Add extra items from menu to this order"
+                >
+                  <Plus className="w-3.5 h-3.5 text-primary" />
+                  <span>Add Item</span>
+                </button>
+              )}
+
+              {remaining.length > 0 && (
+                <div className="flex items-center justify-end gap-2 ml-auto">
+                  {confirming ? (
+                    <>
+                      <span className="text-xs font-semibold text-fg">Serve {remainingIds.length} items?</span>
+                      <button
+                        type="button"
+                        data-testid={`serve-all-confirm-${order.id}`}
+                        disabled={serving}
+                        onClick={() => {
+                          setConfirming(false);
+                          onServeAll(order, remainingIds);
+                        }}
+                        className="px-2.5 py-1 rounded-lg text-xs font-bold bg-st-served-fg text-surface hover:opacity-90 disabled:opacity-50"
+                      >
+                        Confirm
+                      </button>
+                      <button type="button" onClick={() => setConfirming(false)} className="px-2.5 py-1 rounded-lg text-xs font-bold border border-line text-muted">
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
                     <button
                       type="button"
-                      data-testid={`serve-all-confirm-${order.id}`}
+                      data-testid={`serve-all-${order.id}`}
                       disabled={serving}
-                      onClick={() => {
-                        setConfirming(false);
-                        onServeAll(order, remainingIds);
-                      }}
+                      onClick={startServeAll}
                       className="px-2.5 py-1 rounded-lg text-xs font-bold bg-st-served-fg text-surface hover:opacity-90 disabled:opacity-50"
                     >
-                      Confirm
+                      {serving ? 'Serving…' : 'Serve All Remaining'}
                     </button>
-                    <button type="button" onClick={() => setConfirming(false)} className="px-2.5 py-1 rounded-lg text-xs font-bold border border-line text-muted">
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    data-testid={`serve-all-${order.id}`}
-                    disabled={serving}
-                    onClick={startServeAll}
-                    className="px-2.5 py-1 rounded-lg text-xs font-bold bg-st-served-fg text-surface hover:opacity-90 disabled:opacity-50"
-                  >
-                    {serving ? 'Serving…' : 'Serve All Remaining'}
-                  </button>
-                )}
-              </div>
-            )}
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

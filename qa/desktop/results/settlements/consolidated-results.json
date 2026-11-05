@@ -1,0 +1,98 @@
+[
+  {
+    "id": "C-01",
+    "desc": "Desktop app runtime launched and authenticated",
+    "result": "PASS",
+    "evidence": "http://127.0.0.1:51130/api"
+  },
+  {
+    "id": "C-02",
+    "desc": "Test orders with multi-stall dishes and payments (cash & UPI) seeded",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "C-03",
+    "desc": "Consolidated screen opened with title \"End-of-Day Closing & Stall Settlements\"",
+    "result": "PASS",
+    "evidence": "End-of-Day Closing & Stall Settlements"
+  },
+  {
+    "id": "C-04",
+    "desc": "Before closing: Review Bills button is accessible on stall rows",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "C-05",
+    "desc": "Inline stall bills drawer expanded before closing",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "C-06",
+    "desc": "End-of-Day closing executed: status shows Day Closed Successfully",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "C-07",
+    "desc": "Settlement figures present: sales calculated, payable, outstanding",
+    "result": "PASS",
+    "evidence": "₹1,110.00 | ₹1,110.00 | ₹1,110.00"
+  },
+  {
+    "id": "C-08",
+    "desc": "Inline stall bills drawer opened for Curry House in settlement ledger",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "C-09",
+    "desc": "Drawer displays itemized dish orders and amounts",
+    "result": "PASS",
+    "evidence": "Paid Bills for Curry House IMYK (2 bills)\n₹750.00\nORDER #\tTIME\tTABLE / TYPE\tDISHES ORDERED\tSTALL SUBTOTAL\tMETHOD\nORD-20261105-VZYG7\t03:57 PM\tTakeaway\t1x Paneer "
+  },
+  {
+    "id": "C-10",
+    "desc": "Record Payout modal opened directly from consolidated review",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "C-11",
+    "desc": "Settlement payout completed and receipt displayed with PAY number",
+    "result": "PASS",
+    "evidence": "Payout receipt\nUrban Food Court\nSTALL PAYOUT RECEIPT\nReceipt\nPAY-000001\nBusiness date\n05-11-2026\nPaid at\n05/11/2026, 03:57 pm\nStall\nCurry House IMYK\nOwner\nRames"
+  },
+  {
+    "id": "C-12",
+    "desc": "Curry House remaining balance updated to ₹0.00 (Fully Settled)",
+    "result": "PASS",
+    "evidence": "₹0.00"
+  },
+  {
+    "id": "C-13",
+    "desc": "All Stall Bills consolidated tab opened on the same screen",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "C-14",
+    "desc": "All Stall Bills table lists all order bills across stalls",
+    "result": "PASS",
+    "evidence": "rows=3"
+  },
+  {
+    "id": "C-15",
+    "desc": "Filtering by stall in All Stall Bills tab updates list to that stall only",
+    "result": "PASS",
+    "evidence": "filteredRows=1"
+  },
+  {
+    "id": "C-16",
+    "desc": "Payout History tab accessible on same screen with recorded settlement payout",
+    "result": "PASS",
+    "evidence": "historyRows=1"
+  }
+]

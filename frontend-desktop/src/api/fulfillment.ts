@@ -16,6 +16,28 @@ export async function setItemStatus(
   return parseItemStatusBody(res.data);
 }
 
+export async function updateItemQuantity(
+  ticketItemId: number,
+  delta: 1 | -1,
+): Promise<{ order: BoardOrder }> {
+  const res = await apiClient.patch(`/ticket-items/${ticketItemId}/quantity`, { delta });
+  return res.data.data;
+}
+
+export async function addOrderItem(
+  orderId: number,
+  menuItemId: number,
+  quantity = 1,
+  specialInstructions?: string,
+): Promise<{ order: BoardOrder }> {
+  const res = await apiClient.post(`/orders/${orderId}/items`, {
+    menu_item_id: menuItemId,
+    quantity,
+    special_instructions: specialInstructions,
+  });
+  return res.data.data;
+}
+
 export async function serveRemaining(
   orderId: number,
   idempotencyKey: string,

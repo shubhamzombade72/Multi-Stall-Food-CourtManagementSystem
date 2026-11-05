@@ -1,0 +1,74 @@
+[
+  {
+    "id": "V-01",
+    "desc": "Desktop application running with embedded runtime & authenticated owner",
+    "result": "PASS",
+    "evidence": "http://127.0.0.1:52415/api"
+  },
+  {
+    "id": "V-02",
+    "desc": "Test order created with dishes across stalls",
+    "result": "PASS",
+    "evidence": "orderId=1"
+  },
+  {
+    "id": "V-03",
+    "desc": "Order card visible on tracking board",
+    "result": "PASS",
+    "evidence": ""
+  },
+  {
+    "id": "V-04",
+    "desc": "Card label has NO elapsed-minute indicator (e.g. 15m)",
+    "result": "PASS",
+    "evidence": "label=\"T-HFYT · 0/2 Served\""
+  },
+  {
+    "id": "V-05",
+    "desc": "Card label contains table, guest count, and served ratio",
+    "result": "PASS",
+    "evidence": "label=\"T-HFYT · 0/2 Served\""
+  },
+  {
+    "id": "V-06",
+    "desc": "No LATE badge on order card or tracking board",
+    "result": "PASS",
+    "evidence": "card=0, board=0"
+  },
+  {
+    "id": "V-07",
+    "desc": "No delayed ring/pulse indicators on the order or board",
+    "result": "PASS",
+    "evidence": "delayed=0, all=0"
+  },
+  {
+    "id": "V-08",
+    "desc": "Normal kitchen workflow intact: card transitions to amber when dish is ready",
+    "result": "PASS",
+    "evidence": "state=card-state-red"
+  },
+  {
+    "id": "V-09",
+    "desc": "Dish actions work and updated label still contains NO elapsed minutes",
+    "result": "PASS",
+    "evidence": "updatedLabel=\"T-HFYT · 2/2 Served\""
+  },
+  {
+    "id": "V-10",
+    "desc": "Payment records intact: successful payment settlement",
+    "result": "PASS",
+    "evidence": "status=200"
+  },
+  {
+    "id": "V-11",
+    "desc": "Audit history intact: audit logs recorded for operations",
+    "result": "PASS",
+    "evidence": "auditCount=18"
+  },
+  {
+    "id": "V-12",
+    "desc": "Food Court Settings: \"Late-order warning after (minutes)\" setting completely removed",
+    "result": "PASS",
+    "evidence": "inputs=0, text=0"
+  }
+]

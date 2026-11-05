@@ -1043,4 +1043,188 @@ class ItemFulfillmentTest extends TestCase
         $this->serveRemaining($this->byEmail('cashier@foodcourt.com'), $order->id, 'serve-key-0006', [$item->id])
             ->assertOk()->assertJsonPath('data.replayed', false);
     }
+
+    // ------------------------------------------------- Quantity controls & Add Item (Task A, B, D)
+
+    public function test_quantity_increase_and_decrease_lifecycle_with_recalculation_and_audit(): void
+    {
+        $cashier = $this->byEmail('cashier@foodcourt.com');
+        $order = $this->placeOrder([$this->pizzaStall() => 1]);
+        $ticketItem = $this->ticketItems($order)->first();
+        $this->assertSame(1, (int) $ticketItem->quantity);
+
+        $initialTotal = $order->fresh()->total_amount;
+
+        // 1. Increase 1 -> 2
+        $res = $this->actingAs($cashier, 'sanctum')
+            ->patchJson("/api/ticket-items/{$ticketItem->id}/quantity", ['delta' => 1])
+            ->assertOk();
+        $this->assertSame(2, $res->json('data.order.items.0.quantity'));
+        $this->assertSame(2, (int) $ticketItem->fresh()->quantity);
+        $orderItem = OrderItem::findOrFail($ticketItem->order_item_id);
+        $this->assertSame(2, (int) $orderItem->quantity);
+        $this->assertGreaterThan($initialTotal, (float) $order->fresh()->total_amount);
+
+        // Verify audit log for increase
+        $incAudit = AuditLog::where('action', 'ticket_item_quantity_increased')
+            ->where('entity_id', (string) $ticketItem->id)
+            ->latest('id')
+            ->first();
+        $this->assertNotNull($incAudit);
+        $this->assertSame(1, (int) $incAudit->old_values['quantity']);
+        $this->assertSame(2, (int) $incAudit->new_values['quantity']);
+        $this->assertSame($cashier->id, $incAudit->user_id);
+
+        // 2. Decrease 2 -> 1
+        $res = $this->actingAs($cashier, 'sanctum')
+            ->patchJson("/api/ticket-items/{$ticketItem->id}/quantity", ['delta' => -1])
+            ->assertOk();
+        $this->assertSame(1, $res->json('data.order.items.0.quantity'));
+        $this->assertSame(1, (int) $ticketItem->fresh()->quantity);
+        $this->assertSame(1, (int) $orderItem->fresh()->quantity);
+        $this->assertEquals($initialTotal, $order->fresh()->total_amount);
+
+        // Verify audit log for decrease
+        $decAudit = AuditLog::where('action', 'ticket_item_quantity_decreased')
+            ->where('entity_id', (string) $ticketItem->id)
+            ->latest('id')
+            ->first();
+        $this->assertNotNull($decAudit);
+        $this->assertSame(2, (int) $decAudit->old_values['quantity']);
+        $this->assertSame(1, (int) $decAudit->new_values['quantity']);
+        $this->assertSame($cashier->id, $decAudit->user_id);
+
+        // 3. Prevent decrease below 1
+        $this->actingAs($cashier, 'sanctum')
+            ->patchJson("/api/ticket-items/{$ticketItem->id}/quantity", ['delta' => -1])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Quantity cannot be decreased below 1.');
+        $this->assertSame(1, (int) $ticketItem->fresh()->quantity);
+    }
+
+    public function test_quantity_cannot_be_modified_on_served_ready_or_cancelled_items(): void
+    {
+        $cashier = $this->byEmail('cashier@foodcourt.com');
+        $kitchen = $this->byEmail('kitchen.pizza@foodcourt.com');
+        $order = $this->placeOrder([$this->pizzaStall() => 1]);
+        $ticketItem = $this->ticketItems($order)->first();
+
+        // Ready item test
+        $this->patchItem($kitchen, $ticketItem->id, 'ready')->assertOk();
+        $this->actingAs($cashier, 'sanctum')
+            ->patchJson("/api/ticket-items/{$ticketItem->id}/quantity", ['delta' => 1])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Cannot modify quantity of an already prepared item. Please add a new item.');
+
+        // Served item test
+        $this->patchItem($cashier, $ticketItem->id, 'served')->assertOk();
+        $this->actingAs($cashier, 'sanctum')
+            ->patchJson("/api/ticket-items/{$ticketItem->id}/quantity", ['delta' => 1])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Cannot modify quantity of an already served item.');
+
+        // Cancelled item test
+        $order2 = $this->placeOrder([$this->pizzaStall() => 1]);
+        $ticketItem2 = $this->ticketItems($order2)->first();
+        $ticketItem2->update(['status' => 'cancelled']);
+        $this->actingAs($cashier, 'sanctum')
+            ->patchJson("/api/ticket-items/{$ticketItem2->id}/quantity", ['delta' => 1])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Cannot modify quantity of a cancelled item.');
+    }
+
+    public function test_quantity_controls_and_add_item_prevent_modifying_paid_orders(): void
+    {
+        $cashier = $this->byEmail('cashier@foodcourt.com');
+        $order = $this->placeOrder([$this->pizzaStall() => 1]);
+        $ticketItem = $this->ticketItems($order)->first();
+
+        $order->update(['payment_status' => 'paid']);
+
+        // Quantity modification blocked
+        $this->actingAs($cashier, 'sanctum')
+            ->patchJson("/api/ticket-items/{$ticketItem->id}/quantity", ['delta' => 1])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Order has existing payments and cannot be modified.');
+
+        // Add item blocked
+        $menuItem = MenuItem::where('stall_id', $this->burgerStall())->where('is_available', true)->firstOrFail();
+        $this->actingAs($cashier, 'sanctum')
+            ->postJson("/api/orders/{$order->id}/items", ['menu_item_id' => $menuItem->id, 'quantity' => 1])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Order has existing payments and items cannot be added.');
+    }
+
+    public function test_add_item_multi_stall_and_ticket_isolation(): void
+    {
+        $cashier = $this->byEmail('cashier@foodcourt.com');
+        // Initial order: only pizza stall
+        $order = $this->placeOrder([$this->pizzaStall() => 1]);
+        $this->assertSame(1, $order->kitchenTickets()->count());
+        $initialSubtotal = (float) $order->subtotal;
+
+        // Add burger stall item
+        $burgerItem = MenuItem::where('stall_id', $this->burgerStall())->where('is_available', true)->firstOrFail();
+        $res = $this->actingAs($cashier, 'sanctum')
+            ->postJson("/api/orders/{$order->id}/items", [
+                'menu_item_id' => $burgerItem->id,
+                'quantity' => 2,
+                'special_instructions' => 'Extra mayo',
+            ])
+            ->assertOk();
+
+        // 1. Order now has 2 kitchen tickets (1 for Pizza, 1 for Burger)
+        $order->refresh();
+        $this->assertSame(2, $order->kitchenTickets()->count());
+        $burgerTicket = $order->kitchenTickets()->where('stall_id', $this->burgerStall())->firstOrFail();
+        $this->assertSame('pending', $burgerTicket->status);
+        $this->assertSame(1, $burgerTicket->ticketItems()->count());
+
+        $burgerTicketItem = $burgerTicket->ticketItems()->firstOrFail();
+        $this->assertSame(2, (int) $burgerTicketItem->quantity);
+        $this->assertSame('pending', $burgerTicketItem->status);
+
+        // 2. Financial recalculation verified
+        $expectedLine = bcmul((string) $burgerItem->price, '2', 2);
+        $this->assertEquals(bcadd((string) $initialSubtotal, $expectedLine, 2), (string) $order->subtotal);
+
+        // 3. Audit log verified
+        $addAudit = AuditLog::where('action', 'order_item_added')
+            ->where('stall_id', $this->burgerStall())
+            ->latest('id')
+            ->first();
+        $this->assertNotNull($addAudit);
+        $this->assertSame($order->id, (int) $addAudit->new_values['order_id']);
+        $this->assertSame(2, (int) $addAudit->new_values['quantity']);
+
+        // 4. Adding same item with same instructions merges quantity
+        $res2 = $this->actingAs($cashier, 'sanctum')
+            ->postJson("/api/orders/{$order->id}/items", [
+                'menu_item_id' => $burgerItem->id,
+                'quantity' => 1,
+                'special_instructions' => 'Extra mayo',
+            ])
+            ->assertOk();
+
+        $this->assertSame(3, (int) $burgerTicketItem->fresh()->quantity);
+        $mergeAudit = AuditLog::where('action', 'order_item_quantity_merged')
+            ->where('stall_id', $this->burgerStall())
+            ->latest('id')
+            ->first();
+        $this->assertNotNull($mergeAudit);
+        $this->assertSame(2, (int) $mergeAudit->old_values['quantity']);
+        $this->assertSame(3, (int) $mergeAudit->new_values['quantity']);
+
+        // 5. Adding same item with DIFFERENT instructions creates distinct line
+        $res3 = $this->actingAs($cashier, 'sanctum')
+            ->postJson("/api/orders/{$order->id}/items", [
+                'menu_item_id' => $burgerItem->id,
+                'quantity' => 1,
+                'special_instructions' => 'No mayo',
+            ])
+            ->assertOk();
+
+        // Burger ticket now has 2 items: 3x with Extra mayo, 1x with No mayo
+        $this->assertSame(2, $burgerTicket->fresh()->ticketItems()->count());
+    }
 }

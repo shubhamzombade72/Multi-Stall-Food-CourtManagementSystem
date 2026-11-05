@@ -14,6 +14,7 @@ class Payment extends Model
         'uuid',
         'payment_number',
         'order_id',
+        'order_split_id',
         'cashier_id',
         'payment_method',
         'amount',
@@ -40,6 +41,12 @@ class Payment extends Model
                 $model->payment_number = 'PAY-' . date('Ymd') . '-' . strtoupper(Str::random(5));
             }
         });
+
+        static::deleting(function ($model) {
+            if ($model->status === 'success' || $model->allocations()->exists()) {
+                throw new \RuntimeException("Financial integrity violation: Cannot delete a successful payment transaction (Payment #{$model->payment_number}, ID: {$model->id}). Payments must be preserved for audit.");
+            }
+        });
     }
 
     public function order()
@@ -47,9 +54,18 @@ class Payment extends Model
         return $this->belongsTo(Order::class);
     }
 
+    public function orderSplit()
+    {
+        return $this->belongsTo(OrderSplit::class, 'order_split_id');
+    }
+
+    public function allocations()
+    {
+        return $this->hasMany(PaymentAllocation::class);
+    }
+
     public function cashier()
     {
         return $this->belongsTo(User::class, 'cashier_id');
     }
 }
-

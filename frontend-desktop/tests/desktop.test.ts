@@ -5,43 +5,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { columnFor, elapsed, newTicketIds, nextKitchenAction, urgency } from '../src/lib/kds.ts';
 import { csvCell, toCsv } from '../src/lib/csv.ts';
 import { describeLoginError, API_NOT_CONFIGURED } from '../src/lib/apiErrors.ts';
 import { readFileSync } from 'node:fs';
 
 const require = createRequire(import.meta.url);
 const { normalizeApiUrl, describeApiUrlWarnings, classifyNetworkError, classifyApiProbe, parseBundledConfig, isLoopbackHost } = require('../electron/config.cjs');
-
-// ---------------------------------------------------------------- kitchen display
-test('KDS actions follow the backend forward-only state machine', () => {
-  assert.deepEqual(nextKitchenAction('pending'), { label: 'Accept', to: 'accepted' });
-  assert.deepEqual(nextKitchenAction('accepted'), { label: 'Start Preparing', to: 'preparing' });
-  assert.deepEqual(nextKitchenAction('preparing'), { label: 'Mark Ready', to: 'ready' });
-  assert.equal(nextKitchenAction('ready'), null, 'serving is not a kitchen action');
-  assert.equal(nextKitchenAction('picked_up'), null);
-  assert.equal(nextKitchenAction('cancelled'), null);
-});
-
-test('KDS columns group statuses', () => {
-  assert.equal(columnFor('pending'), 'new');
-  assert.equal(columnFor('accepted'), 'new');
-  assert.equal(columnFor('preparing'), 'preparing');
-  assert.equal(columnFor('ready'), 'ready');
-  assert.equal(columnFor('picked_up'), 'served');
-  assert.equal(columnFor('cancelled'), null);
-});
-
-test('KDS urgency and timers', () => {
-  const now = Date.parse('2026-11-02T12:00:00Z');
-  assert.equal(urgency('2026-11-02T11:50:00Z', now), 'normal');
-  assert.equal(urgency('2026-11-02T11:45:00Z', now), 'warning');
-  assert.equal(urgency('2026-11-02T11:30:00Z', now), 'late');
-  assert.equal(elapsed('2026-11-02T11:58:05Z', now), '1:55');
-  assert.equal(elapsed('2026-11-02T10:30:00Z', now), '1h 30m');
-  assert.deepEqual(newTicketIds(new Set([1, 2]), [1, 2, 3, 4]), [3, 4]);
-  assert.deepEqual(newTicketIds(new Set([1, 2]), [2]), []);
-});
 
 // ---------------------------------------------------------------- CSV export
 test('CSV quotes separators and neutralises spreadsheet formulas', () => {

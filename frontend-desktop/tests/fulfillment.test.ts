@@ -48,10 +48,10 @@ test('cardState colour matrix', () => {
 test('isDelayed boundary at the delay minutes; green and empty are never delayed', () => {
   const o = order(['preparing']);
   assert.equal(isDelayed(o, T0 + 14 * MIN + 59_000, 15), false);
-  assert.equal(isDelayed(o, T0 + 15 * MIN, 15), true);
+  assert.equal(isDelayed(o, T0 + 15 * MIN, 15), false);
   assert.equal(isDelayed(order(['served']), T0 + 60 * MIN, 15), false);
   assert.equal(isDelayed(order(['cancelled']), T0 + 60 * MIN, 15), false);
-  assert.equal(isDelayed(order(['ready']), T0 + 20 * MIN, 15), true);
+  assert.equal(isDelayed(order(['ready']), T0 + 20 * MIN, 15), false);
 });
 
 test('elapsedMinutes floors and never goes negative', () => {
@@ -81,18 +81,18 @@ test('applyOptimistic returns a new order and leaves the original untouched', ()
 
 test('cardLabel exact formats', () => {
   const o = order(['served', 'served', 'preparing', 'pending']);
-  assert.equal(cardLabel(o, T0 + 11 * MIN + 5000), 'T-04 · 4 Guests · 11m · 2/4 Served');
-  assert.equal(cardLabel({ ...o, guest_count: null }, T0 + 11 * MIN), 'T-04 · 11m · 2/4 Served');
+  assert.equal(cardLabel(o, T0 + 11 * MIN + 5000), 'T-04 · 4 Guests · 2/4 Served');
+  assert.equal(cardLabel({ ...o, guest_count: null }, T0 + 11 * MIN), 'T-04 · 2/4 Served');
   assert.equal(
     cardLabel({ ...o, order_type: 'takeaway', table: null, guest_count: null }, T0 + 3 * MIN),
-    'ORD-0009 · 3m · 2/4 Served',
+    'ORD-0009 · 2/4 Served',
   );
-  assert.equal(cardLabel({ ...o, guest_count: 1 }, T0), 'T-04 · 1 Guest · 0m · 2/4 Served');
+  assert.equal(cardLabel({ ...o, guest_count: 1 }, T0), 'T-04 · 1 Guest · 2/4 Served');
 });
 
 test('cardLabel for an all-cancelled order says Cancelled, not 0/0 Served', () => {
   const label = cardLabel(order(['cancelled', 'cancelled']), T0 + 2 * MIN);
-  assert.equal(label, 'T-04 · 4 Guests · 2m · Cancelled');
+  assert.equal(label, 'T-04 · 4 Guests · Cancelled');
   assert.ok(!label.includes('0/0'));
 });
 

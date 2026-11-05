@@ -14,6 +14,7 @@
  * P-23        reconciliation proves payable = paid + outstanding
  * P-24..P-26  application restart: history, balances and payout numbers identical afterwards
  */
+import electronPath from 'electron';
 import { _electron as electron } from 'playwright-core';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -52,7 +53,9 @@ const api = async (token, method, path, body, allowFail = false) => {
 };
 
 const launch = async () => {
-  app = await electron.launch({ args: [APP_DIR], env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: '' }, timeout: 60000 });
+  const launchEnv = { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: '' };
+  delete launchEnv.ELECTRON_RUN_AS_NODE;
+  app = await electron.launch({ executablePath: electronPath, args: [APP_DIR], env: launchEnv, timeout: 60000 });
   page = await app.firstWindow();
   page.on('pageerror', (e) => pageErrors.push(String(e?.message || e)));
   page.on('console', (m) => m.type() === 'error' && pageErrors.push(m.text()));

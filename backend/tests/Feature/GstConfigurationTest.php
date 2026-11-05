@@ -236,13 +236,13 @@ class GstConfigurationTest extends TestCase
 
     public static function paymentMethods(): array
     {
-        return ['cash' => ['cash'], 'card' => ['card'], 'split' => ['split'], 'upi without a configured QR' => ['upi_qr']];
+        return ['cash' => ['cash'], 'card' => ['card'], 'upi without a configured QR' => ['upi_qr']];
     }
 
     public function test_upi_qr_amount_is_the_gst_inclusive_payable_amount(): void
     {
         $this->setTax(true, '18.00', 'exclusive');
-        Setting::updateOrCreate(['key' => 'payment_methods'], ['value' => ['enabled' => ['cash', 'upi_qr', 'card', 'split']]]);
+        Setting::updateOrCreate(['key' => 'payment_methods'], ['value' => ['enabled' => ['cash', 'upi_qr', 'card']]]);
         Setting::updateOrCreate(['key' => 'upi'], ['value' => ['enabled' => true, 'vpa' => 'shop@upi']]);
         $order = $this->placeOrder($this->menuItem('100.00'));
 

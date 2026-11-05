@@ -17,7 +17,7 @@ use Illuminate\Http\Request;
 class SettingsController extends Controller
 {
     /** Payment methods the billing code already supports. Settings can only switch these on or off. */
-    public const PAYMENT_METHODS = ['cash', 'upi_qr', 'card', 'split'];
+    public const PAYMENT_METHODS = ['cash', 'upi_qr', 'card'];
 
     private const DEFAULTS = [
         'business_profile' => [
@@ -46,6 +46,8 @@ class SettingsController extends Controller
         'upi' => [
             'enabled' => false,
             'vpa' => null,
+            // Set only by the owner's test-scan confirmation; dropped when the UPI ID changes. Never client-supplied.
+            'verification' => null,
         ],
         // GST. These are the values an installation that never opened the setting keeps using (the rule it always had:
         // GST on, 5%, added on top of item prices). The owner changes them in Food Court Settings; nothing else holds a rate.
@@ -81,7 +83,7 @@ class SettingsController extends Controller
                     'available' => self::PAYMENT_METHODS,
                 ],
                 'order_tracking' => self::current('order_tracking'),
-                'upi' => self::current('upi'),
+                'upi' => UpiPaymentService::publicConfig(),
                 'tax' => self::current('tax') + [
                     'editable' => true,
                     // Menu items carry no tax setting of their own, so GST can only apply to all items
@@ -170,10 +172,51 @@ class SettingsController extends Controller
 
         $old = self::current($key);
         $new = array_merge($old, $validated);
+        if ($key === 'upi' && strtolower((string) ($old['vpa'] ?? '')) !== strtolower((string) ($new['vpa'] ?? ''))) {
+            $new['verification'] = null; // a test scan only vouches for the UPI ID it was done with
+        }
 
         Setting::updateOrCreate(['key' => $key], ['value' => $new, 'updated_by_user_id' => $request->user()->id]);
         AuditService::log('settings_updated', 'Setting', $key, null, $old, $new);
 
-        return response()->json(['success' => true, 'message' => 'Settings saved', 'data' => $new]);
+        $data = $key === 'upi' ? UpiPaymentService::publicConfig() : $new;
+
+        return response()->json(['success' => true, 'message' => 'Settings saved', 'data' => $data]);
+    }
+
+    /** POST /settings/upi/test-qr (owner): a Rs 1.00 test payload to the saved UPI ID. Creates no order or payment. */
+    public function upiTestQr(Request $request)
+    {
+        if (!$request->user()->isOwner()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Owner access required.'], 403);
+        }
+
+        return response()->json(['success' => true, 'data' => UpiPaymentService::testPayload()]);
+    }
+
+    /**
+     * POST /settings/upi/test-confirmed (owner): the owner attests that a real UPI app scanned the test QR and showed the
+     * payee for THIS UPI ID. This is an owner statement, not a bank/provider verification, and is recorded as such.
+     */
+    public function upiTestConfirmed(Request $request)
+    {
+        if (!$request->user()->isOwner()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Owner access required.'], 403);
+        }
+        $cfg = self::current('upi');
+        if (empty($cfg['vpa']) || !preg_match(UpiPaymentService::VPA_PATTERN, (string) $cfg['vpa'])) {
+            return response()->json(['success' => false, 'message' => 'Save a valid UPI ID first, then test it.'], 422);
+        }
+        $old = $cfg;
+        $cfg['verification'] = [
+            'vpa' => strtolower((string) $cfg['vpa']),
+            'method' => 'owner_test_scan',
+            'confirmed_at' => now()->toIso8601String(),
+            'confirmed_by_user_id' => $request->user()->id,
+        ];
+        Setting::updateOrCreate(['key' => 'upi'], ['value' => $cfg, 'updated_by_user_id' => $request->user()->id]);
+        AuditService::log('upi_test_scan_confirmed', 'Setting', 'upi', null, $old, $cfg);
+
+        return response()->json(['success' => true, 'message' => 'Test scan recorded', 'data' => UpiPaymentService::publicConfig()]);
     }
 }

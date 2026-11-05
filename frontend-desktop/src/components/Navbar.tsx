@@ -37,7 +37,7 @@ export const Navbar: React.FC = () => {
         </div>
         <div>
           <h1 className="font-bold text-fg tracking-tight text-base leading-tight">{settings.business_profile.name}</h1>
-          <p className="text-xs text-muted">Multi-Stall Management System</p>
+          <p className="text-xs text-muted">मंगलमूर्ती POS</p>
         </div>
       </div>
 

@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ListChecks } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ListChecks, Receipt } from 'lucide-react';
+import { usePendingBillsCount } from '../hooks/usePendingBillsCount';
 import { useAuth } from '../context/AuthContext';
 import { useNow } from '../hooks/useNow';
-import { fetchBoard, serveRemaining, setItemStatus } from '../api/fulfillment';
+import { addOrderItem, fetchBoard, serveRemaining, setItemStatus, updateItemQuantity } from '../api/fulfillment';
 import { applyOptimistic, cardNow, serverOffset, type BoardItem, type BoardOrder, type BoardPage } from '../lib/fulfillment';
 import { mergePages, nextPageCursor, revertItem, shouldApplyPage, showingCounts } from '../lib/boardMerge';
 import { EmptyState, ErrorBanner, Loading, PageHeader, buttonClass } from '../components/ui';
 import { OrderCard } from '../components/tracking/OrderCard';
+import { AddItemModal } from '../components/tracking/AddItemModal';
 
 const POLL_MS = 5000;
 const NO_BUSY: ReadonlySet<number> = new Set();
@@ -24,6 +27,8 @@ const newKey = (): string =>
     : `k-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 export const OrderTrackingPage: React.FC = () => {
+  const navigate = useNavigate();
+  const pendingCount = usePendingBillsCount();
   const { isOwner } = useAuth();
   const canMarkReady = Boolean(isOwner);
 
@@ -39,6 +44,7 @@ export const OrderTrackingPage: React.FC = () => {
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<number>>(new Set());
   const [busyItems, setBusyItems] = useState<ReadonlySet<number>>(new Set());
   const [servingOrders, setServingOrders] = useState<ReadonlySet<number>>(new Set());
+  const [activeOrderForAdd, setActiveOrderForAdd] = useState<BoardOrder | null>(null);
 
   // Orders with a request in flight (count per order): polls must not overwrite their optimistic state.
   const inFlight = useRef<Map<number, number>>(new Map());
@@ -173,6 +179,68 @@ export const OrderTrackingPage: React.FC = () => {
     }
   }, [refresh, replaceOrder]);
 
+  const handleItemQuantityChange = useCallback(
+    async (order: BoardOrder, item: BoardItem, delta: 1 | -1) => {
+      if (busyRef.current.has(item.id)) return;
+      if (delta === -1 && item.quantity <= 1) {
+        return;
+      }
+      busyRef.current.add(item.id);
+      setError(null);
+      track(order.id, 1);
+      setBusyItems((s) => new Set(s).add(item.id));
+
+      try {
+        const res = await updateItemQuantity(item.id, delta);
+        if (res.order && mounted.current) {
+          replaceOrder(res.order);
+        }
+      } catch (err: any) {
+        if (mounted.current) {
+          setError(err?.response?.data?.message || 'Could not update item quantity.');
+        }
+        await refresh(true);
+      } finally {
+        track(order.id, -1);
+        busyRef.current.delete(item.id);
+        mutationSeq.current += 1;
+        if (mounted.current) {
+          setBusyItems((s) => {
+            const n = new Set(s);
+            n.delete(item.id);
+            return n;
+          });
+        }
+      }
+    },
+    [refresh, replaceOrder]
+  );
+
+  const handleAddItem = useCallback(
+    async (orderId: number, menuItemId: number, quantity: number, instructions?: string) => {
+      setError(null);
+      track(orderId, 1);
+      try {
+        const res = await addOrderItem(orderId, menuItemId, quantity, instructions);
+        if (res.order && mounted.current) {
+          replaceOrder(res.order);
+          setActiveOrderForAdd(res.order);
+        }
+        return true;
+      } catch (err: any) {
+        if (mounted.current) {
+          setError(err?.response?.data?.message || 'Could not add item to order.');
+        }
+        await refresh(true);
+        return false;
+      } finally {
+        track(orderId, -1);
+        mutationSeq.current += 1;
+      }
+    },
+    [refresh, replaceOrder]
+  );
+
   const handleServeAll = useCallback(async (order: BoardOrder, itemIds: number[]) => {
     const sig = [...itemIds].sort((a, b) => a - b).join(',');
     let entry = serveKeys.current.get(order.id);
@@ -239,6 +307,25 @@ export const OrderTrackingPage: React.FC = () => {
         title="Orders & Table Tracking"
         icon={ListChecks}
         subtitle={`${totalActive} ${totalActive === 1 ? 'order' : 'orders'} with food still to serve`}
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              data-testid="go-to-pending-bills"
+              onClick={() => navigate('/pos?mode=pending_bills')}
+              className={buttonClass.secondary}
+              title="View and Settle Pending Table Bills"
+            >
+              <Receipt className="w-4 h-4 text-warning-fg" />
+              <span>Pending Bills</span>
+              {pendingCount > 0 && (
+                <span className="ml-1.5 px-2 py-0.5 rounded-full text-[11px] font-black bg-primary text-primary-fg tabular-nums">
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+          </div>
+        }
       />
       <ErrorBanner message={error} onRetry={() => void refresh()} />
       {loading ? (
@@ -261,6 +348,8 @@ export const OrderTrackingPage: React.FC = () => {
                 onToggle={onToggle}
                 onItemAction={handleItemAction}
                 onServeAll={handleServeAll}
+                onQuantityChange={handleItemQuantityChange}
+                onOpenAddItem={(o) => setActiveOrderForAdd(o)}
               />
             ))}
           </div>
@@ -275,6 +364,14 @@ export const OrderTrackingPage: React.FC = () => {
             </div>
           )}
         </>
+      )}
+
+      {activeOrderForAdd && (
+        <AddItemModal
+          order={activeOrderForAdd}
+          onClose={() => setActiveOrderForAdd(null)}
+          onAdd={handleAddItem}
+        />
       )}
     </div>
   );

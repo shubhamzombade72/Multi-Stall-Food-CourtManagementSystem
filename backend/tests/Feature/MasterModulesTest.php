@@ -63,7 +63,7 @@ class MasterModulesTest extends TestCase
         $this->actingAs($cashier, 'sanctum')->getJson('/api/settings')
             ->assertStatus(200)
             ->assertJsonPath('data.tax.editable', true)
-            ->assertJsonPath('data.payment_methods.available', ['cash', 'upi_qr', 'card', 'split']);
+            ->assertJsonPath('data.payment_methods.available', ['cash', 'upi_qr', 'card']);
 
         $this->actingAs($cashier, 'sanctum')->putJson('/api/settings/business_profile', ['name' => 'Hacked'])->assertStatus(403);
 

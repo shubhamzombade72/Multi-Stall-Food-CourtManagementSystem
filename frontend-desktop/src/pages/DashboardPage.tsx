@@ -51,21 +51,6 @@ export const DashboardPage: React.FC = () => {
           <h2 className="text-xl font-bold text-fg tracking-tight">Food Court Executive Overview</h2>
           <p className="text-sm text-muted mt-1">Real-time consolidated operations across all culinary stalls</p>
         </div>
-        <div className="flex space-x-3">
-          <Link
-            to="/pos"
-            className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-fg font-medium text-sm rounded-lg shadow-sm transition flex items-center space-x-1.5"
-          >
-            <span>Open Cashier POS</span>
-            <ArrowUpRight className="w-4 h-4" />
-          </Link>
-          <Link
-            to="/settlements"
-            className="px-4 py-2 bg-surface border border-line hover:bg-surface-2 text-fg font-medium text-sm rounded-lg transition"
-          >
-            End-of-Day Closing
-          </Link>
-        </div>
       </div>
 
       {/* Top 4 KPI Cards */}
@@ -120,7 +105,7 @@ export const DashboardPage: React.FC = () => {
 
       {/* Operations: every figure below is read from the server; nothing is estimated */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Link to="/pos" className="bg-surface p-3 rounded-lg border border-line shadow-sm hover:border-primary/40">
+        <Link to="/pos?mode=pending_bills" className="bg-surface p-3 rounded-lg border border-line shadow-sm hover:border-primary/40">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted">Pending Bills</span>
           <div className="text-xl font-bold text-danger-fg mt-1">{data?.pending_bills?.count ?? 0}</div>
           <p className="text-xs text-muted mt-1">₹{Number(data?.pending_bills?.amount || 0).toFixed(2)} awaiting payment</p>
@@ -128,10 +113,10 @@ export const DashboardPage: React.FC = () => {
         <div className="bg-surface p-3 rounded-lg border border-line shadow-sm">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted">Completed Orders Today</span>
           <div className="text-xl font-bold text-success-fg mt-1">{data?.completed_orders_count ?? 0}</div>
-          <p className="text-xs text-muted mt-1">Purchases today: {data?.purchases_today?.count ?? 0} (₹{Number(data?.purchases_today?.total || 0).toFixed(2)})</p>
+          <p className="text-xs text-muted mt-1">Orders fully fulfilled</p>
         </div>
         <Link to="/settlements" className="bg-surface p-3 rounded-lg border border-line shadow-sm hover:border-primary/40">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted">Daily Closing</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted">End-of-Day Closing & Settlements</span>
           <div className={`text-lg font-bold mt-1 ${data?.closing_today ? 'text-success-fg' : 'text-warning-fg'}`}>
             {data?.closing_today ? 'Closed' : 'Open'}
           </div>
@@ -156,29 +141,7 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="bg-surface rounded-lg border border-line p-3 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-base text-fg">Low-Stock Alerts</h3>
-            <Link to="/inventory" className="text-xs font-semibold text-primary">Inventory</Link>
-          </div>
-          {(data?.low_stock_items || []).length === 0 ? (
-            <p className="text-sm text-muted">All items above their alert level.</p>
-          ) : (
-            <ul className="text-sm space-y-1.5 max-h-56 overflow-y-auto">
-              {data.low_stock_items.map((i: any) => (
-                <li key={i.id} className="flex justify-between">
-                  <span>
-                    {i.name} <span className="text-xs text-muted">({i.stall?.name})</span>
-                  </span>
-                  <span className="font-bold text-danger-fg">
-                    {Number(i.current_stock)} / {Number(i.minimum_alert_stock)} {i.unit}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-surface rounded-lg border border-line p-3 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-base text-fg">Staff</h3>

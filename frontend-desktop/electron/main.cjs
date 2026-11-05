@@ -409,7 +409,7 @@ function createWindow() {
     minWidth: 1100,
     minHeight: 700,
     show: false,
-    title: 'FoodCourt Desktop',
+    title: 'मंगलमूर्ती POS',
     backgroundColor: '#0f172a',
     autoHideMenuBar: true,
     webPreferences: {

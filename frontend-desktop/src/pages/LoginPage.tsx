@@ -94,7 +94,7 @@ export const LoginPage: React.FC = () => {
             <img src={logoImg} alt="मंगलमूर्ती Logo" className="w-full h-full object-cover" />
           </div>
           <h2 className="text-xl font-bold text-fg tracking-tight">मंगलमूर्ती</h2>
-          <p className="text-sm text-muted mt-1">Multi-Stall Food Court Management & POS</p>
+          <p className="text-sm text-muted mt-1">Food Court POS & Management</p>
         </div>
 
         {notice && (

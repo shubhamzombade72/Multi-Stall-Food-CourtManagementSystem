@@ -1,8 +1,8 @@
 {
   "name": "frontend-desktop",
-  "productName": "FoodCourt Desktop",
-  "description": "Multi-Stall Food Court Management System - Windows desktop (Owner, Cashier POS, Kitchen Display, Inventory). Runs on one PC with its own database, or joins a shared food court host.",
-  "author": "Multi-Stall Food Court",
+  "productName": "MangalMurti POS",
+  "description": "MangalMurti POS - Food Court Management & Point of Sale System for Windows desktop (Owner, Cashier POS, Orders & Table Tracking). Runs on one PC with its own database, or joins a shared food court host.",
+  "author": "MangalMurti Tech Solution",
   "private": true,
   "version": "1.2.0",
   "type": "module",
@@ -17,7 +17,7 @@
     "pack:dir": "pnpm build && pnpm prepare:server && electron-builder --win --x64 --dir",
     "pack:dir:demo": "pnpm build && set FOODCOURT_DEMO_DATA=1&& pnpm prepare:server && electron-builder --win --x64 --dir",
     "dist:win": "pnpm build && pnpm prepare:server && electron-builder --win --x64",
-    "dist:win:demo": "pnpm build && set FOODCOURT_DEMO_DATA=1&& pnpm prepare:server && electron-builder --win --x64 --config.win.artifactName=Multi-Stall-Food-Court-DEMO-Setup-${version}.${ext}",
+    "dist:win:demo": "pnpm build && set FOODCOURT_DEMO_DATA=1&& pnpm prepare:server && electron-builder --win --x64 --config.win.artifactName=MangalMurti-POS-DEMO-Setup-${version}.${ext}",
     "prepare:server": "node scripts/prepare-embedded-server.mjs"
   },
   "dependencies": {
@@ -53,8 +53,8 @@
   },
   "build": {
     "appId": "com.foodcourt.desktop",
-    "productName": "Multi-Stall Food Court Management System",
-    "copyright": "Multi-Stall Food Court",
+    "productName": "MangalMurti POS",
+    "copyright": "MangalMurti Tech Solution",
     "directories": {
       "output": "installers/${version}",
       "buildResources": "build-resources"
@@ -75,14 +75,14 @@
           ]
         }
       ],
-      "artifactName": "Multi-Stall-Food-Court-Setup-${version}.${ext}"
+      "artifactName": "MangalMurti-POS-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "Multi-Stall Food Court",
+      "shortcutName": "MangalMurti POS",
       "deleteAppDataOnUninstall": false,
       "runAfterFinish": true
     },

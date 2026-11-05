@@ -11,18 +11,14 @@ import { OrdersPage } from './pages/OrdersPage';
 import { OrderTrackingPage } from './pages/OrderTrackingPage';
 import { StallsPage } from './pages/StallsPage';
 import { MenuPage } from './pages/MenuPage';
-import { InventoryPage } from './pages/InventoryPage';
 import { SettlementsPage } from './pages/SettlementsPage';
 import { ReportsPage } from './pages/ReportsPage';
-import { PurchasesPage } from './pages/PurchasesPage';
-import { KitchenPage } from './pages/KitchenPage';
 import { StaffPage } from './pages/StaffPage';
 import { PaymentsPage } from './pages/PaymentsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { FoodCourtSettingsPage } from './pages/FoodCourtSettingsPage';
 import { TablesPage } from './pages/TablesPage';
 import { CustomersPage } from './pages/CustomersPage';
-import { WaiterPage } from './pages/WaiterPage';
 import { CashierClosingPage } from './pages/CashierClosingPage';
 import { SettingsProvider } from './context/SettingsContext';
 import { FirstRunPage } from './pages/FirstRunPage';
@@ -39,13 +35,11 @@ export const homeFor = (role: string): string => {
     case 'cashier':
       return '/pos';
     case 'kitchen_staff':
-      return '/kitchen';
+      return '/tracking';
     case 'stall_manager':
-      return '/kitchen';
-    case 'store_staff':
-      return '/inventory';
+      return '/tracking';
     case 'waiter':
-      return '/waiter';
+      return '/tracking';
     default:
       return '/settings';
   }
@@ -80,19 +74,18 @@ const ProtectedLayout: React.FC = () => {
               <Route path="/" element={<Navigate to={homeFor(user.role)} replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/pos" element={<PosPage />} />
+              <Route path="/pending-bills" element={<Navigate to="/pos?mode=pending_bills" replace />} />
               <Route path="/orders" element={<OrdersPage />} />
               <Route path="/tracking" element={<OrderTrackingPage />} />
               <Route path="/payments" element={<PaymentsPage />} />
               <Route path="/cashier-closing" element={<CashierClosingPage />} />
-              <Route path="/kitchen" element={<KitchenPage />} />
-              <Route path="/waiter" element={<WaiterPage />} />
+              <Route path="/kitchen" element={<Navigate to="/tracking" replace />} />
+              <Route path="/waiter" element={<Navigate to="/tracking" replace />} />
               <Route path="/tables" element={<TablesPage />} />
               <Route path="/customers" element={<CustomersPage />} />
               <Route path="/stalls" element={<StallsPage />} />
               <Route path="/staff" element={<StaffPage />} />
               <Route path="/menu" element={<MenuPage />} />
-              <Route path="/inventory" element={<InventoryPage />} />
-              <Route path="/purchases" element={<PurchasesPage />} />
               <Route path="/settlements" element={<SettlementsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/food-court-settings" element={<FoodCourtSettingsPage />} />
@@ -109,13 +102,12 @@ const ProtectedLayout: React.FC = () => {
 export const App: React.FC = () => {
   return (
     <AuthProvider>
-      {/* Hash routing works both from a web server and from file:// inside the Electron app */}
       <HashRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/first-run" element={<FirstRunPage />} />
-          <Route path="/recover" element={<RecoverOwnerPage />} />
-          <Route path="/connect" element={<ConnectHostPage />} />
+          <Route path="/recover-owner" element={<RecoverOwnerPage />} />
+          <Route path="/connect-host" element={<ConnectHostPage />} />
           <Route path="/*" element={<ProtectedLayout />} />
         </Routes>
       </HashRouter>

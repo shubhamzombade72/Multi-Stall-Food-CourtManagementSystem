@@ -18,7 +18,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
 const version = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
 const UNPACKED = join(ROOT, 'installers', version, 'win-unpacked');
-const EXE = process.argv[2] || join(UNPACKED, 'Multi-Stall Food Court Management System.exe');
+const EXE = process.argv[2] || (existsSync(join(UNPACKED, 'MangalMurti POS.exe')) ? join(UNPACKED, 'MangalMurti POS.exe') : join(UNPACKED, 'Multi-Stall Food Court Management System.exe'));
 const OUT = join(ROOT, '..', 'qa', 'desktop', 'results', 'demo');
 mkdirSync(OUT, { recursive: true });
 

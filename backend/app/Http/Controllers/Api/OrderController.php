@@ -420,7 +420,8 @@ class OrderController extends Controller
             // fulfilment writer, inside this transaction and under the order lock taken above.
             app(FulfillmentService::class)->cancelOrderItems($order, $user);
             // Any UPI QR already shown for this bill can no longer confirm a payment
-            \App\Models\UpiPaymentRequest::where('order_id', $order->id)->where('status', 'pending')->update(['status' => 'cancelled']);
+            \App\Models\UpiPaymentRequest::where('order_id', $order->id)->whereIn('status', \App\Models\UpiPaymentRequest::OPEN)
+                ->update(['status' => 'cancelled', 'closed_at' => now(), 'closed_reason' => 'Order cancelled']);
 
             // Release the table only if no other open order is still using it
             if ($order->table_id) {

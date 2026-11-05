@@ -32,7 +32,7 @@ const sizeMb = (p) => {
   return (total / 1048576).toFixed(1);
 };
 
-rmSync(stage, { recursive: true, force: true });
+rmSync(stage, { recursive: true, force: true, maxRetries: 3, retryDelay: 500 });
 mkdirSync(join(stage, 'backend'), { recursive: true });
 mkdirSync(join(stage, 'php', 'ext'), { recursive: true });
 

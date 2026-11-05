@@ -20,7 +20,14 @@ trait MakesSettlements
 
     protected function owner(): User
     {
-        return User::where('role', 'owner')->where('is_active', true)->firstOrFail();
+        return User::where('role', 'owner')->where('is_active', true)->first()
+            ?? User::create([
+                'name' => 'Test Owner',
+                'email' => 'owner.' . Str::random(6) . '@test.com',
+                'password' => bcrypt('password'),
+                'role' => 'owner',
+                'is_active' => true,
+            ]);
     }
 
     /** A business date nobody else uses: far in the future, one new day per call. */
@@ -109,10 +116,26 @@ trait MakesSettlements
             'created_at' => $date . ' 12:00:00',
             'updated_at' => $date . ' 12:00:00',
         ]);
+        $catId = DB::table('menu_categories')->value('id') ?? DB::table('menu_categories')->insertGetId([
+            'stall_id' => $stall->id,
+            'name' => 'Main Category',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $menuItemId = MenuItem::query()->value('id') ?? DB::table('menu_items')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'stall_id' => $stall->id,
+            'category_id' => $catId,
+            'name' => 'Test dish',
+            'price' => $amount,
+            'is_available' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         DB::table('order_items')->insert([
             'order_id' => $orderId,
             'stall_id' => $stall->id,
-            'menu_item_id' => MenuItem::query()->value('id'),
+            'menu_item_id' => $menuItemId,
             'item_name' => 'Test dish',
             'unit_price' => $amount,
             'quantity' => 1,

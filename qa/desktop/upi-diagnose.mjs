@@ -80,7 +80,7 @@ const report = {
   decoder: 'jsQR 1.4.0 (independent of the app encoder)',
   generatedAt: new Date().toISOString(),
   configuredUpi: { enabled: settings.upi?.enabled, vpa: settings.upi?.vpa ? mask(settings.upi.vpa) : null, ...vpaCheck(settings.upi?.vpa ?? '') },
-  businessName: settings.business_profile?.name,
+  businessProfileRowStored: Boolean(settings.business_profile),
   requests: [],
 };
 for (const r of requests) {
@@ -97,7 +97,8 @@ for (const r of requests) {
     notDoubleEncoded: !p.doubleEncoded,
     paEqualsStoredVpa: p.params.pa === r.vpa,
     paEqualsCurrentSetting: p.params.pa === (settings.upi?.vpa ?? '').toLowerCase(),
-    pnEqualsBusinessName: p.params.pn === settings.business_profile?.name,
+    // No business_profile row is stored (defaults are used), so compare with the payee name saved on the request
+    pnEqualsSavedPayeeName: p.params.pn === r.payee_name,
     amEqualsBillTotal: p.params.am === Number(r.total_amount).toFixed(2) && p.params.am === money,
     amFormat2dp: /^\d+\.\d{2}$/.test(p.params.am ?? ''),
     cuIsINR: p.params.cu === 'INR',

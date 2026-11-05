@@ -46,6 +46,21 @@ class Order extends Model
         'guest_count' => 'integer',
     ];
 
+    protected $appends = [
+        'paid_amount',
+        'remaining_balance',
+    ];
+
+    public function getPaidAmountAttribute(): string
+    {
+        return $this->totalPaid();
+    }
+
+    public function getRemainingBalanceAttribute(): string
+    {
+        return $this->remainingBalance();
+    }
+
     protected static function boot()
     {
         parent::boot();
@@ -58,6 +73,12 @@ class Order extends Model
             }
             if (empty($model->tracking_token)) {
                 $model->tracking_token = 'trk_' . Str::random(36);
+            }
+        });
+
+        static::deleting(function ($model) {
+            if ($model->payments()->where('status', 'success')->exists() || $model->paymentAllocations()->exists()) {
+                throw new \RuntimeException("Financial integrity violation: Cannot delete order #{$model->order_number} (ID: {$model->id}) because it has successful payments or ledger allocations.");
             }
         });
     }
@@ -91,5 +112,57 @@ class Order extends Model
     {
         return $this->hasMany(Payment::class);
     }
-}
 
+    public function splits()
+    {
+        return $this->hasMany(OrderSplit::class)->orderBy('split_number');
+    }
+
+    public function paymentAllocations()
+    {
+        return $this->hasMany(PaymentAllocation::class);
+    }
+
+    public function totalPaid(): string
+    {
+        $paid = $this->payments()->where('status', 'success')->sum('amount');
+        return bcadd((string) $paid, '0', 2);
+    }
+
+    public function remainingBalance(): string
+    {
+        $rem = bcsub((string) $this->total_amount, (string) $this->totalPaid(), 2);
+        return bccomp($rem, '0', 2) > 0 ? $rem : '0.00';
+    }
+
+    public function recalculatePaymentStatus(?int $cashierId = null): void
+    {
+        $totalPaid = $this->totalPaid();
+        $totalAmount = (string) $this->total_amount;
+        $isPaid = bccomp($totalPaid, $totalAmount, 2) >= 0;
+
+        $newStatus = 'unpaid';
+        if ($isPaid) {
+            $newStatus = 'paid';
+        } elseif (bccomp($totalPaid, '0.00', 2) > 0) {
+            $newStatus = 'partially_paid';
+        }
+
+        $updates = [
+            'payment_status' => $newStatus,
+        ];
+        if ($isPaid) {
+            $updates['status'] = 'completed';
+            if ($cashierId) {
+                $updates['cashier_id'] = $cashierId;
+            }
+            if ($this->table_id) {
+                DiningTable::where('id', $this->table_id)->update(['status' => 'available']);
+            }
+        } elseif ($cashierId) {
+            $updates['cashier_id'] = $cashierId;
+        }
+
+        $this->update($updates);
+    }
+}

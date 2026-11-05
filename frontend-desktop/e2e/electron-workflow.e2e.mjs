@@ -210,7 +210,7 @@ const logout = async () => {
   await page.locator('label:has-text("Save to customers") input[type=checkbox]').check();
   await page.fill('input[aria-label="Order notes"]', `E2E run ${run}`);
   // double click: the button disables while sending and the idempotency key is per cart
-  await page.dblclick('button:has-text("Send to Kitchen")');
+  await page.dblclick('button:has-text("Send & Pay")');
   await page.getByText(/sent to 2 stall kitchen/).waitFor();
   const orderRow = sql(`SELECT id || '|' || order_number || '|' || status || '|' || order_channel || '|' || total_amount FROM orders WHERE notes=${lit(`E2E run ${run}`)}`);
   const orderCount = Number(sql(`SELECT COUNT(*) FROM orders WHERE notes=${lit(`E2E run ${run}`)}`));

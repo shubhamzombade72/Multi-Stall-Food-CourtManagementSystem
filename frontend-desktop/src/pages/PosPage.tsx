@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { statusChip } from '../lib/status';
 import { apiClient } from '../api/client';
 import { PrintReceiptButton, ReceiptPreviewButton } from '../components/Receipt';
@@ -24,7 +25,7 @@ import {
   CreditCard,
   QrCode,
   Banknote,
-  Wallet
+  ListChecks,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -49,13 +50,32 @@ const METHOD_META: Record<string, { label: string; icon: React.ElementType; colo
   cash: { label: 'Cash', icon: Banknote, color: 'text-success-fg' },
   upi_qr: { label: 'UPI QR', icon: QrCode, color: 'text-info-fg' },
   card: { label: 'Card POS', icon: CreditCard, color: 'text-info-fg' },
-  split: { label: 'Split', icon: Wallet, color: 'text-muted' },
 };
 
 export const PosPage: React.FC = () => {
   const { settings } = useSettings();
   const enabledMethods = settings.payment_methods.enabled;
-  const [posMode, setPosMode] = useState<'new_order' | 'pending_bills'>('new_order');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [posMode, setPosMode] = useState<'new_order' | 'pending_bills'>(
+    searchParams.get('mode') === 'pending_bills' ? 'pending_bills' : 'new_order'
+  );
+
+  const switchPosMode = (mode: 'new_order' | 'pending_bills') => {
+    setPosMode(mode);
+    setSearchParams(mode === 'pending_bills' ? { mode: 'pending_bills' } : {});
+    if (mode === 'pending_bills') {
+      loadPendingBills();
+    }
+  };
+
+  useEffect(() => {
+    const targetMode = searchParams.get('mode') === 'pending_bills' ? 'pending_bills' : 'new_order';
+    setPosMode(targetMode);
+    if (targetMode === 'pending_bills') {
+      loadPendingBills();
+    }
+  }, [searchParams]);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerHint, setCustomerHint] = useState<string | null>(null);
@@ -135,6 +155,7 @@ export const PosPage: React.FC = () => {
       const res = await apiClient.get('/billing/pending');
       if (res.data.success) {
         setPendingBills(res.data.data);
+        window.dispatchEvent(new CustomEvent('pending-bills-updated', { detail: { count: res.data.data.length } }));
       }
     } catch (err) {
       console.error('Failed to load pending bills', err);
@@ -212,7 +233,8 @@ export const PosPage: React.FC = () => {
     setUpiUtr('');
     setUpiVerified(false);
     setPaymentMethod((enabledMethods[0] as any) || 'cash');
-    setCashTendered(Number(order.total_amount));
+    const payable = Number(order.remaining_balance ?? order.total_amount);
+    setCashTendered(payable);
     setActivePaymentOrder(order);
   };
 
@@ -228,7 +250,7 @@ export const PosPage: React.FC = () => {
     setUpiLoading(true);
     setUpiError(null);
     apiClient
-      .post(`/billing/orders/${payingOrderId}/upi-request`)
+      .post(`/billing/orders/${payingOrderId}/upi-request`, {})
       .then((res) => !cancelled && setUpiRequest(res.data.data))
       .catch((err) => {
         if (cancelled) return;
@@ -324,15 +346,24 @@ export const PosPage: React.FC = () => {
     setIsPaying(true);
     setPayError(null);
     try {
-      const res = await apiClient.post('/billing/pay', {
+      const payableAmount = Number(activePaymentOrder.remaining_balance ?? activePaymentOrder.total_amount);
+
+      const payload: any = {
         order_id: activePaymentOrder.id,
         payment_method: paymentMethod,
-        amount: Number(activePaymentOrder.total_amount),
-        cash_tendered: paymentMethod === 'cash' ? cashTendered : Number(activePaymentOrder.total_amount),
-        ...(upiMode && upiRequest
-          ? { upi_reference: upiRequest.reference, payment_verified: upiVerified, ...(upiUtr.trim() ? { transaction_reference: upiUtr.trim() } : {}) }
-          : {}),
-      });
+        amount: payableAmount,
+        cash_tendered: paymentMethod === 'cash' ? cashTendered : payableAmount,
+      };
+
+      if (upiMode && upiRequest) {
+        payload.upi_reference = upiRequest.reference;
+        payload.payment_verified = upiVerified;
+        if (upiUtr.trim()) {
+          payload.transaction_reference = upiUtr.trim();
+        }
+      }
+
+      const res = await apiClient.post('/billing/pay', payload);
 
       if (res.data.success) {
         setSettledReceipt(res.data.data);
@@ -367,11 +398,13 @@ export const PosPage: React.FC = () => {
     }
   };
 
-  // Keyboard shortcuts: F2 search, F4 send to kitchen, F8 send & pay, F9 toggle pending bills, Esc close dialogs
+  // Keyboard shortcuts: F2 search, F4 tracking, F8 send & pay, F9 toggle pending bills, Esc close dialogs
   const shortcuts = useRef<(e: KeyboardEvent) => void>(() => undefined);
   shortcuts.current = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
-      if (activePaymentOrder && !isPaying) setActivePaymentOrder(null);
+      if (activePaymentOrder && !isPaying) {
+        setActivePaymentOrder(null);
+      }
       else if (settledReceipt) setSettledReceipt(null);
       else if (cancelBill) setCancelBill(null);
       return;
@@ -379,17 +412,17 @@ export const PosPage: React.FC = () => {
     if (activePaymentOrder || settledReceipt || cancelBill) return;
     if (e.key === 'F2') {
       e.preventDefault();
-      setPosMode('new_order');
+      switchPosMode('new_order');
       setTimeout(() => searchInput.current?.focus(), 0);
-    } else if (e.key === 'F4' && posMode === 'new_order') {
+    } else if (e.key === 'F4') {
       e.preventDefault();
-      handleCreateOrder(false);
+      navigate('/tracking');
     } else if (e.key === 'F8' && posMode === 'new_order') {
       e.preventDefault();
       handleCreateOrder(true);
     } else if (e.key === 'F9') {
       e.preventDefault();
-      setPosMode((m) => (m === 'new_order' ? 'pending_bills' : 'new_order'));
+      switchPosMode(posMode === 'new_order' ? 'pending_bills' : 'new_order');
     }
   };
   useEffect(() => {
@@ -421,7 +454,7 @@ export const PosPage: React.FC = () => {
       <div className="bg-surface px-4 py-1.5 flex items-center justify-between border-b border-line">
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => setPosMode('new_order')}
+            onClick={() => switchPosMode('new_order')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center space-x-2 ${
               posMode === 'new_order'
                 ? 'bg-primary text-primary-fg shadow-md'
@@ -433,10 +466,7 @@ export const PosPage: React.FC = () => {
           </button>
 
           <button
-            onClick={() => {
-              setPosMode('pending_bills');
-              loadPendingBills();
-            }}
+            onClick={() => switchPosMode('pending_bills')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center space-x-2 ${
               posMode === 'pending_bills'
                 ? 'bg-primary text-primary-fg shadow-md'
@@ -512,9 +542,20 @@ export const PosPage: React.FC = () => {
                           #{bill.order_number}
                         </span>
                       </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${statusChip(bill.status)}`}>
-                        {bill.status}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {bill.payment_status === 'partially_paid' ? (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase bg-st-kitchen-soft text-st-kitchen-fg border border-line">
+                            Partially Paid
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase bg-danger/10 text-danger-fg border border-danger/30">
+                            Unpaid
+                          </span>
+                        )}
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${statusChip(bill.status)}`}>
+                          {bill.status}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="text-xs text-muted flex items-center justify-between">
@@ -526,6 +567,12 @@ export const PosPage: React.FC = () => {
                         Via: {bill.order_channel === 'qr_customer' ? '📱 Table QR' : bill.order_channel === 'waiter_app' ? '🧑‍🍳 Waiter App' : '🖥️ Counter POS'}
                       </span>
                     </div>
+
+                    {bill.customer_name && (
+                      <div className="text-xs text-fg">
+                        Guest: <span className="font-bold">{bill.customer_name}</span>
+                      </div>
+                    )}
 
                     {/* Stalls badges */}
                     <div className="flex flex-wrap gap-1">
@@ -553,8 +600,17 @@ export const PosPage: React.FC = () => {
                   {/* Bill Total & Settle Button */}
                   <div className="mt-4 pt-3 border-t border-line flex items-center justify-between">
                     <div>
-                      <span className="text-[11px] text-muted block font-medium">Total Payable</span>
-                      <span className="text-2xl font-black text-fg tabular-nums">₹{Number(bill.total_amount).toFixed(2)}</span>
+                      <span className="text-[11px] text-muted block font-medium">
+                        {Number(bill.total_paid || 0) > 0 ? 'Remaining Balance' : 'Total Payable'}
+                      </span>
+                      <span className="text-2xl font-black text-fg tabular-nums">
+                        ₹{Number(bill.remaining_balance ?? bill.total_amount).toFixed(2)}
+                      </span>
+                      {Number(bill.total_paid || 0) > 0 && (
+                        <span className="text-[10px] text-muted block">
+                          (Total: ₹{Number(bill.total_amount).toFixed(2)} · Paid: ₹{Number(bill.total_paid).toFixed(2)})
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -570,14 +626,21 @@ export const PosPage: React.FC = () => {
                           Cancel
                         </button>
                       )}
-                      <button
-                        onClick={() => openPayment(bill)}
-                        data-settle-order={bill.order_number}
-                        className="px-4 py-2 bg-success-fg hover:opacity-90 text-surface rounded-lg text-xs font-extrabold shadow-sm flex items-center space-x-1.5 transition"
-                      >
-                        <span>Settle Bill</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
+                      {Number(bill.remaining_balance ?? bill.total_amount) <= 0 || bill.payment_status === 'paid' ? (
+                        <span className={`px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1 border ${statusChip('paid')}`}>
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Paid</span>
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => openPayment(bill)}
+                          data-settle-order={bill.order_number}
+                          className="px-4 py-2 bg-success-fg hover:opacity-90 text-surface rounded-lg text-xs font-extrabold shadow-sm flex items-center space-x-1.5 transition"
+                        >
+                          <span>Settle Bill</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -835,21 +898,25 @@ export const PosPage: React.FC = () => {
               )}
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <button
-                  disabled={cart.length === 0 || isSubmitting}
-                  onClick={() => handleCreateOrder(false)}
-                  className="py-2 px-3 rounded-lg border border-line font-bold text-xs text-fg hover:bg-surface transition disabled:opacity-50"
+                  type="button"
+                  data-testid="pos-to-tracking"
+                  onClick={() => navigate('/tracking')}
+                  className="py-2 px-2 rounded-lg border border-line bg-surface hover:bg-surface-2 font-bold text-xs text-fg flex items-center justify-center gap-1.5 transition shadow-xs"
+                  title="Orders & Table Tracking (F4)"
                 >
-                  {isSubmitting ? 'Sending…' : 'Send to Kitchen (F4)'}
+                  <ListChecks className="w-4 h-4 text-primary shrink-0" />
+                  <span className="truncate">Orders & Table Tracking (F4)</span>
                 </button>
                 <button
                   disabled={cart.length === 0 || isSubmitting}
                   onClick={() => handleCreateOrder(true)}
-                  className="py-2 px-3 rounded-lg bg-primary hover:bg-primary/90 text-primary-fg font-extrabold text-xs shadow-md shadow-primary/20 transition disabled:opacity-50"
+                  className="py-2 px-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-fg font-extrabold text-xs shadow-md shadow-primary/20 transition disabled:opacity-50 flex items-center justify-center gap-1"
                 >
-                  Send & Pay (F8) ➔
+                  <span>{isSubmitting ? 'Processing…' : 'Send & Pay (F8)'}</span>
+                  <span>➔</span>
                 </button>
               </div>
-              <p className="text-[10px] text-muted text-center">F2 search · F9 pending bills · Esc close</p>
+              <p className="text-[10px] text-muted text-center">F2 search · F4 tracking · F8 send & pay · F9 pending bills · Esc close</p>
 
               {cart.length > 0 && (
                 <button
@@ -894,23 +961,31 @@ export const PosPage: React.FC = () => {
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-4">
             {/* Bill Summary */}
             <div className="bg-canvas px-4 py-3 rounded-lg border border-line">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-bold text-fg">Total Bill Amount</span>
-                <span className="text-2xl font-black text-primary tabular-nums">₹{Number(activePaymentOrder.total_amount).toFixed(2)}</span>
-              </div>
-              <div className="mt-1 text-[11px] text-muted">
-                Covers {activePaymentOrder.items?.length || 0} dishes across participating kitchens
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-bold text-fg">
+                    {Number(activePaymentOrder.total_paid || 0) > 0 ? 'Remaining Balance' : 'Total Bill Amount'}
+                  </span>
+                  <span className="text-2xl font-black text-primary tabular-nums">
+                    ₹{Number(activePaymentOrder.remaining_balance ?? activePaymentOrder.total_amount).toFixed(2)}
+                  </span>
+                </div>
+                <div className="mt-1 text-[11px] text-muted flex justify-between">
+                  <span>Covers {activePaymentOrder.items?.length || 0} dishes</span>
+                  {Number(activePaymentOrder.total_paid || 0) > 0 && (
+                    <span>Total: ₹{Number(activePaymentOrder.total_amount).toFixed(2)} · Paid: ₹{Number(activePaymentOrder.total_paid).toFixed(2)}</span>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Payment Method Selector */}
             <div>
               <label className="block text-xs font-bold text-fg mb-2">Select Tender Method</label>
-              {/* Only the methods the owner enabled in Food Court Settings */}
-              {/* One even row for up to 4 methods (a 3-column grid left the 4th button orphaned on its own row) */}
               <div className={`grid gap-2 ${enabledMethods.length >= 4 ? 'grid-cols-2 sm:grid-cols-4' : enabledMethods.length === 3 ? 'grid-cols-3' : enabledMethods.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                {enabledMethods.map((m) => {
-                  const meta = METHOD_META[m] || METHOD_META.split;
+                {enabledMethods.filter((m) => m !== 'split').map((m) => {
+                  const meta = METHOD_META[m];
+                  if (!meta) return null;
                   const Icon = meta.icon;
                   return (
                     <button
@@ -947,9 +1022,14 @@ export const PosPage: React.FC = () => {
                 </div>
                 <div className="flex justify-between items-center text-xs pt-2 border-t border-line font-bold">
                   <span>Change to Return:</span>
-                  <span className={`text-base tabular-nums ${cashTendered >= activePaymentOrder.total_amount ? 'text-success-fg font-black' : 'text-danger-fg'}`}>
-                    ₹{Math.max(0, cashTendered - Number(activePaymentOrder.total_amount)).toFixed(2)}
-                  </span>
+                  {(() => {
+                    const payAmt = Number(activePaymentOrder.remaining_balance ?? activePaymentOrder.total_amount);
+                    return (
+                      <span className={`text-base tabular-nums ${cashTendered >= payAmt ? 'text-success-fg font-black' : 'text-danger-fg'}`}>
+                        ₹{Math.max(0, cashTendered - payAmt).toFixed(2)}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
             )}
@@ -1069,7 +1149,7 @@ export const PosPage: React.FC = () => {
                 onClick={handleConfirmPayment}
                 disabled={
                   isPaying ||
-                  (paymentMethod === 'cash' && cashTendered < Number(activePaymentOrder.total_amount)) ||
+                  (paymentMethod === 'cash' && cashTendered < Number(activePaymentOrder.remaining_balance ?? activePaymentOrder.total_amount)) ||
                   (upiMode && (!upiRequest || !upiUtrValid || !upiVerified))
                 }
                 className="py-2.5 rounded-lg bg-success-fg hover:opacity-90 text-surface text-xs font-extrabold shadow-md shadow-success/20 disabled:opacity-50"

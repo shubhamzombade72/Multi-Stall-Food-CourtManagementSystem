@@ -1,0 +1,173 @@
+{
+  "ranAt": "2026-11-04T18:10:57.001Z",
+  "results": [
+    {
+      "id": "E-00",
+      "desc": "Fresh profile: built-in server started and owner signed in",
+      "result": "PASS",
+      "evidence": "http://127.0.0.1:57945/api"
+    },
+    {
+      "id": "S1",
+      "desc": "All 6 sound files load in the production (file://) build",
+      "result": "PASS",
+      "evidence": "{\"out\":{\"new-order\":\"ok 0.43s\",\"kitchen-ticket\":\"ok 0.28s\",\"order-ready\":\"ok 0.59s\",\"payment-success\":\"ok 0.73s\",\"payment-failed\":\"ok 0.55s\",\"alert\":\"ok 0.49s\"},\"origin\":\"file:\"}"
+    },
+    {
+      "id": "S2",
+      "desc": "Sound plays with no user gesture and uses the volume setting (30%)",
+      "result": "PASS",
+      "evidence": "[{\"src\":\"new-order.wav\",\"volume\":0.3,\"ok\":true}]"
+    },
+    {
+      "id": "S2b",
+      "desc": "Volume and switches are stored on this PC",
+      "result": "PASS",
+      "evidence": "{\"enabled\":true,\"volume\":0.3,\"categories\":{\"orders\":true,\"kitchen\":true,\"payments\":true,\"alerts\":true}}"
+    },
+    {
+      "id": "P1a",
+      "desc": "Printer settings saved and reloaded from the main process",
+      "result": "PASS",
+      "evidence": "{\"transport\":\"network\",\"printerName\":\"\",\"host\":\"127.0.0.1\",\"port\":59920,\"paperWidthMm\":58,\"codepage\":\"CP858\",\"columns\":null,\"cut\":true}"
+    },
+    {
+      "id": "P1b",
+      "desc": "Printer check reports the listener as reachable, with the honest caveat",
+      "result": "PASS",
+      "evidence": ""
+    },
+    {
+      "id": "P1c",
+      "desc": "Test print reached the receipt printer: init, ruler of 48 columns, cut",
+      "result": "PASS",
+      "evidence": "\"\\u001b@\\u001bt\\u0013\\u001bM\\u0000\\u001ba\\u0001\\u001bE\\u0001\\u001d!\\u0011RECEIPT PRINTER TEST\\n\\u001ba\\u0000\\u001bE\\u0000\\u001d!\\u0000-------------\""
+    },
+    {
+      "id": "P1d",
+      "desc": "Kitchen test print uses the 58 mm profile (32-column ruler)",
+      "result": "PASS",
+      "evidence": ""
+    },
+    {
+      "id": "P2a",
+      "desc": "Bill printed on the receipt printer with business name, items and total",
+      "result": "PASS",
+      "evidence": "\"\\u001b@\\u001bt\\u0013\\u001bM\\u0000\\u001ba\\u0001\\u001bE\\u0001PRINT TEST COURT\\n\\u001bE\\u0000MG Road, Pune\\nTel: 9876543210\\nConsolidated Bill\\n\\u001ba\\u0000-----------------------------------\""
+    },
+    {
+      "id": "P2b",
+      "desc": "Receipt text is laid out for 80 mm: no line longer than 48 columns",
+      "result": "PASS",
+      "evidence": ""
+    },
+    {
+      "id": "P2c",
+      "desc": "A second click does not print a second slip (asks first; declined)",
+      "result": "PASS",
+      "evidence": "slips=1"
+    },
+    {
+      "id": "P2d",
+      "desc": "Accepting prints a copy stamped COPY #1",
+      "result": "PASS",
+      "evidence": "Already printed at 11:40:18 PM. Print another copy marked COPY?"
+    },
+    {
+      "id": "P3a",
+      "desc": "One kitchen ticket per stall was printed",
+      "result": "PASS",
+      "evidence": "tickets=2"
+    },
+    {
+      "id": "P3b",
+      "desc": "Dosa stall's KOT lists only dosa lines, with quantity, instruction and order note; no prices",
+      "result": "PASS",
+      "evidence": "\"\\u001b@\\u001bt\\u0013\\u001bM\\u0000\\u001ba\\u0001\\u001bE\\u0001KITCHEN ORDER\\n\\u001d!\\u0011DOSA MA4M\\n\\u001ba\\u0000\\u001bE\\u0000\\u001d!\\u0000================================\\n\\u001bE\\u0001Order: ORD-20261104-QQZP6\\n\\u001bE\\u0000Ticket: KKT-20261104-OVPF\\nTakeaway (takeaway)\""
+    },
+    {
+      "id": "P3c",
+      "desc": "Juice stall's KOT lists only juice lines",
+      "result": "PASS",
+      "evidence": "\"\\u001b@\\u001bt\\u0013\\u001bM\\u0000\\u001ba\\u0001\\u001bE\\u0001KITCHEN ORDER\\n\\u001d!\\u0011JUICE MA4M\\n\\u001ba\\u0000\\u001bE\\u0000\\u001d!\\u0000================================\\n\\u001bE\\u0001Order: ORD-20261104-QQZP6\\n\\u001bE\\u0000Ticket: KKT-20261104-LOHX\\nTakeaway (takeaway\""
+    },
+    {
+      "id": "P3d",
+      "desc": "Printing the KOTs again does not repeat them without confirmation",
+      "result": "PASS",
+      "evidence": "tickets=2"
+    },
+    {
+      "id": "S3a",
+      "desc": "Opening the Kitchen board with existing tickets plays nothing and prints nothing",
+      "result": "PASS",
+      "evidence": "plays=0 newKots=0"
+    },
+    {
+      "id": "S3b",
+      "desc": "A new ticket sounds once and does not repeat on later polls (and not once per stall twice)",
+      "result": "PASS",
+      "evidence": "plays=1"
+    },
+    {
+      "id": "P4",
+      "desc": "Auto-print: the displayed stall new ticket printed exactly once, only its own items, no repeats on later polls",
+      "result": "PASS",
+      "evidence": "newKots=1 \"\\u0011DOSA MA4M\\n\\u001ba\\u0000\\u001bE\\u0000\\u001d!\\u0000==============================\""
+    },
+    {
+      "id": "S4",
+      "desc": "With sound switched off a new ticket plays nothing",
+      "result": "PASS",
+      "evidence": "plays=0"
+    },
+    {
+      "id": "P5a",
+      "desc": "Unreachable printer: the job is FAILED with the reason, not completed",
+      "result": "PASS",
+      "evidence": "{\"code\":\"UNREACHABLE\",\"message\":\"The printer at 127.0.0.1:59919 refused the connection (is raw/9100 printing enabled on it?)\",\"ambiguous\":false,\"at\":\"2026-11-04T18:10:54.128Z\"}"
+    },
+    {
+      "id": "P5b",
+      "desc": "A failure banner is shown with a Retry button",
+      "result": "PASS",
+      "evidence": "visible=true"
+    },
+    {
+      "id": "P5c",
+      "desc": "The alert sound played once for the failed job",
+      "result": "PASS",
+      "evidence": "plays=1"
+    },
+    {
+      "id": "P5d",
+      "desc": "Retry after recovery prints exactly once and the job becomes completed (2 attempts)",
+      "result": "PASS",
+      "evidence": "slips=1 status=completed attempts=2"
+    },
+    {
+      "id": "P6a",
+      "desc": "Job history is persisted on disk",
+      "result": "PASS",
+      "evidence": "C:\\Users\\shubh\\AppData\\Local\\Temp\\foodcourt-sp-vb4ICl\\printing\\jobs.json"
+    },
+    {
+      "id": "P6b",
+      "desc": "After an app restart the same jobs, with the same statuses, are listed",
+      "result": "PASS",
+      "evidence": "9 jobs"
+    },
+    {
+      "id": "P6c",
+      "desc": "Duplicate protection survives the restart (no new slip for an already printed ticket)",
+      "result": "PASS",
+      "evidence": "{\"code\":\"DUPLICATE\",\"reason\":\"already-printed\"}"
+    },
+    {
+      "id": "E-99",
+      "desc": "No unexpected renderer errors",
+      "result": "PASS",
+      "evidence": ""
+    }
+  ]
+}

@@ -36,7 +36,7 @@ class UpiQrPaymentTest extends TestCase
 
     private function configureUpi(string $vpa = self::VPA, bool $enabled = true): void
     {
-        Setting::updateOrCreate(['key' => 'payment_methods'], ['value' => ['enabled' => ['cash', 'upi_qr', 'card', 'split']]]);
+        Setting::updateOrCreate(['key' => 'payment_methods'], ['value' => ['enabled' => ['cash', 'upi_qr', 'card']]]);
         Setting::updateOrCreate(['key' => 'business_profile'], ['value' => ['name' => 'MangalMurti Food Court']]);
         Setting::updateOrCreate(['key' => 'upi'], ['value' => ['enabled' => $enabled, 'vpa' => $vpa]]);
     }

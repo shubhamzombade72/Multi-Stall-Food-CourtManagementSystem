@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Building2, Receipt as ReceiptIcon, Wallet, Percent, Timer, QrCode } from 'lucide-react';
+import { Building2, Receipt as ReceiptIcon, Wallet, Percent, QrCode } from 'lucide-react';
 import { isValidVpa } from '../lib/receiptModel';
 import { calculateTax, formatRate } from '../lib/tax';
 import { apiClient } from '../api/client';
@@ -18,7 +18,6 @@ export const FoodCourtSettingsPage: React.FC = () => {
   const [profile, setProfile] = useState<BusinessProfile>(settings.business_profile);
   const [receipt, setReceipt] = useState(settings.receipt);
   const [methods, setMethods] = useState<string[]>(settings.payment_methods.enabled);
-  const [delay, setDelay] = useState<string>(String(settings.order_tracking?.delay_minutes ?? 15));
   const [gstEnabled, setGstEnabled] = useState<boolean>(settings.tax.enabled);
   const [gstRate, setGstRate] = useState<string>(settings.tax.rate_percent);
   const [gstMode, setGstMode] = useState<'exclusive' | 'inclusive'>(settings.tax.mode);
@@ -37,7 +36,6 @@ export const FoodCourtSettingsPage: React.FC = () => {
     setProfile(settings.business_profile);
     setReceipt(settings.receipt);
     setMethods(settings.payment_methods.enabled);
-    setDelay(String(settings.order_tracking?.delay_minutes ?? 15));
   }, [settings]);
 
   const save = async (key: string, body: object, label: string) => {
@@ -66,8 +64,6 @@ export const FoodCourtSettingsPage: React.FC = () => {
   const upiError = upiFormatError || upiMissing;
   const upiMethodOff = !settings.payment_methods.enabled.includes('upi_qr');
 
-  const delayValue = Number(delay);
-  const delayValid = Number.isInteger(delayValue) && delayValue >= 1 && delayValue <= 120;
 
   const set = (k: keyof BusinessProfile) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setProfile((p) => ({ ...p, [k]: e.target.value === '' ? null : e.target.value }));
@@ -267,37 +263,6 @@ export const FoodCourtSettingsPage: React.FC = () => {
           </p>
           <button type="submit" disabled={saving !== null || !!upiError} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-fg font-semibold text-sm rounded-lg disabled:opacity-50">
             {saving === 'upi' ? 'Saving…' : 'Save UPI settings'}
-          </button>
-        </form>
-      </Card>
-
-      <Card className="p-4">
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (delayValid) save('order_tracking', { delay_minutes: delayValue }, 'Order tracking');
-          }}
-        >
-          <h3 className="font-semibold text-base text-fg flex items-center space-x-2">
-            <Timer className="w-5 h-5" />
-            <span>Order tracking</span>
-          </h3>
-          <Field label="Late-order warning after (minutes)" hint="Orders with food still to serve after this many minutes are flagged as delayed on the tracking board (1–120).">
-            <input
-              type="number"
-              data-testid="delay-minutes"
-              required
-              min={1}
-              max={120}
-              step={1}
-              className={`${inputClass} max-w-[10rem]`}
-              value={delay}
-              onChange={(e) => setDelay(e.target.value)}
-            />
-          </Field>
-          <button type="submit" disabled={saving !== null || !delayValid} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-fg font-semibold text-sm rounded-lg disabled:opacity-50">
-            {saving === 'order_tracking' ? 'Saving…' : 'Save order tracking'}
           </button>
         </form>
       </Card>

@@ -54,6 +54,7 @@ class SettlementController extends Controller
                 'stalls.id as stall_id',
                 'stalls.name as stall_name',
                 'stalls.code as stall_code',
+                DB::raw('COUNT(DISTINCT orders.id) as total_bills_count'),
                 DB::raw('COUNT(order_items.id) as total_items_sold'),
                 DB::raw('SUM(order_items.subtotal) as stall_gross_sales')
             )
@@ -95,6 +96,84 @@ class SettlementController extends Controller
                 ],
                 'stall_breakdown' => $stallSales,
             ]
+        ]);
+    }
+
+    /**
+     * GET /settlements/stall-bills — review all bills contributing to stall sales on a business date.
+     * Owner only. Returns order-level and item-level details per stall.
+     */
+    public function stallBills(Request $request)
+    {
+        $user = $request->user();
+        if (!$user->isOwner()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Owner access required.'], 403);
+        }
+
+        $validated = $request->validate([
+            'date' => 'nullable|date',
+            'stall_id' => 'nullable|integer|exists:stalls,id',
+        ]);
+
+        $date = $validated['date'] ?? now()->toDateString();
+        $stallId = $validated['stall_id'] ?? null;
+
+        $itemsQuery = OrderItem::with(['order.table', 'order.payments', 'stall'])
+            ->join('orders', 'order_items.order_id', '=', 'orders.id')
+            ->whereDate('orders.created_at', $date)
+            ->where('orders.payment_status', 'paid');
+
+        if ($stallId) {
+            $itemsQuery->where('order_items.stall_id', $stallId);
+        }
+
+        $items = $itemsQuery->select('order_items.*')->orderBy('orders.id', 'desc')->get();
+
+        // Group by order and stall to form stall bill entries
+        $grouped = $items->groupBy(fn ($item) => "{$item->order_id}_{$item->stall_id}");
+
+        $bills = [];
+        foreach ($grouped as $stallOrderItems) {
+            $first = $stallOrderItems->first();
+            $order = $first->order;
+            $stall = $first->stall;
+
+            $stallSubtotal = $stallOrderItems->sum('subtotal');
+            $paymentMethod = $order->payments->first()?->payment_method ?? 'cash';
+
+            $bills[] = [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'created_at' => $order->created_at->toIso8601String(),
+                'table_number' => $order->table?->table_number,
+                'order_type' => $order->order_type,
+                'order_channel' => $order->order_channel,
+                'stall_id' => $stall->id,
+                'stall_name' => $stall->name,
+                'stall_code' => $stall->code,
+                'items' => $stallOrderItems->map(fn ($i) => [
+                    'id' => $i->id,
+                    'item_name' => $i->item_name,
+                    'quantity' => $i->quantity,
+                    'unit_price' => number_format((float) $i->unit_price, 2, '.', ''),
+                    'subtotal' => number_format((float) $i->subtotal, 2, '.', ''),
+                ])->values(),
+                'stall_subtotal' => number_format((float) $stallSubtotal, 2, '.', ''),
+                'order_total_amount' => number_format((float) $order->total_amount, 2, '.', ''),
+                'payment_method' => $paymentMethod,
+                'payment_status' => $order->payment_status,
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'date' => $date,
+                'stall_id' => $stallId,
+                'total_bills' => count($bills),
+                'total_sales' => number_format((float) array_sum(array_column($bills, 'stall_subtotal')), 2, '.', ''),
+                'bills' => $bills,
+            ],
         ]);
     }
 

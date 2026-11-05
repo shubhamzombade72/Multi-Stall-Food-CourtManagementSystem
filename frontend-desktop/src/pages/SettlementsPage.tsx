@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { apiClient } from '../api/client';
-import { CheckCircle2, Store, Lock } from 'lucide-react';
+import { CheckCircle2, Store, Lock, Receipt, ChevronDown, ChevronUp } from 'lucide-react';
 import { ErrorBanner, Field, SuccessBanner, inputClass } from '../components/ui';
 import { PayoutReceiptModal, PayoutStatusBadge } from '../components/settlements/PayoutBits';
 import { RecordPayoutModal } from '../components/settlements/RecordPayoutModal';
@@ -8,12 +8,14 @@ import { SettlementHistoryModal } from '../components/settlements/SettlementHist
 import { PayoutHistoryTab } from '../components/settlements/PayoutHistoryTab';
 import { OwnerPayoutsTab } from '../components/settlements/OwnerPayoutsTab';
 import { ReconciliationTab } from '../components/settlements/ReconciliationTab';
+import { StallBillsReview } from '../components/settlements/StallBillsReview';
 import { formatBusinessDate, formatRupees } from '../lib/payout';
 
-type Tab = 'closing' | 'history' | 'owners' | 'reconcile';
+type Tab = 'closing' | 'bills' | 'history' | 'owners' | 'reconcile';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'closing', label: 'Day Closing & Settlements' },
+  { id: 'bills', label: 'All Stall Bills' },
   { id: 'history', label: 'Payout History' },
   { id: 'owners', label: 'Owner-wise Payouts' },
   { id: 'reconcile', label: 'Reconciliation' },
@@ -37,6 +39,7 @@ export const SettlementsPage: React.FC = () => {
   const [historyFor, setHistoryFor] = useState<number | null>(null);
   const [receiptFor, setReceiptFor] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [expandedStallId, setExpandedStallId] = useState<number | null>(null);
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -71,7 +74,7 @@ export const SettlementsPage: React.FC = () => {
         notes: 'End of Day formal operational closure by Owner',
       });
       if (res.data.success) {
-        setNotice('End-of-Day closing recorded. Every stall shows what it is owed as Pending: record each payout below once the money is actually paid.');
+        setNotice('End-of-Day closing recorded. Every stall shows what it is owed as Pending: review all stall bills and record each payout below once the money is actually paid.');
         changed();
       }
     } catch (err: any) {
@@ -83,12 +86,17 @@ export const SettlementsPage: React.FC = () => {
   const ps = data?.payout_summary;
   const liveRows: any[] = data?.stall_breakdown || [];
 
+  const stallsForBills = (settlements.length > 0 ? settlements : liveRows).map((r: any) => ({
+    id: r.stall_id || r.stall?.id,
+    name: r.stall?.name || r.stall_name,
+  }));
+
   return (
     <div className="p-4 max-w-7xl mx-auto space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-bold text-fg tracking-tight">End-of-Day Closing & Stall Settlements</h2>
-          <p className="text-sm text-muted mt-1">Close the day, then record each payout actually made to stall owners. Closing and paying are separate steps.</p>
+          <p className="text-sm text-muted mt-1">Consolidated operational hub: execute closing, review all stall bills, and track & settle stall payouts.</p>
         </div>
 
         <div className="flex items-end gap-3">
@@ -165,7 +173,10 @@ export const SettlementsPage: React.FC = () => {
 
           <div className="bg-surface rounded-lg border border-line overflow-hidden shadow-sm">
             <div className="p-4 border-b border-line flex items-center justify-between">
-              <h3 className="font-semibold text-base text-fg">Stall Settlement Ledger</h3>
+              <div>
+                <h3 className="font-semibold text-base text-fg">Stall Settlement Ledger</h3>
+                <p className="text-xs text-muted mt-0.5">Review each stall's individual bills, audit payouts, and settle remaining balances.</p>
+              </div>
               <span className="text-xs text-muted font-mono">Date: {formatBusinessDate(data?.date)}</span>
             </div>
 
@@ -184,39 +195,121 @@ export const SettlementsPage: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-line">
                   {settlements.length > 0 ? (
-                    settlements.map((r: any) => (
-                      <tr key={r.id} data-testid="settlement-row" data-stall={r.stall?.name} className="hover:bg-surface-2 transition">
-                        <td className="py-2 px-3 font-bold text-fg">
-                          <span className="inline-flex items-center space-x-2">
-                            <Store className="w-4 h-4 text-primary" />
-                            <span>{r.stall?.name}</span>
-                          </span>
-                          <span className="block text-[11px] font-normal text-muted">{r.stall?.owner?.name ? `Owner: ${r.stall.owner.name}` : 'No owner assigned'} · {r.stall_item_count} items</span>
-                        </td>
-                        <td className="py-2 px-3 text-right font-semibold text-fg">{formatRupees(r.stall_gross_sales)}</td>
-                        <td className="py-2 px-3 text-right font-bold text-primary" data-testid="row-payable">
-                          {formatRupees(r.net_payable)}
-                          {Number(r.net_payable) !== Number(r.payable_at_close) && <span className="block text-[10px] font-normal text-muted">adjusted from {formatRupees(r.payable_at_close)}</span>}
-                        </td>
-                        <td className="py-2 px-3 text-right font-semibold text-success-fg" data-testid="row-paid">{formatRupees(r.paid_amount)}</td>
-                        <td className="py-2 px-3 text-right font-bold text-fg" data-testid="row-remaining">{formatRupees(r.remaining_amount)}</td>
-                        <td className="py-2 px-3"><PayoutStatusBadge status={r.payout_status} withHint /></td>
-                        <td className="py-2 px-3 text-right whitespace-nowrap space-x-2">
-                          <button onClick={() => setHistoryFor(r.id)} data-testid="view-payout-history" className="px-2.5 py-1.5 rounded-lg border border-line hover:bg-surface-2 text-fg font-semibold text-xs">View Payout History</button>
-                          {Number(r.remaining_amount) > 0 && (
-                            <button onClick={() => setPaying(r)} data-testid="record-payout" className="px-2.5 py-1.5 rounded-lg bg-primary hover:opacity-90 text-primary-fg font-bold text-xs">Record Payout</button>
+                    settlements.map((r: any) => {
+                      const isExpanded = expandedStallId === r.stall_id;
+                      return (
+                        <React.Fragment key={r.id}>
+                          <tr data-testid="settlement-row" data-stall={r.stall?.name} className={`hover:bg-surface-2 transition ${isExpanded ? 'bg-surface-2/60' : ''}`}>
+                            <td className="py-2 px-3 font-bold text-fg">
+                              <span className="inline-flex items-center space-x-2">
+                                <Store className="w-4 h-4 text-primary" />
+                                <span>{r.stall?.name}</span>
+                              </span>
+                              <span className="block text-[11px] font-normal text-muted">
+                                {r.stall?.owner?.name ? `Owner: ${r.stall.owner.name}` : 'No owner assigned'} · {r.stall_item_count} items
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-right font-semibold text-fg">{formatRupees(r.stall_gross_sales)}</td>
+                            <td className="py-2 px-3 text-right font-bold text-primary" data-testid="row-payable">
+                              {formatRupees(r.net_payable)}
+                              {Number(r.net_payable) !== Number(r.payable_at_close) && <span className="block text-[10px] font-normal text-muted">adjusted from {formatRupees(r.payable_at_close)}</span>}
+                            </td>
+                            <td className="py-2 px-3 text-right font-semibold text-success-fg" data-testid="row-paid">{formatRupees(r.paid_amount)}</td>
+                            <td className="py-2 px-3 text-right font-bold text-fg" data-testid="row-remaining">{formatRupees(r.remaining_amount)}</td>
+                            <td className="py-2 px-3"><PayoutStatusBadge status={r.payout_status} withHint /></td>
+                            <td className="py-2 px-3 text-right whitespace-nowrap space-x-2">
+                              <button
+                                onClick={() => setExpandedStallId(isExpanded ? null : r.stall_id)}
+                                data-testid={`toggle-bills-${r.stall?.name}`}
+                                className="px-2.5 py-1.5 rounded-lg border border-line hover:bg-surface-2 text-fg font-semibold text-xs inline-flex items-center gap-1"
+                              >
+                                <Receipt className="w-3.5 h-3.5 text-primary" />
+                                <span>{isExpanded ? 'Hide Bills' : 'Review Bills'}</span>
+                                {isExpanded ? <ChevronUp className="w-3 h-3 text-muted" /> : <ChevronDown className="w-3 h-3 text-muted" />}
+                              </button>
+                              <button onClick={() => setHistoryFor(r.id)} data-testid="view-payout-history" className="px-2.5 py-1.5 rounded-lg border border-line hover:bg-surface-2 text-fg font-semibold text-xs">View Payout History</button>
+                              {Number(r.remaining_amount) > 0 && (
+                                <button onClick={() => setPaying(r)} data-testid="record-payout" className="px-2.5 py-1.5 rounded-lg bg-primary hover:opacity-90 text-primary-fg font-bold text-xs">Record Payout</button>
+                              )}
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr data-testid={`expanded-row-${r.stall_id}`}>
+                              <td colSpan={7} className="p-3 bg-canvas/60 border-y border-line">
+                                <div className="space-y-3">
+                                  <StallBillsReview
+                                    date={data?.date || date}
+                                    stallId={r.stall_id}
+                                    stallName={r.stall?.name}
+                                    compact
+                                  />
+                                  <div className="flex items-center justify-between bg-surface p-2.5 rounded-lg border border-line text-xs">
+                                    <div>
+                                      <span className="text-muted">Settlement status for <strong>{r.stall?.name}</strong>: </span>
+                                      <span className="font-bold text-fg">{r.payout_status.toUpperCase()}</span>
+                                      <span className="text-muted ml-3">Remaining Balance: </span>
+                                      <span className="font-extrabold text-primary">{formatRupees(r.remaining_amount)}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => setHistoryFor(r.id)}
+                                        className="px-2.5 py-1.5 rounded-lg border border-line hover:bg-surface-2 font-semibold text-xs text-fg"
+                                      >
+                                        Payout Ledger & Audit
+                                      </button>
+                                      {Number(r.remaining_amount) > 0 && (
+                                        <button
+                                          onClick={() => setPaying(r)}
+                                          data-testid={`drawer-record-payout-${r.stall_id}`}
+                                          className="px-3 py-1.5 rounded-lg bg-primary hover:opacity-90 text-primary-fg font-bold text-xs"
+                                        >
+                                          Settle Remaining ({formatRupees(r.remaining_amount)})
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
                           )}
-                        </td>
-                      </tr>
-                    ))
+                        </React.Fragment>
+                      );
+                    })
                   ) : liveRows.length > 0 ? (
-                    liveRows.map((r: any) => (
-                      <tr key={r.stall_id} className="text-muted">
-                        <td className="py-2 px-3 font-bold text-fg">{r.stall_name}</td>
-                        <td className="py-2 px-3 text-right font-semibold text-fg">{formatRupees(r.stall_gross_sales)}</td>
-                        <td className="py-2 px-3 text-right" colSpan={5}>Not closed yet: execute End-of-Day closing to create the payable and record payouts.</td>
-                      </tr>
-                    ))
+                    liveRows.map((r: any) => {
+                      const isExpanded = expandedStallId === r.stall_id;
+                      return (
+                        <React.Fragment key={r.stall_id}>
+                          <tr className={`text-muted ${isExpanded ? 'bg-surface-2/60' : ''}`}>
+                            <td className="py-2 px-3 font-bold text-fg">{r.stall_name}</td>
+                            <td className="py-2 px-3 text-right font-semibold text-fg">{formatRupees(r.stall_gross_sales)}</td>
+                            <td className="py-2 px-3 text-right" colSpan={4}>Not closed yet: execute End-of-Day closing to create the payable and record payouts.</td>
+                            <td className="py-2 px-3 text-right">
+                              <button
+                                onClick={() => setExpandedStallId(isExpanded ? null : r.stall_id)}
+                                className="px-2.5 py-1.5 rounded-lg border border-line hover:bg-surface-2 text-fg font-semibold text-xs inline-flex items-center gap-1"
+                              >
+                                <Receipt className="w-3.5 h-3.5 text-primary" />
+                                <span>{isExpanded ? 'Hide Bills' : 'Review Bills'}</span>
+                                {isExpanded ? <ChevronUp className="w-3 h-3 text-muted" /> : <ChevronDown className="w-3 h-3 text-muted" />}
+                              </button>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={7} className="p-3 bg-canvas/60 border-y border-line">
+                                <StallBillsReview
+                                  date={data?.date || date}
+                                  stallId={r.stall_id}
+                                  stallName={r.stall_name}
+                                  compact
+                                />
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
                   ) : (
                     <tr>
                       <td colSpan={7} className="py-8 text-center text-muted text-sm">
@@ -229,6 +322,22 @@ export const SettlementsPage: React.FC = () => {
             </div>
           </div>
         </>
+      )}
+
+      {tab === 'bills' && (
+        <StallBillsReview
+          date={data?.date || date}
+          stallsList={stallsForBills}
+          onSettleStall={(stallId) => {
+            const target = settlements.find((s: any) => s.stall_id === stallId);
+            if (target && Number(target.remaining_amount) > 0) {
+              setPaying(target);
+            } else {
+              setTab('closing');
+              setExpandedStallId(stallId);
+            }
+          }}
+        />
       )}
 
       {tab === 'history' && <PayoutHistoryTab refreshKey={refreshKey} onChanged={changed} />}

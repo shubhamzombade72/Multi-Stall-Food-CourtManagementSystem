@@ -101,7 +101,7 @@ export const StartupScreen: React.FC<{ onReady: () => void }> = ({ onReady }) =>
           <div className="w-20 h-20 rounded-lg overflow-hidden border-2 border-st-ready mx-auto shadow-lg mb-3 bg-canvas">
             <img src={logoImg} alt="Logo" className="w-full h-full object-cover" />
           </div>
-          <h1 className="text-xl font-bold text-fg">Food Court Management</h1>
+          <h1 className="text-xl font-bold text-fg">मंगलमूर्ती POS</h1>
         </div>
 
         {failed || unreachable ? (

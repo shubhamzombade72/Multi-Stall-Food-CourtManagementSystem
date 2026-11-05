@@ -135,12 +135,13 @@ export const SettingsPage: React.FC = () => {
             <Info className="w-5 h-5" />
             <span>About</span>
           </h2>
+          <p className="text-xs text-muted">Powered by MangalMurti Tech Solution</p>
           {info ? (
             <p>
               {info.name} v{info.version} · {info.platform}
             </p>
           ) : (
-            <p>Web build</p>
+            <p>MangalMurti POS · Web build</p>
           )}
         </section>
       </div>

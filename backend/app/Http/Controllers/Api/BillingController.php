@@ -24,15 +24,23 @@ class BillingController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized. Only Cashier or Owner can view pending bills.'], 403);
         }
 
-        $query = Order::with(['table', 'items.stall:id,name,code', 'kitchenTickets.stall:id,name,code', 'payments'])
-            ->where('payment_status', 'unpaid')
+        $query = Order::with([
+            'table',
+            'items.stall:id,name,code',
+            'kitchenTickets.stall:id,name,code',
+            'payments.cashier:id,name',
+        ])
+            ->whereIn('payment_status', ['unpaid', 'partially_paid'])
             ->where('status', '!=', 'cancelled');
 
         if ($request->filled('search')) {
             $search = $request->query('search');
             $query->where(function ($q) use ($search) {
                 $q->where('order_number', Sql::like(), "%{$search}%")
-                  ->orWhere('customer_name', Sql::like(), "%{$search}%");
+                  ->orWhere('customer_name', Sql::like(), "%{$search}%")
+                  ->orWhereHas('table', function ($tq) use ($search) {
+                      $tq->where('table_number', Sql::like(), "%{$search}%");
+                  });
             });
         }
 
@@ -40,11 +48,19 @@ class BillingController extends Controller
             $query->where('table_id', $request->query('table_id'));
         }
 
-        $orders = $query->orderByDesc('id')->get();
+        $orders = $query->orderByDesc('id')->get()->map(function ($order) {
+            $order->total_paid = $order->totalPaid();
+            $order->remaining_balance = $order->remainingBalance();
+            return $order;
+        })->filter(function ($order) {
+            return in_array($order->payment_status, ['unpaid', 'partially_paid'], true)
+                && bccomp((string) $order->remaining_balance, '0.00', 2) > 0;
+        })->values();
 
         return response()->json([
             'success' => true,
             'data' => $orders,
+            'count' => $orders->count(),
         ]);
     }
 
@@ -55,9 +71,6 @@ class BillingController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized. Cashier or Owner privileges required to process payments.'], 403);
         }
 
-        // With UPI QR configured, a UPI payment is only recorded after the cashier verifies the money: the QR's
-        // reference and an explicit "I verified it" confirmation are mandatory. The bank reference (UTR) is optional,
-        // but when the cashier does enter one it must be well-formed and not used by another payment.
         $upiVerified = $request->input('payment_method') === 'upi_qr' && UpiPaymentService::isActive();
         $upiRules = $upiVerified ? [
             'upi_reference' => 'required|string|max:40',
@@ -69,7 +82,6 @@ class BillingController extends Controller
 
         $validated = $request->validate(array_merge([
             'order_id' => 'required|exists:orders,id',
-            // Only the methods the owner has enabled in Settings (all supported methods by default)
             'payment_method' => 'required|in:' . implode(',', SettingsController::enabledPaymentMethods()),
             'amount' => 'required|numeric|min:0.01',
             'cash_tendered' => 'nullable|numeric|min:0',
@@ -100,10 +112,19 @@ class BillingController extends Controller
                 abort(422, 'Cannot take payment for a cancelled order.');
             }
 
-            // A single payment settles the whole bill, so it must equal the server-side total exactly
             $amount = bcadd((string) $validated['amount'], '0', 2);
-            if (bccomp($amount, (string) $order->total_amount, 2) !== 0) {
-                abort(422, "Payment amount {$amount} does not match the bill total {$order->total_amount}.");
+            $remaining = $order->remainingBalance();
+
+            if (bccomp($remaining, '0.00', 2) <= 0) {
+                abort(422, 'This order has already been paid in full.');
+            }
+
+            if (bccomp($amount, '0.00', 2) <= 0) {
+                abort(422, 'Payment amount must be greater than zero.');
+            }
+
+            if (bccomp($amount, $remaining, 2) > 0) {
+                abort(422, "Payment amount {$amount} exceeds remaining balance {$remaining}.");
             }
 
             $cashTendered = bcadd((string) ($validated['cash_tendered'] ?? $amount), '0', 2);
@@ -111,17 +132,19 @@ class BillingController extends Controller
 
             if ($validated['payment_method'] === 'cash') {
                 if (bccomp($cashTendered, $amount, 2) < 0) {
-                    abort(422, 'Cash tendered is less than the total bill amount.');
+                    abort(422, 'Cash tendered is less than the payment amount.');
                 }
                 $changeReturned = bcsub($cashTendered, $amount, 2);
             }
 
             $upiRequest = null;
             if ($upiVerified) {
-                // The QR must be this order's own, still-current request for exactly this amount
                 $upiRequest = UpiPaymentRequest::where('reference', $validated['upi_reference'])
-                    ->where('order_id', $order->id)->lockForUpdate()->first();
-                if (!$upiRequest || $upiRequest->status !== 'pending') {
+                    ->where('order_id', $order->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$upiRequest || !$upiRequest->isOpen()) {
                     abort(422, 'This UPI QR is not valid for this bill any more. Generate a fresh QR and try again.');
                 }
                 if (bccomp((string) $upiRequest->amount, $amount, 2) !== 0 || $upiRequest->vpa !== strtolower((string) UpiPaymentService::config()['vpa'])) {
@@ -144,10 +167,20 @@ class BillingController extends Controller
                 'status' => 'success',
             ]);
 
+            $order->recalculatePaymentStatus($cashier->id);
+
             if ($upiRequest) {
-                $upiRequest->update(['status' => 'paid', 'payment_id' => $payment->id]);
-                AuditService::log('upi_payment_confirmed', 'UpiPaymentRequest', $upiRequest->id, null, ['status' => 'pending'], [
+                $was = $upiRequest->status;
+                $upiRequest->update([
                     'status' => 'paid',
+                    'payment_id' => $payment->id,
+                    'verification_method' => 'manual',
+                    'verified_by_user_id' => $cashier->id,
+                    'verified_at' => now(),
+                ]);
+                AuditService::log('upi_payment_confirmed', 'UpiPaymentRequest', $upiRequest->id, null, ['status' => $was], [
+                    'status' => 'paid',
+                    'verification_method' => 'manual',
                     'order_id' => $order->id,
                     'payment_id' => $payment->id,
                     'reference' => $upiRequest->reference,
@@ -158,16 +191,8 @@ class BillingController extends Controller
                 ], $cashier->id);
             }
 
-            $order->update([
-                'payment_status' => 'paid',
-                'status' => 'completed',
-                'cashier_id' => $cashier->id,
-            ]);
-
-            // Release table if dine-in
-            if ($order->table_id) {
-                DiningTable::where('id', $order->table_id)->update(['status' => 'available']);
-            }
+            $order->refresh();
+            $isFullyPaid = ($order->payment_status === 'paid');
 
             try {
                 event(new \App\Events\PaymentCompletedEvent($payment));
@@ -177,11 +202,13 @@ class BillingController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Payment recorded successfully. Bill settled.',
+                'message' => $isFullyPaid ? 'Payment recorded successfully. Bill settled.' : 'Payment recorded successfully.',
                 'data' => [
                     'payment' => $payment,
                     'order' => $order->fresh(['table', 'items.stall', 'payments']),
                     'change_returned' => $changeReturned,
+                    'is_fully_paid' => $isFullyPaid,
+                    'remaining_balance' => $order->fresh()->remainingBalance(),
                 ]
             ]);
         });
@@ -201,8 +228,13 @@ class BillingController extends Controller
             'per_page' => 'nullable|integer|min:1|max:200',
         ]);
 
-        $query = Payment::with(['order:id,order_number,table_id,order_channel,total_amount', 'order.table:id,table_number', 'cashier:id,name'])
-            ->orderByDesc('id');
+        $query = Payment::with([
+            'order:id,order_number,table_id,order_channel,total_amount',
+            'order.table:id,table_number',
+            'orderSplit:id,split_code,split_number',
+            'cashier:id,name'
+        ])->orderByDesc('id');
+
         if ($request->filled('date')) {
             $query->whereDate('created_at', $request->query('date'));
         }
@@ -228,13 +260,14 @@ class BillingController extends Controller
             'cashier:id,name'
         ])->findOrFail($orderId);
 
-        // Group items by stall for itemized receipt
         $itemsByStall = $order->items->groupBy('stall.name');
 
         return response()->json([
             'success' => true,
             'data' => [
                 'order' => $order,
+                'total_paid' => $order->totalPaid(),
+                'remaining_balance' => $order->remainingBalance(),
                 'stall_breakdown' => $itemsByStall,
                 'upi_enabled' => UpiPaymentService::isActive(),
                 'upi' => $this->receiptUpi($order),
@@ -243,19 +276,27 @@ class BillingController extends Controller
     }
 
     /**
-     * The UPI details a receipt prints. A paid UPI bill always shows its original (snapshotted) request; an unpaid
-     * bill shows its pending request only while UPI QR is on and the request still matches the configured UPI ID.
+     * The UPI details a receipt prints.
      */
     private function receiptUpi(Order $order): ?array
     {
-        $paid = UpiPaymentRequest::where('order_id', $order->id)->where('status', 'paid')->latest('id')->first();
+        $paid = UpiPaymentRequest::with('verifiedBy:id,name')
+            ->where('order_id', $order->id)
+            ->where('status', 'paid')
+            ->latest('id')
+            ->first();
         if ($paid) {
             return $paid->toReceiptArray();
         }
+
         if ($order->payment_status === 'paid' || $order->status === 'cancelled' || !UpiPaymentService::isActive()) {
             return null;
         }
-        $pending = UpiPaymentRequest::where('order_id', $order->id)->where('status', 'pending')->latest('id')->first();
+
+        $pending = UpiPaymentRequest::where('order_id', $order->id)
+            ->whereIn('status', UpiPaymentRequest::OPEN)
+            ->latest('id')
+            ->first();
         if ($pending && $pending->vpa === strtolower((string) UpiPaymentService::config()['vpa'])
             && bccomp((string) $pending->amount, (string) $order->total_amount, 2) === 0) {
             return $pending->toReceiptArray();
@@ -264,7 +305,23 @@ class BillingController extends Controller
         return null;
     }
 
-    /** Get-or-create the UPI payment request (QR payload) for an unpaid bill. Never marks anything paid. */
+    public function upiRequestStatus(Request $request, $reference, UpiPaymentService $upi)
+    {
+        $user = $request->user();
+        if (!$user->isOwner() && !$user->isCashier()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Only Cashier or Owner can update a UPI status.'], 403);
+        }
+
+        $validated = $request->validate([
+            'status' => 'required|in:initiated,failed,cancelled',
+            'reason' => 'nullable|string|max:255',
+        ]);
+
+        $updated = $upi->transition((string) $reference, $validated['status'], $user, $validated['reason'] ?? null);
+
+        return response()->json(['success' => true, 'data' => $updated->toReceiptArray()]);
+    }
+
     public function upiRequest(Request $request, $orderId, UpiPaymentService $upi)
     {
         $user = $request->user();
@@ -277,4 +334,3 @@ class BillingController extends Controller
         return response()->json(['success' => true, 'data' => $upiRequest->toReceiptArray()]);
     }
 }
-

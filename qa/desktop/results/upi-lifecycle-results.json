@@ -1,0 +1,62 @@
+[
+  {
+    "id": "L-01",
+    "desc": "Fresh profile: built-in server started and owner created",
+    "result": "PASS",
+    "evidence": "http://127.0.0.1:50325/api"
+  },
+  {
+    "id": "L-02",
+    "desc": "Unrecognised handle \"@oksb\": saved UNCHANGED, warned with \"did you mean @oksbi\", reported untested, never reported provider-verified",
+    "result": "PASS",
+    "evidence": "\"@oksb\" is not a UPI provider handle we recognise. UPI apps such as Google Pay, PhonePe and Paytm will most likely say \"invalid UPI ID\" for it. Did you mean @oksbi? (Nothing was changed; correct it yourself if so.)"
+  },
+  {
+    "id": "L-03",
+    "desc": "Test QR decodes (from the rendered SVG) to Rs 1.00 for the saved UPI ID with a TEST reference, and creates no order or payment",
+    "result": "PASS",
+    "evidence": "upi://pay?pa=shubh.test@oksb&pn=Urban%20Food%20Court&am=1.00&cu=INR&tn=TEST-037DA057"
+  },
+  {
+    "id": "L-04",
+    "desc": "A failed test stays untested; \"correct payee\" is recorded as the OWNER's confirmation (not a bank verification) and the handle warning remains",
+    "result": "PASS",
+    "evidence": "Test scan confirmed by the owner on 11/4/2026, 3:40:21 PM. This is the owner's own confirmation, not a bank verification."
+  },
+  {
+    "id": "L-05",
+    "desc": "Changing the UPI ID drops the test confirmation; the unknown-handle warning goes away for the known handle @oksbi but \"untested\" returns",
+    "result": "PASS",
+    "evidence": "{\"syntax_valid\":true,\"handle\":\"oksbi\",\"handle_known\":true,\"suggested_handle\":null,\"test_confirmed\":false,\"test_confirmed_at\":null,\"provider_verified\":false}"
+  },
+  {
+    "id": "L-06a",
+    "desc": "POS: QR generated = Pending, bill unpaid, amount 26.25 and reference in the decoded QR, untested-UPI-ID warning shown",
+    "result": "PASS",
+    "evidence": "pending upi://pay?pa=shubh.test@oksbi&pn=Urban%20Food%20Court&am=26.25&cu=INR&tn=ORD-20261104-ARW4Z"
+  },
+  {
+    "id": "L-06b",
+    "desc": "Initiated is shown as \"not yet verified\"; the bill is still unpaid and cannot be settled without the verification tick",
+    "result": "PASS",
+    "evidence": "●\nInitiated - not yet verified"
+  },
+  {
+    "id": "L-07",
+    "desc": "Payment failed: that QR is closed (cannot settle), a NEW QR with a new reference is Pending, and the bill is still unpaid",
+    "result": "PASS",
+    "evidence": "ORD-20261104-ARW4Z -> ORD-20261104-ARW4Z-2; old reference pay=422"
+  },
+  {
+    "id": "L-08",
+    "desc": "Only the cashier's manual verification pays the bill; the receipt says PAID VIA UPI - MANUALLY VERIFIED (no extra note printed; verifier and time are recorded on the server) and makes no automatic-receipt claim",
+    "result": "PASS",
+    "evidence": "PAID VIA UPI - MANUALLY VERIFIED"
+  },
+  {
+    "id": "L-09",
+    "desc": "No unexpected renderer errors during the run",
+    "result": "PASS",
+    "evidence": ""
+  }
+]

@@ -87,7 +87,7 @@ export const Tag: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 
 /** Explicit "LATE" label for overdue work (KDS tickets, tracking cards): solid danger, >= 6:1 in both themes. */
 export const LateBadge: React.FC = () => (
-  <span className="text-[11px] font-extrabold tracking-wider px-1.5 py-0.5 rounded bg-danger-fg text-surface">LATE</span>
+  null
 );
 
 /** Badge tone for an order / ticket / payment / table status: a thin wrapper over the shared statusKind(). */

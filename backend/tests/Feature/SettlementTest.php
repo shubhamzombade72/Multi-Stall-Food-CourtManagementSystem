@@ -11,7 +11,13 @@ class SettlementTest extends TestCase
 {
     public function test_owner_can_view_daily_summary_and_close_day(): void
     {
-        $owner = User::where('email', 'owner@foodcourt.com')->first();
+        $owner = User::where('role', 'owner')->first() ?? User::create([
+            'name' => 'Food Court Owner',
+            'email' => 'owner@foodcourt.com',
+            'password' => bcrypt('password'),
+            'role' => 'owner',
+            'is_active' => true,
+        ]);
         $this->assertNotNull($owner);
 
         // 1. View daily summary
@@ -40,5 +46,35 @@ class SettlementTest extends TestCase
 
         $this->assertNotNull($closing);
         $this->assertEquals(Stall::count(), $closing->settlements->count(), "Settlement record must be created for each active stall");
+    }
+
+    public function test_owner_can_review_stall_bills_for_settlement(): void
+    {
+        $owner = User::where('role', 'owner')->first() ?? User::create([
+            'name' => 'Food Court Owner',
+            'email' => 'owner@foodcourt.com',
+            'password' => bcrypt('password'),
+            'role' => 'owner',
+            'is_active' => true,
+        ]);
+
+        $cashier = User::where('role', 'cashier')->where('is_active', true)->first() ?? User::create([
+            'name' => 'Test Cashier',
+            'email' => 'cashier.test@foodcourt.com',
+            'password' => bcrypt('password'),
+            'role' => 'cashier',
+            'is_active' => true,
+        ]);
+
+        // Cashier cannot access stall bills
+        $this->actingAs($cashier)->getJson('/api/settlements/stall-bills')->assertStatus(403);
+
+        // Owner can access stall bills
+        $response = $this->actingAs($owner)->getJson('/api/settlements/stall-bills');
+        $response->assertStatus(200);
+        $response->assertJsonPath('success', true);
+        $this->assertArrayHasKey('bills', $response->json('data'));
+        $this->assertArrayHasKey('total_bills', $response->json('data'));
+        $this->assertArrayHasKey('total_sales', $response->json('data'));
     }
 }

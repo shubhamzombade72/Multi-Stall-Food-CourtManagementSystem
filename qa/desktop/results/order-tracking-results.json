@@ -3,7 +3,7 @@
     "id": "T-00",
     "desc": "Fresh profile: built-in server started and owner created on the Welcome screen",
     "result": "PASS",
-    "evidence": "http://127.0.0.1:62776/api"
+    "evidence": "http://127.0.0.1:53268/api"
   },
   {
     "id": "T-01",
@@ -21,102 +21,24 @@
     "id": "S1-02",
     "desc": "New order shows a red card with 0/4 Served",
     "result": "PASS",
-    "evidence": "red | T-BECZ · 0m · 0/4 Served"
+    "evidence": "red | T-H5UD · 0m · 0/4 Served"
   },
   {
     "id": "S1-02b",
     "desc": "Card details: \"Table : <table no>\" and \"Stalls : <both stall names>\", card open by default",
     "result": "PASS",
-    "evidence": "Table : T-BECZ | Stalls : Pizza BECZ, Burger BECZ"
+    "evidence": "Table : T-H5UD | Stalls : Pizza H5UD, Burger H5UD"
   },
   {
     "id": "S1-02c",
     "desc": "Item rows show the stall name next to the dish, not the stall code",
     "result": "PASS",
-    "evidence": "(Pizza BECZ) (Pizza BECZ) (Burger BECZ) (Burger BECZ)"
+    "evidence": "(Pizza H5UD) (Pizza H5UD) (Burger H5UD) (Burger H5UD)"
   },
   {
-    "id": "S1-03",
-    "desc": "Kitchen marks stall A ready (KDS) -> the card turns amber by itself (poll)",
-    "result": "PASS",
-    "evidence": "amber"
-  },
-  {
-    "id": "S1-04",
-    "desc": "Stall A items show Ready, stall B items show Cooking",
-    "result": "PASS",
-    "evidence": "Ready,Ready | Cooking,Cooking"
-  },
-  {
-    "id": "S1-05",
-    "desc": "Owner marks the 2 ready items served -> 2/4 Served, card red again (rest still cooking)",
-    "result": "PASS",
-    "evidence": "red | T-BECZ · 0m · 2/4 Served"
-  },
-  {
-    "id": "S1-06",
-    "desc": "Serve All asks \"Serve 2 items?\", then the card is green with 4/4 Served",
-    "result": "PASS",
-    "evidence": "green | T-BECZ · 0m · 4/4 Served"
-  },
-  {
-    "id": "S1-07",
-    "desc": "KDS API: order left the active KDS list; both tickets picked up and all 4 ticket items served",
-    "result": "PASS",
-    "evidence": "active=0 tickets=picked_up,picked_up items=served,served,served,served"
-  },
-  {
-    "id": "S1-08",
-    "desc": "Board API: all 4 items served",
-    "result": "PASS",
-    "evidence": "served,served,served,served"
-  },
-  {
-    "id": "S1-09",
-    "desc": "Audit: exactly one ticket_item_status row per item change (2 ready via KDS, 2 served on board, 2 by Serve All)",
-    "result": "PASS",
-    "evidence": "1:pending>ready:kds 1:ready>served:item 2:pending>ready:kds 2:ready>served:item 3:pending>served:serve_remaining 4:pending>served:serve_remaining"
-  },
-  {
-    "id": "S1-10",
-    "desc": "Audit: exactly one order_serve_remaining row, listing the 2 stall-B items",
-    "result": "PASS",
-    "evidence": "[{\"served_item_ids\":[3,4],\"order_id\":1,\"requested_item_ids\":[3,4],\"idempotency_key\":\"302c0707-082a-410c-bc15-0a88d3cf6768\"}]"
-  },
-  {
-    "id": "S5-01",
-    "desc": "Cards are open by default; two cards stay open at once and a poll does not close them",
-    "result": "PASS",
-    "evidence": "both=true afterPoll=true"
-  },
-  {
-    "id": "S5-02",
-    "desc": "Clicking the title collapses only that card (and it stays collapsed after a poll); clicking again re-opens it",
-    "result": "PASS",
-    "evidence": "collapsed=true stays=true"
-  },
-  {
-    "id": "S3-01",
-    "desc": "Aborted PATCH: the card shows the server state again (Ready, amber, 0/1) with an error message",
-    "result": "PASS",
-    "evidence": "aborted=1 chip=Ready state=amber server=ready alert=\"Could not update the order. Showing the latest state.\nRetry\""
-  },
-  {
-    "id": "S3-02",
-    "desc": "Retry succeeds: Served, card green, error cleared",
-    "result": "PASS",
-    "evidence": "Served | green"
-  },
-  {
-    "id": "S3-03",
-    "desc": "Exactly one \"served\" audit row for the item (the aborted attempt left none); server says served",
-    "result": "PASS",
-    "evidence": "5:ready>served:item 5:pending>ready:kds"
-  },
-  {
-    "id": "S4-01",
-    "desc": "Owner sets \"Late-order warning after (minutes)\" 15 -> 25 on Food Court Settings; 121 cannot be saved; board uses 25",
-    "result": "PASS",
-    "evidence": "before=15 disabled@121=true msg=\"Order tracking saved.\" setting=25 board=25"
+    "id": "T-ERR",
+    "desc": "Journey completed without an unexpected error",
+    "result": "FAIL",
+    "evidence": "GET /kitchen/tickets -> 404 {\"message\":\"The route api/kitchen/tickets could not be found.\"}"
   }
 ]

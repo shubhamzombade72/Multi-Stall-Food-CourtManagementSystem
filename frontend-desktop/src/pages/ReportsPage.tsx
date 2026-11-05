@@ -15,9 +15,6 @@ type Tab =
   | 'cashiers'
   | 'cashier_closings'
   | 'closings'
-  | 'purchases'
-  | 'inventory'
-  | 'stock'
   | 'staff'
   | 'logins'
   | 'audit';
@@ -156,54 +153,6 @@ const REPORTS: Record<Tab, ReportDef> = {
     ],
     load: async () => (await get('/settlements/closings', { per_page: 100 })).data,
   },
-  purchases: {
-    label: 'Purchases',
-    title: 'Purchases by supplier',
-    stall: true,
-    columns: [
-      { header: 'Supplier', value: (r) => r.supplier_name },
-      { header: 'Stall', value: (r) => r.stall_name },
-      { header: 'Purchase orders', value: (r) => r.purchase_orders, align: 'right', numeric: true },
-      { header: 'Open', value: (r) => r.open_orders, align: 'right', numeric: true },
-      { header: 'Received (₹)', value: (r) => amt(r.received_total), align: 'right', numeric: true },
-      { header: 'Open value (₹)', value: (r) => amt(r.open_total), align: 'right', numeric: true },
-    ],
-    load: async ({ start, end, stallId }) => (await get('/reports/purchases', { start_date: start, end_date: end, stall_id: stallId || undefined })).suppliers,
-  },
-  inventory: {
-    label: 'Inventory',
-    title: 'Current stock and value (at last purchase cost)',
-    stall: true,
-    note: 'Stock value = current stock × last purchase unit cost. Current figures, not tied to the date range.',
-    columns: [
-      { header: 'Stall', value: (r) => r.stall_name },
-      { header: 'Item', value: (r) => r.name },
-      { header: 'Stock', value: (r) => `${Number(r.current_stock)} ${r.unit}`, align: 'right' },
-      { header: 'Alert at', value: (r) => Number(r.minimum_alert_stock), align: 'right', numeric: true },
-      { header: 'Unit cost (₹)', value: (r) => amt(r.unit_cost), align: 'right', numeric: true },
-      { header: 'Value (₹)', value: (r) => amt(r.stock_value), align: 'right', numeric: true },
-      { header: 'Low', value: (r) => (r.is_low ? 'LOW' : '') },
-    ],
-    load: async ({ stallId }) => (await get('/reports/inventory', { stall_id: stallId || undefined })).items,
-  },
-  stock: {
-    label: 'Stock Movements',
-    title: 'Stock movement ledger',
-    stall: true,
-    note: 'Latest 200 movements in the range.',
-    columns: [
-      { header: 'Time', value: (r) => when(r.created_at) },
-      { header: 'Stall', value: (r) => r.stall?.name },
-      { header: 'Item', value: (r) => r.inventory_item?.name },
-      { header: 'Type', value: (r) => humanize(r.movement_type) },
-      { header: 'Qty', value: (r) => Number(r.quantity), align: 'right', numeric: true },
-      { header: 'Before', value: (r) => Number(r.previous_stock), align: 'right', numeric: true },
-      { header: 'After', value: (r) => Number(r.new_stock), align: 'right', numeric: true },
-      { header: 'By', value: (r) => r.performed_by?.name || '' },
-      { header: 'Reason', value: (r) => r.reason || '' },
-    ],
-    load: async ({ start, end, stallId }) => (await get('/inventory/movements', { date_from: start, date_to: end, stall_id: stallId || undefined, per_page: 200 })).data,
-  },
   staff: {
     label: 'Staff Activity',
     title: 'Staff activity (audited actions)',
@@ -308,7 +257,7 @@ export const ReportsPage: React.FC = () => {
     return out;
   }, [rows, filter, sort, report]);
 
-  const title = `${report.title} · ${report.singleDay ? endDate : tab === 'inventory' || tab === 'closings' ? 'current' : `${startDate} to ${endDate}`}`;
+  const title = `${report.title} · ${report.singleDay ? endDate : tab === 'closings' ? 'current' : `${startDate} to ${endDate}`}`;
   const exportCsv = () => downloadCsv(`${tab}-report-${endDate}.csv`, toCsv(visible, report.columns));
   const print = () =>
     printContent(
@@ -330,7 +279,7 @@ export const ReportsPage: React.FC = () => {
             <BarChart3 className="w-5 h-5" />
             <span>Reports & Audit</span>
           </h2>
-          <p className="text-sm text-muted mt-1">All figures come from recorded orders, payments, purchases and stock movements. No commission or settlement formula is applied.</p>
+          <p className="text-sm text-muted mt-1">All figures come from recorded orders and payments. No commission or settlement formula is applied.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {report.stall && (

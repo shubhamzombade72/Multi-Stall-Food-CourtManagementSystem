@@ -1,3 +1,4 @@
+import electronPath from 'electron';
 /**
  * Orders & Table Tracking board, driven through the real Electron runtime with its built-in server on a brand-new
  * profile (same pattern as ui-first-run.e2e.mjs).
@@ -98,9 +99,12 @@ const auditRows = async (ownerToken, actions) => {
 
 try {
   // ------------------------------------------------------------------ fresh profile, owner via Welcome
+  const launchEnv = { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: '' };
+  delete launchEnv.ELECTRON_RUN_AS_NODE;
   app = await electron.launch({
+    executablePath: electronPath,
     args: [APP_DIR],
-    env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: '' },
+    env: launchEnv,
     timeout: 60000,
   });
   page = await app.firstWindow();
@@ -219,6 +223,62 @@ try {
   check('S1-09', 'Audit: exactly one ticket_item_status row per item change (2 ready via KDS, 2 served on board, 2 by Serve All)', JSON.stringify(got) === JSON.stringify(expected), got.join(' '));
   const serveAudits = audits.filter((r) => r.action === 'order_serve_remaining' && Number(r.entity_id) === order1);
   check('S1-10', 'Audit: exactly one order_serve_remaining row, listing the 2 stall-B items', serveAudits.length === 1 && JSON.stringify([...serveAudits[0].new_values.served_item_ids].sort()) === JSON.stringify([...itemsB].sort()), JSON.stringify(serveAudits.map((r) => r.new_values)));
+
+    // ================================================================== Scenario 2: Dish Quantity Controls (+/-) & Add Item
+  const order2 = await placeOrder(['Margherita']);
+  await card(order2).waitFor({ timeout: 20000 });
+  await expand(order2);
+
+  const b2 = await boardOrder(order2);
+  const item2 = b2.items[0].id;
+  const decBtn = page.getByTestId(`qty-decrease-${item2}`);
+  const incBtn = page.getByTestId(`qty-increase-${item2}`);
+
+  // 1. Minus button is disabled when quantity is 1
+  const decDisabledAt1 = await decBtn.isDisabled();
+  check('S2-01', 'Quantity controls: minus button is disabled when quantity is 1', decDisabledAt1, `disabled=${decDisabledAt1}`);
+
+  // 2. Click plus: quantity increases 1 -> 2
+  await incBtn.click();
+  const rowAfterInc = await waitText(() => page.getByTestId(`item-row-${item2}`).innerText(), /2 × Margherita/);
+  check('S2-02', 'Quantity controls: clicking plus increases dish quantity immediately to 2', /2 × Margherita/.test(rowAfterInc), rowAfterInc);
+
+  // 3. Now minus button is enabled; click minus: quantity decreases 2 -> 1
+  const decEnabledAt2 = !(await decBtn.isDisabled());
+  await decBtn.click();
+  const rowAfterDec = await waitText(() => page.getByTestId(`item-row-${item2}`).innerText(), /1 × Margherita/);
+  check('S2-03', 'Quantity controls: clicking minus decreases dish quantity back to 1', decEnabledAt2 && /1 × Margherita/.test(rowAfterDec), `enabledAt2=${decEnabledAt2} row="${rowAfterDec}"`);
+
+  // 4. Test + Add Item inside the same order card
+  const addBtn = page.getByTestId(`add-item-${order2}`);
+  await addBtn.click();
+
+  // 5. Add Item modal opens with menu catalog
+  const searchInput = page.getByTestId('add-item-search');
+  await searchInput.waitFor({ timeout: 10000 });
+  check('S2-04', 'Add Item: clicking "+ Add Item" opens menu selection modal', await searchInput.isVisible(), 'modal visible');
+
+  // Search for Veg Burger from Stall B and add 2x
+  await searchInput.fill('Veg Burger');
+  const burgerCard = page.locator('[data-testid^="menu-card-"]').first();
+  await burgerCard.waitFor({ timeout: 10000 });
+  const burgerCardId = (await burgerCard.getAttribute('data-testid')).replace('menu-card-', '');
+
+  // Set quantity to 2
+  await page.getByTestId(`menu-qty-increase-${burgerCardId}`).click();
+  await page.getByTestId(`menu-add-btn-${burgerCardId}`).click();
+
+  // Wait for success notice
+  await page.waitForSelector('text=Added 2 × Veg Burger', { timeout: 10000 });
+  check('S2-05', 'Add Item: added 2x Veg Burger (Stall B) to existing order', true, 'item added');
+
+  // Close modal
+  await page.getByRole('button', { name: 'Close' }).first().click();
+
+  // Verify order card now shows both dishes
+  const cardText = await waitText(() => card(order2).innerText(), /Veg Burger/);
+  check('S2-06', 'Order card in tracking board now displays the newly added burger item', /Veg Burger/.test(cardText), cardText);
+  await page.screenshot({ path: join(shots, 'tracking-added-item.png') });
 
   // ================================================================== Scenario 3
   const order3 = await placeOrder(['Margherita']);

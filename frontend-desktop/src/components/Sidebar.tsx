@@ -1,45 +1,53 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useConnection } from '../hooks/useConnection';
+import { usePendingBillsCount } from '../hooks/usePendingBillsCount';
 import {
   LayoutDashboard,
   ShoppingCart,
   Store,
   UtensilsCrossed,
-  Package,
-  Truck,
   CalendarCheck,
   BarChart3,
   Receipt,
-  ChefHat,
   Users,
   CreditCard,
   Settings,
-  ConciergeBell,
   LayoutGrid,
   Calculator,
   Contact,
   Building2,
   ListChecks,
+  Clock,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
   const { user, isOwner, isCashier } = useAuth();
   const { state, lastChecked } = useConnection();
+  const pendingBillsCount = usePendingBillsCount();
+  const location = useLocation();
   const role = user?.role;
 
   const isWaiter = role === 'waiter';
-  const groups: { title: string; links: { to: string; label: string; icon: React.ElementType; show: boolean }[] }[] = [
+  const groups: {
+    title: string;
+    links: { to: string; label: string; icon: React.ElementType; show: boolean; badge?: number }[];
+  }[] = [
     {
       title: 'Operations',
       links: [
         { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, show: isOwner },
         { to: '/pos', label: 'Cashier POS', icon: ShoppingCart, show: isCashier || isOwner },
-        { to: '/waiter', label: 'Waiter Station', icon: ConciergeBell, show: isWaiter || isOwner },
+        {
+          to: '/pos?mode=pending_bills',
+          label: 'Pending Table Bills',
+          icon: Clock,
+          show: isCashier || isOwner,
+          badge: pendingBillsCount,
+        },
         { to: '/orders', label: 'Orders & Receipts', icon: Receipt, show: isOwner || isCashier },
-        { to: '/tracking', label: 'Orders & Table Tracking', icon: ListChecks, show: isOwner || isCashier || isWaiter },
-        { to: '/kitchen', label: 'Kitchen Display', icon: ChefHat, show: isOwner || role === 'kitchen_staff' || role === 'stall_manager' },
+        { to: '/tracking', label: 'Orders & Table Tracking', icon: ListChecks, show: isOwner || isCashier || isWaiter || role === 'kitchen_staff' || role === 'stall_manager' },
         { to: '/tables', label: 'Floor & Tables', icon: LayoutGrid, show: isOwner || isCashier || isWaiter },
       ],
     },
@@ -48,7 +56,7 @@ export const Sidebar: React.FC = () => {
       links: [
         { to: '/payments', label: 'Payment History', icon: CreditCard, show: isOwner || isCashier },
         { to: '/cashier-closing', label: 'Cashier Closing', icon: Calculator, show: isOwner || isCashier },
-        { to: '/settlements', label: 'Daily Closing', icon: CalendarCheck, show: isOwner },
+        { to: '/settlements', label: 'End-of-Day Closing & Settlements', icon: CalendarCheck, show: isOwner },
       ],
     },
     {
@@ -63,8 +71,6 @@ export const Sidebar: React.FC = () => {
     {
       title: 'Back Office',
       links: [
-        { to: '/inventory', label: 'Stall Inventory', icon: Package, show: isOwner || role === 'stall_manager' || role === 'store_staff' },
-        { to: '/purchases', label: 'Purchases & Suppliers', icon: Truck, show: isOwner || role === 'stall_manager' },
         { to: '/reports', label: 'Reports & Audit', icon: BarChart3, show: isOwner },
       ],
     },
@@ -80,6 +86,17 @@ export const Sidebar: React.FC = () => {
   const dot = state === 'online' ? 'text-st-served-fg' : state === 'offline' ? 'text-danger-fg' : 'text-muted';
   const label = state === 'online' ? 'System online' : state === 'offline' ? 'System not responding' : 'Checking system…';
 
+  const isLinkActive = (to: string) => {
+    const [toPath, toQuery] = to.split('?');
+    if (toQuery) {
+      return location.pathname === toPath && location.search.includes(toQuery);
+    }
+    if (toPath === '/pos') {
+      return location.pathname === '/pos' && (!location.search || !location.search.includes('mode=pending_bills'));
+    }
+    return location.pathname === toPath;
+  };
+
   return (
     <aside className="w-52 bg-sidebar text-fg border-r border-line flex flex-col shrink-0 min-h-[calc(100vh-3rem)]">
       <nav className="p-2 flex-1 space-y-3 overflow-y-auto" aria-label="Main navigation">
@@ -91,18 +108,30 @@ export const Sidebar: React.FC = () => {
               <p className="px-2 text-[11px] font-semibold uppercase tracking-wider text-muted mb-0.5">{group.title}</p>
               {links.map((link) => {
                 const Icon = link.icon;
+                const active = isLinkActive(link.to);
                 return (
                   <NavLink
                     key={link.to}
                     to={link.to}
-                    className={({ isActive }) =>
-                      `flex items-center space-x-2 px-2 py-1.5 rounded-lg font-medium text-[13px] transition ${
-                        isActive ? 'bg-primary text-primary-fg' : 'text-muted hover:text-fg hover:bg-surface-2'
-                      }`
-                    }
+                    className={`flex items-center space-x-2 px-2 py-1.5 rounded-lg font-medium text-[13px] transition ${
+                      active ? 'bg-primary text-primary-fg' : 'text-muted hover:text-fg hover:bg-surface-2'
+                    }`}
                   >
                     <Icon className="w-4 h-4 shrink-0" />
-                    <span>{link.label}</span>
+                    <span className="flex-1 truncate">{link.label}</span>
+                    {link.badge !== undefined && (
+                      <span
+                        className={`ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-black tracking-tight ${
+                          active
+                            ? 'bg-primary-fg/20 text-primary-fg'
+                            : link.badge > 0
+                            ? 'bg-danger/10 text-danger-fg'
+                            : 'bg-surface-2 text-muted'
+                        }`}
+                      >
+                        {link.badge}
+                      </span>
+                    )}
                   </NavLink>
                 );
               })}

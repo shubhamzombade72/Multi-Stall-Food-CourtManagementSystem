@@ -501,7 +501,14 @@ class SettlementPayoutTest extends TestCase
     public function test_only_the_owner_can_see_or_change_payouts(): void
     {
         $s = $this->makeSettlement($this->freshDate(), '1000.00');
-        $cashier = User::where('role', 'cashier')->firstOrFail();
+        $cashier = User::where('role', 'cashier')->where('is_active', true)->first()
+            ?? User::create([
+                'name' => 'Test Cashier',
+                'email' => 'cashier.' . \Illuminate\Support\Str::random(6) . '@test.com',
+                'password' => bcrypt('password'),
+                'role' => 'cashier',
+                'is_active' => true,
+            ]);
 
         foreach ([
             ['post', "/api/settlements/{$s->id}/payouts", ['amount' => '10', 'payment_method' => 'cash', 'idempotency_key' => 'cashier-key-1']],
