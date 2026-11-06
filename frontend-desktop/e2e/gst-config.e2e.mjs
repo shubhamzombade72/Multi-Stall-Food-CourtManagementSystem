@@ -13,6 +13,7 @@
  *  G6  Old bills keep their own rate after the changes (Orders detail + reprint), daily closing and reports reconcile
  */
 import { _electron as electron } from 'playwright-core';
+import { serveAll } from './serve-order.mjs';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -88,16 +89,26 @@ const row = (text, label) => {
 };
 
 /** Adds an item in the POS, reads the cart's GST lines, sends & pays with `method`, returns what the screens showed. */
+let ownerTokenForServing = '';
+const staffToken = () => ownerTokenForServing;
 const posSale = async (itemName, method, extra = async () => {}) => {
   await page.reload();
   await goto('#/pos');
+  await page.locator('[data-category-chip="All Categories"]').click(); // the POS opens on one category
   await page.locator(`[data-menu-item="${itemName}"]`).first().waitFor({ timeout: 20000 });
   await page.locator(`[data-menu-item="${itemName}"]`).first().click();
   await page.getByRole('button', { name: 'Takeaway' }).click();
   await page.getByTestId('cart-tax-line').first().waitFor({ timeout: 10000 });
   const cartLines = (await page.getByTestId('cart-tax-line').allInnerTexts()).map(norm);
   const grand = norm(await page.getByText('Grand Total:').locator('..').innerText());
-  await page.getByRole('button', { name: /Send & Pay/ }).click();
+  await page.getByRole('button', { name: /Place Order/ }).click();
+  const sent = page.getByText(/sent to \d+ stall kitchen/);
+  await sent.waitFor({ timeout: 15000 });
+  const placed = /Order (\S+) sent/.exec(await sent.innerText())[1];
+  const placedId = (await api(staffToken(), 'GET', `/orders?search=${placed}`)).data.data[0].id;
+  await serveAll(API, staffToken(), placedId);
+  await page.getByRole('button', { name: /Pending Table Bills/ }).click();
+  await page.locator(`[data-settle-order="${placed}"]`).click();
   const dialog = page.getByRole('dialog', { name: 'Consolidated bill settlement' });
   await dialog.waitFor({ timeout: 15000 });
   const modalText = norm(await dialog.innerText());
@@ -115,7 +126,7 @@ const closeSettled = () => page.getByRole('button', { name: 'Close' }).first().c
 
 try {
   // ------------------------------------------------------------------ fresh profile, owner via Welcome
-  app = await electron.launch({ args: [APP_DIR], env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: '' }, timeout: 60000 });
+  app = await electron.launch({ args: [APP_DIR], env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_PIN_LOCK: 'off', FOODCOURT_API_URL: '' }, timeout: 60000 });
   page = await app.firstWindow();
   page.on('pageerror', (e) => pageErrors.push(String(e?.message || e)));
   page.on('console', (m) => m.type() === 'error' && pageErrors.push(m.text()));
@@ -131,6 +142,7 @@ try {
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.waitForFunction(() => /dashboard/i.test(location.hash), null, { timeout: 20000 });
   const ownerToken = await page.evaluate(() => localStorage.getItem('fc_auth_token'));
+  ownerTokenForServing = ownerToken;
   API = (await page.evaluate(() => window.desktop.getConfig())).apiBaseUrl.replace(/\/$/, '');
   check('G-00', 'Fresh profile: built-in server started and owner created', Boolean(ownerToken), API);
 
@@ -203,8 +215,8 @@ try {
   const q = Object.fromEntries(new URLSearchParams(payload.split('?')[1]));
   check('G-11', 'After the owner changes GST to 18%, the new bill uses 18%: cart GST (18%) 18.00 / total 118.00', s2.cartLines[1] === 'GST (18%): ₹18.00' && /₹118\.00/.test(s2.grand) && s2.modalTotal === '118.00', `${s2.cartLines.join(' | ')} | ${s2.grand}`);
   check('G-12', 'UPI QR amount is the GST-inclusive payable amount: panel Pay Rs 118.00 and QR am=118.00', /118\.00/.test(upiAmount) && q.am === '118.00' && q.pa === 'gst.shop@upi', `${upiAmount} ${payload}`);
-  const stale = await api(cashierToken, 'POST', '/billing/pay', { order_id: (await api(ownerToken, 'GET', '/orders')).data.data.find((o) => o.order_number === s2.orderNumber).id, payment_method: 'cash', amount: '105.00', cash_tendered: 200 }, true);
-  check('G-13', 'A client still using the old 5% total (105.00) is refused by the server', stale.status === 422, `${stale.status} ${stale.json.message}`);
+  const stale = await api(cashierToken, 'POST', '/billing/pay', { order_id: (await api(ownerToken, 'GET', '/orders')).data.data.find((o) => o.order_number === s2.orderNumber).id, payment_method: 'cash', amount: '105.00', expected_balance: '105.00', cash_tendered: 200 }, true);
+  check('G-13', 'A client still using the old 5% total (105.00) is refused by the server', stale.status === 409, `${stale.status} ${stale.json.message}`);
   await s2.dialog.getByTestId('upi-utr').fill('412345678901');
   await s2.dialog.getByTestId('upi-verified').check();
   await settle(s2.dialog);

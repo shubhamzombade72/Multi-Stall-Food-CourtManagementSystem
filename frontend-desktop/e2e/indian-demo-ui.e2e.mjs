@@ -62,7 +62,7 @@ const visit = async (name, hash, ready) => {
 try {
   app = await electron.launch({
     args: [APP_DIR],
-    env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: API },
+    env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_PIN_LOCK: 'off', FOODCOURT_API_URL: API },
     timeout: 60000,
   });
   page = await app.firstWindow();
@@ -116,7 +116,9 @@ try {
   // ---------------------------------------------------------------- POS
   await visit('pos', '#/pos', async () => {
     await page.getByPlaceholder(/Search food, beverages, or stalls/).waitFor({ timeout: 30000 });
-    await page.waitForFunction(() => /All Stalls \(\d{3,4}\)/.test(document.body.innerText), null, { timeout: 45000 }); // chip shows the number of orderable dishes (fetched from /stalls + /menu)
+    await page.waitForFunction(() => /All Categories \(\d{3,4}\)/.test(document.body.innerText), null, { timeout: 45000 }); // chip shows the number of orderable dishes
+    await page.locator('[data-category-chip="All Categories"]').click();
+    await page.waitForTimeout(300);
   });
   const posNodesAll = metrics.pos.nodes;
   const tPos = Date.now();
@@ -127,16 +129,12 @@ try {
   const posNodesFiltered = await page.evaluate(() => document.querySelectorAll('*').length);
   check('D-07', 'POS product search ("Misal") responds quickly and narrows the grid', metrics.pos_search_ms < 1500 && posNodesFiltered < posNodesAll, `all nodes=${posNodesAll}, filtered=${posNodesFiltered}, ${metrics.pos_search_ms} ms`);
   await page.getByPlaceholder(/Search food, beverages, or stalls/).fill('');
-  const stallChip = page.getByRole('button', { name: /Pune Misal House/ }).first();
-  if (await stallChip.count()) {
-    await stallChip.click();
-    await page.waitForTimeout(300);
-    await page.screenshot({ path: join(SHOTS, 'pos-stall-pune-misal.png') });
-    const posText = await page.evaluate(() => document.body.innerText);
-    check('D-08', 'POS stall filter shows only the selected stall\'s dishes (Pune Misal House)', /Misal Pav/.test(posText), 'stall filter applied');
-  } else {
-    check('D-08', 'POS stall filter chip for Pune Misal House found', false, 'chip missing');
-  }
+  const categoryChip = page.locator('[data-category-chip]:not([data-category-chip="All Categories"])').first();
+  await categoryChip.click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: join(SHOTS, 'pos-category.png') });
+  const shownCategories = await page.locator('[data-menu-item]').evaluateAll((cards) => [...new Set(cards.map((c) => c.getAttribute('data-category-key')))]);
+  check('D-08', 'POS category chip shows only that category\'s dishes', shownCategories.length === 1, `${await categoryChip.innerText()}: ${shownCategories.join(', ')}`);
 
   // ---------------------------------------------------------------- Order board, KDS, orders
   await visit('order-board', '#/tracking', hasText('ORD-'));

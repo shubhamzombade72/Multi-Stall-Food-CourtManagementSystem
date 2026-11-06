@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { statusChip } from '../lib/status';
 import { apiClient } from '../api/client';
@@ -11,7 +11,18 @@ import { apiError } from '../lib/format';
 import { sound } from '../lib/sound/index';
 import { PrintOrderKotButton } from '../components/PrintKotButtons';
 import { upiConfigWarnings, upiStatusView } from '../lib/upiStatus';
+import {
+  ALL_CATEGORIES,
+  CatalogCategory,
+  buildCategoryGroups,
+  categoryKey,
+  eligibleItems,
+  filterCatalog,
+  menuImageUrl,
+  resolveSelectedCategory,
+} from '../lib/posCatalog';
 import { Modal, Field, inputClass } from '../components/ui';
+import { OutstandingItem, OutstandingItems } from '../components/OutstandingItems';
 import {
   Search,
   Plus,
@@ -26,6 +37,7 @@ import {
   QrCode,
   Banknote,
   ListChecks,
+  UtensilsCrossed,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -35,6 +47,7 @@ interface MenuItem {
   price: string;
   is_veg: boolean;
   is_available: boolean;
+  image_url?: string | null;
   stall: { id: number; name: string; code: string };
   category: { id: number; name: string };
 }
@@ -45,6 +58,20 @@ interface CartItem {
 }
 
 const newOrderKey = () => 'cashier_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+
+/** The dish photo, or a plain tile when there is none or it cannot be loaded. */
+const ProductThumb: React.FC<{ url?: string | null }> = ({ url }) => {
+  const [failed, setFailed] = useState(false);
+  const src = menuImageUrl(url, apiClient.defaults.baseURL);
+  if (src && !failed) {
+    return <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} className="w-11 h-11 rounded-lg object-cover border border-line shrink-0" />;
+  }
+  return (
+    <div className="w-11 h-11 rounded-lg bg-surface-2 flex items-center justify-center shrink-0">
+      <UtensilsCrossed className="w-5 h-5 text-subtle" />
+    </div>
+  );
+};
 
 const METHOD_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   cash: { label: 'Cash', icon: Banknote, color: 'text-success-fg' },
@@ -85,16 +112,22 @@ export const PosPage: React.FC = () => {
   const [kotOrderId, setKotOrderId] = useState<number | null>(null); // last order sent to the kitchen, for the paper-KOT button
   const [isPaying, setIsPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
+  const [payBlockedItems, setPayBlockedItems] = useState<OutstandingItem[]>([]);
+  // A bill the server refused to open: why, and which items are still outstanding
+  const [billBlock, setBillBlock] = useState<{ orderNumber: string; message: string; items: OutstandingItem[] } | null>(null);
   const [cancelBill, setCancelBill] = useState<any | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError] = useState<string | null>(null);
   // One key per cart: a retry after a timeout replays the same order instead of creating a second one
   const orderKey = useRef(newOrderKey());
   const searchInput = useRef<HTMLInputElement>(null);
-  const [stalls, setStalls] = useState<any[]>([]);
+  const categoryChips = useRef<HTMLDivElement>(null);
+  const productGrid = useRef<HTMLDivElement>(null);
   const [tables, setTables] = useState<any[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [selectedStallId, setSelectedStallId] = useState<number | 'all'>('all');
+  const [categories, setCategories] = useState<CatalogCategory[] | null>(null);
+  const [catalogStatus, setCatalogStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null); // null until the cashier picks one
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orderType, setOrderType] = useState<'dine_in' | 'takeaway'>('dine_in');
@@ -103,8 +136,10 @@ export const PosPage: React.FC = () => {
 
   // Pending Bills State
   const [pendingBills, setPendingBills] = useState<any[]>([]);
+  const [awaitingFulfilment, setAwaitingFulfilment] = useState(0);
   const [pendingSearch, setPendingSearch] = useState('');
   const [isLoadingPending, setIsLoadingPending] = useState(false);
+  const pendingRequest = useRef(0); // only the newest response may replace the list
 
   // Payment Modal States
   const [activePaymentOrder, setActivePaymentOrder] = useState<any | null>(null);
@@ -133,28 +168,33 @@ export const PosPage: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [stallsRes, tablesRes, menuRes] = await Promise.all([
-        apiClient.get('/stalls'),
+      const [tablesRes, menuRes, categoriesRes] = await Promise.all([
         apiClient.get('/tables'),
         apiClient.get('/menu?available_only=1'),
+        // Without the list the chips are built from the dishes themselves, so selling never depends on it
+        apiClient.get('/menu-categories').catch(() => null),
       ]);
-      setStalls(stallsRes.data.data);
       setTables(tablesRes.data.data);
       setMenuItems(menuRes.data.data);
+      setCategories(categoriesRes ? categoriesRes.data.data : null);
+      setCatalogStatus('ready');
       if (tablesRes.data.data.length > 0) {
         setSelectedTableId(tablesRes.data.data[0].id);
       }
     } catch (err) {
       console.error('Failed to load POS catalog data', err);
+      setCatalogStatus((status) => (status === 'ready' ? status : 'error'));
     }
   };
 
   const loadPendingBills = async () => {
     setIsLoadingPending(true);
+    const request = ++pendingRequest.current;
     try {
       const res = await apiClient.get('/billing/pending');
-      if (res.data.success) {
+      if (res.data.success && request === pendingRequest.current) {
         setPendingBills(res.data.data);
+        setAwaitingFulfilment(res.data.awaiting_fulfilment_count ?? 0);
         window.dispatchEvent(new CustomEvent('pending-bills-updated', { detail: { count: res.data.data.length } }));
       }
     } catch (err) {
@@ -226,16 +266,30 @@ export const PosPage: React.FC = () => {
     }
   };
 
-  const openPayment = (order: any) => {
-    setPayError(null);
-    setUpiRequest(null);
-    setUpiError(null);
-    setUpiUtr('');
-    setUpiVerified(false);
-    setPaymentMethod((enabledMethods[0] as any) || 'cash');
-    const payable = Number(order.remaining_balance ?? order.total_amount);
-    setCashTendered(payable);
-    setActivePaymentOrder(order);
+  // The list may be seconds old: the server re-checks every item before the bill opens and returns the current amounts
+  const openPayment = async (listed: any) => {
+    setBillBlock(null);
+    try {
+      const res = await apiClient.get(`/billing/orders/${listed.id}/open`);
+      const order = res.data.data;
+      setPayError(null);
+      setPayBlockedItems([]);
+      setUpiRequest(null);
+      setUpiError(null);
+      setUpiUtr('');
+      setUpiVerified(false);
+      setPaymentMethod((enabledMethods[0] as any) || 'cash');
+      setCashTendered(Number(order.remaining_balance ?? order.total_amount));
+      setActivePaymentOrder(order);
+    } catch (err: any) {
+      setBillBlock({
+        orderNumber: listed.order_number,
+        message: apiError(err, 'This bill could not be opened.'),
+        items: err?.response?.data?.data?.outstanding_items ?? [],
+      });
+      void sound.play('payment_failed');
+      loadPendingBills();
+    }
   };
 
   // Generate (or reuse) the QR for the bill being paid. The server computes the amount from the order itself.
@@ -286,7 +340,7 @@ export const PosPage: React.FC = () => {
     }
   };
 
-  const handleCreateOrder = async (autoPay: boolean = false) => {
+  const handleCreateOrder = async () => {
     if (cart.length === 0 || isSubmitting) return;
     if (orderType === 'dine_in' && !selectedTableId) {
       setNotice({ ok: false, text: 'Select a dining table for a dine-in order.' });
@@ -326,12 +380,9 @@ export const PosPage: React.FC = () => {
         loadData();
         loadPendingBills();
 
-        if (autoPay) {
-          openPayment(createdOrder);
-        } else {
-          setNotice({ ok: true, text: `Order ${createdOrder.order_number} sent to ${createdOrder.kitchen_tickets?.length ?? 0} stall kitchen(s).` });
-          setKotOrderId(createdOrder.id);
-        }
+        // Billing opens from Pending Bills once every item is Served or Cancelled, never at order time
+        setNotice({ ok: true, text: `Order ${createdOrder.order_number} sent to ${createdOrder.kitchen_tickets?.length ?? 0} stall kitchen(s). The bill appears in Pending Bills once every item is Served or Cancelled.` });
+        setKotOrderId(createdOrder.id);
       }
     } catch (err: any) {
       // The cart keeps its idempotency key, so pressing the button again cannot duplicate the order
@@ -345,6 +396,7 @@ export const PosPage: React.FC = () => {
     if (!activePaymentOrder || isPaying) return;
     setIsPaying(true);
     setPayError(null);
+    setPayBlockedItems([]);
     try {
       const payableAmount = Number(activePaymentOrder.remaining_balance ?? activePaymentOrder.total_amount);
 
@@ -352,6 +404,7 @@ export const PosPage: React.FC = () => {
         order_id: activePaymentOrder.id,
         payment_method: paymentMethod,
         amount: payableAmount,
+        expected_balance: payableAmount,
         cash_tendered: paymentMethod === 'cash' ? cashTendered : payableAmount,
       };
 
@@ -375,8 +428,17 @@ export const PosPage: React.FC = () => {
       }
     } catch (err: any) {
       setPayError(apiError(err, 'Payment processing failed.'));
+      setPayBlockedItems(err?.response?.data?.data?.outstanding_items ?? []);
       void sound.play('payment_failed');
       loadPendingBills();
+      if (err?.response?.data?.error === 'balance_changed') {
+        // Show the new amount; the cashier reviews it and confirms again
+        const fresh = await apiClient.get(`/billing/orders/${activePaymentOrder.id}/open`).catch(() => null);
+        if (fresh) {
+          setActivePaymentOrder(fresh.data.data);
+          setCashTendered(Number(fresh.data.data.remaining_balance ?? fresh.data.data.total_amount));
+        }
+      }
     } finally {
       setIsPaying(false);
     }
@@ -398,7 +460,7 @@ export const PosPage: React.FC = () => {
     }
   };
 
-  // Keyboard shortcuts: F2 search, F4 tracking, F8 send & pay, F9 toggle pending bills, Esc close dialogs
+  // Keyboard shortcuts: F2 search, F4 tracking, F8 place order, F9 toggle pending bills, Esc close dialogs
   const shortcuts = useRef<(e: KeyboardEvent) => void>(() => undefined);
   shortcuts.current = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -419,7 +481,7 @@ export const PosPage: React.FC = () => {
       navigate('/tracking');
     } else if (e.key === 'F8' && posMode === 'new_order') {
       e.preventDefault();
-      handleCreateOrder(true);
+      handleCreateOrder();
     } else if (e.key === 'F9') {
       e.preventDefault();
       switchPosMode(posMode === 'new_order' ? 'pending_bills' : 'new_order');
@@ -431,14 +493,35 @@ export const PosPage: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const filteredItems = menuItems.filter((item) => {
-    const matchesStall = selectedStallId === 'all' || item.stall_id === selectedStallId;
-    const matchesSearch =
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.stall.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.category.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesStall && matchesSearch;
-  });
+  const browsableItems = useMemo(() => eligibleItems(menuItems, categories), [menuItems, categories]);
+  const categoryGroups = useMemo(() => buildCategoryGroups(categories, browsableItems), [categories, browsableItems]);
+  const activeCategory = resolveSelectedCategory(categoryGroups, selectedCategory);
+  const activeCategoryName = categoryGroups.find((g) => g.key === activeCategory)?.name;
+  const filteredItems = useMemo(() => filterCatalog(browsableItems, activeCategory, searchQuery), [browsableItems, activeCategory, searchQuery]);
+
+  // Keep the selected chip in view and start each category at its first dish
+  useEffect(() => {
+    categoryChips.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    productGrid.current?.scrollTo({ top: 0 });
+  }, [activeCategory, posMode]);
+
+  const onCategoryChipKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const chips = Array.from(e.currentTarget.querySelectorAll('button'));
+    const next = chips[chips.indexOf(document.activeElement as HTMLButtonElement) + (e.key === 'ArrowRight' ? 1 : -1)];
+    if (next) {
+      e.preventDefault();
+      next.focus();
+      next.click();
+    }
+  };
+
+  const categoryChipClass = (selected: boolean) =>
+    `px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
+      selected ? 'bg-primary text-primary-fg shadow-sm' : 'bg-surface-2 text-muted hover:bg-line'
+    }`;
+
+  const trimmedSearch = searchQuery.trim();
 
   const filteredPendingBills = pendingBills.filter((bill) => {
     const term = pendingSearch.toLowerCase();
@@ -490,7 +573,7 @@ export const PosPage: React.FC = () => {
             <RefreshCw className={`w-4 h-4 ${isLoadingPending ? 'animate-spin text-primary' : ''}`} />
           </button>
           <span className="text-muted font-mono">
-            {pendingBills.length} Unpaid Bill{pendingBills.length === 1 ? '' : 's'}
+            {pendingBills.length} Bill{pendingBills.length === 1 ? '' : 's'} to Settle
           </span>
         </div>
       </div>
@@ -515,14 +598,35 @@ export const PosPage: React.FC = () => {
             </p>
           </div>
 
+          {billBlock && (
+            <div role="alert" data-testid="bill-blocked" className="bg-danger/10 border border-danger/30 text-danger-fg rounded-lg p-3 text-xs space-y-1.5">
+              <p className="font-bold">Order {billBlock.orderNumber}: {billBlock.message}</p>
+              {billBlock.items.length > 0 && <OutstandingItems items={billBlock.items} />}
+            </div>
+          )}
+
+          {awaitingFulfilment > 0 && (
+            <button
+              type="button"
+              data-testid="awaiting-fulfilment"
+              onClick={() => navigate('/tracking')}
+              className="w-full text-left bg-surface border border-line rounded-lg px-3 py-2 text-xs text-muted hover:border-primary transition flex items-center gap-2"
+            >
+              <ListChecks className="w-4 h-4 text-primary shrink-0" />
+              <span>
+                <span className="font-bold text-fg">{awaitingFulfilment}</span> more {awaitingFulfilment === 1 ? 'order is' : 'orders are'} still being prepared or served. A bill appears here once every item is Served or Cancelled.
+              </span>
+            </button>
+          )}
+
           {filteredPendingBills.length === 0 ? (
             <div className="bg-surface rounded-lg px-4 py-8 text-center border border-line max-w-md mx-auto mt-8 space-y-3">
               <div className="w-16 h-16 bg-st-served-soft text-st-served-fg rounded-lg flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
-              <h3 className="font-semibold text-base text-fg">All Table Bills Settled</h3>
+              <h3 className="font-semibold text-base text-fg">No Bills Ready to Settle</h3>
               <p className="text-xs text-muted">
-                There are no outstanding table or takeaway orders awaiting payment.
+                No table or takeaway order is fully served and awaiting payment.
               </p>
             </div>
           ) : (
@@ -589,9 +693,9 @@ export const PosPage: React.FC = () => {
                     {/* Items List */}
                     <div className="bg-canvas p-2.5 rounded-lg space-y-1 text-xs">
                       {bill.items?.map((it: any) => (
-                        <div key={it.id} className="flex justify-between text-fg">
+                        <div key={it.id} className={`flex justify-between ${it.status === 'cancelled' ? 'text-muted line-through' : 'text-fg'}`}>
                           <span>{it.quantity}× {it.item_name}</span>
-                          <span className="font-semibold text-fg">₹{it.subtotal}</span>
+                          <span className="font-semibold">{it.status === 'cancelled' ? 'Cancelled' : `₹${it.subtotal}`}</span>
                         </div>
                       ))}
                     </div>
@@ -653,8 +757,8 @@ export const PosPage: React.FC = () => {
         <div className="flex flex-1 overflow-hidden">
           {/* Left Menu & Catalog Column */}
           <div className="flex-1 flex flex-col min-w-0 border-r border-line bg-surface">
-            {/* Top Controls: Search & Stall Filters */}
-            <div className="p-4 border-b border-line space-y-3 bg-surface">
+            {/* Top Controls: Search & Category Filters */}
+            <div className="px-4 py-3 border-b border-line space-y-2.5 bg-surface">
               <div className="flex items-center space-x-3">
                 <div className="relative flex-1">
                   <Search className="w-4 h-4 text-subtle absolute left-3 top-3" />
@@ -670,74 +774,122 @@ export const PosPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Stall Selector Tabs */}
-              <div className="flex items-center space-x-2 overflow-x-auto pb-1">
+              {/* Category chips: browsing only. A dish's stall never depends on the category it was picked from. */}
+              <div
+                ref={categoryChips}
+                role="group"
+                aria-label="Product categories"
+                data-testid="pos-category-chips"
+                onKeyDown={onCategoryChipKey}
+                className="flex items-center gap-2 overflow-x-auto pb-1"
+              >
                 <button
-                  onClick={() => setSelectedStallId('all')}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
-                    selectedStallId === 'all'
-                      ? 'bg-primary text-primary-fg'
-                      : 'bg-surface-2 text-muted hover:bg-line'
-                  }`}
+                  type="button"
+                  data-category-chip="All Categories"
+                  aria-pressed={activeCategory === ALL_CATEGORIES}
+                  onClick={() => setSelectedCategory(ALL_CATEGORIES)}
+                  className={categoryChipClass(activeCategory === ALL_CATEGORIES)}
                 >
-                  All Stalls ({menuItems.length})
+                  All Categories ({browsableItems.length})
                 </button>
-                {stalls.map((s) => (
+                {categoryGroups.map((group) => (
                   <button
-                    key={s.id}
-                    onClick={() => setSelectedStallId(s.id)}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition flex items-center space-x-1.5 ${
-                      selectedStallId === s.id
-                        ? 'bg-primary text-primary-fg shadow-sm'
-                        : 'bg-surface-2 text-muted hover:bg-line'
-                    }`}
+                    key={group.key}
+                    type="button"
+                    data-category-chip={group.name}
+                    aria-pressed={activeCategory === group.key}
+                    onClick={() => setSelectedCategory(group.key)}
+                    className={categoryChipClass(activeCategory === group.key)}
                   >
-                    <Store className="w-3.5 h-3.5" />
-                    <span>{s.name}</span>
+                    {group.name} ({group.count})
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Menu Items Grid */}
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filteredItems.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => addToCart(item)}
-                    data-menu-item={item.name}
-                    className="p-3 min-h-[40px] rounded-lg border border-line hover:border-primary bg-surface hover:shadow-md cursor-pointer transition flex flex-col justify-between group"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[11px] font-semibold text-primary truncate max-w-[120px]">
-                          {item.stall.name}
-                        </span>
-                        <span
-                          className={`w-2.5 h-2.5 rounded-full ${
-                            item.is_veg ? 'bg-success-fg' : 'bg-danger'
-                          }`}
-                          title={item.is_veg ? 'Vegetarian' : 'Non-Vegetarian'}
-                        />
-                      </div>
-                      <h4 className="font-bold text-fg text-sm leading-snug group-hover:text-primary transition">
-                        {item.name}
-                      </h4>
-                      <p className="text-xs text-muted mt-1 line-clamp-2">{item.category.name}</p>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-line">
-                      <span className="font-extrabold text-fg text-sm">
-                        ₹{Number(item.price).toFixed(2)}
-                      </span>
-                      <button className="w-7 h-7 rounded-lg bg-surface-2 group-hover:bg-primary group-hover:text-primary-fg flex items-center justify-center transition">
-                        <Plus className="w-4 h-4" />
+            {/* Menu Items Grid: columns follow the space left beside the cart, not the window width */}
+            <div ref={productGrid} className="flex-1 overflow-y-auto p-4">
+              {filteredItems.length === 0 ? (
+                <div data-testid="pos-empty-state" className="h-full flex flex-col items-center justify-center text-center text-muted space-y-2 px-4">
+                  <UtensilsCrossed className="w-10 h-10 opacity-30" />
+                  {catalogStatus === 'loading' ? (
+                    <p className="text-xs font-medium">Loading menu…</p>
+                  ) : catalogStatus === 'error' ? (
+                    <>
+                      <p className="text-sm font-semibold text-fg">The menu could not be loaded</p>
+                      <button type="button" onClick={loadData} className="px-3 py-1.5 border border-line rounded-lg text-xs font-bold text-fg hover:bg-surface-2">
+                        Try again
                       </button>
+                    </>
+                  ) : trimmedSearch ? (
+                    <>
+                      <p className="text-sm font-semibold text-fg">
+                        No dishes match “{trimmedSearch}”{activeCategoryName ? ` in ${activeCategoryName}` : ''}
+                      </p>
+                      {activeCategory !== ALL_CATEGORIES && (
+                        <button
+                          type="button"
+                          data-testid="pos-search-all-categories"
+                          onClick={() => setSelectedCategory(ALL_CATEGORIES)}
+                          className="px-3 py-1.5 border border-line rounded-lg text-xs font-bold text-fg hover:bg-surface-2"
+                        >
+                          Search all categories
+                        </button>
+                      )}
+                    </>
+                  ) : activeCategoryName ? (
+                    <p className="text-sm font-semibold text-fg">No dishes available in {activeCategoryName}</p>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold text-fg">No dishes to sell yet</p>
+                      <p className="text-xs">Add categories and dishes in Menu Catalog.</p>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
+                  {filteredItems.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => addToCart(item)}
+                      data-menu-item={item.name}
+                      data-category-key={categoryKey(item.category.name)}
+                      className="p-3 rounded-lg border border-line hover:border-primary bg-surface hover:shadow-md cursor-pointer transition flex flex-col justify-between group"
+                    >
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <ProductThumb url={item.image_url} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2 mb-0.5">
+                            <span className="text-[11px] font-semibold text-primary truncate">{item.stall.name}</span>
+                            <span
+                              className={`w-2.5 h-2.5 rounded-full shrink-0 ${item.is_veg ? 'bg-success-fg' : 'bg-danger'}`}
+                              title={item.is_veg ? 'Vegetarian' : 'Non-Vegetarian'}
+                            />
+                          </div>
+                          <h4 className="font-bold text-fg text-sm leading-snug group-hover:text-primary transition line-clamp-2">
+                            {item.name}
+                          </h4>
+                          <p className="text-[11px] text-muted mt-0.5 truncate">{item.category.name}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-line">
+                        <div className="min-w-0">
+                          <span className="font-extrabold text-fg text-sm block">₹{Number(item.price).toFixed(2)}</span>
+                          <span className="text-[10px] font-semibold text-success-fg">Available</span>
+                        </div>
+                        <button
+                          type="button"
+                          aria-label={`Add ${item.name} to cart`}
+                          className="w-7 h-7 rounded-lg bg-surface-2 group-hover:bg-primary group-hover:text-primary-fg flex items-center justify-center transition shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -909,14 +1061,14 @@ export const PosPage: React.FC = () => {
                 </button>
                 <button
                   disabled={cart.length === 0 || isSubmitting}
-                  onClick={() => handleCreateOrder(true)}
+                  onClick={() => handleCreateOrder()}
                   className="py-2 px-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-fg font-extrabold text-xs shadow-md shadow-primary/20 transition disabled:opacity-50 flex items-center justify-center gap-1"
                 >
-                  <span>{isSubmitting ? 'Processing…' : 'Send & Pay (F8)'}</span>
+                  <span>{isSubmitting ? 'Processing…' : 'Place Order (F8)'}</span>
                   <span>➔</span>
                 </button>
               </div>
-              <p className="text-[10px] text-muted text-center">F2 search · F4 tracking · F8 send & pay · F9 pending bills · Esc close</p>
+              <p className="text-[10px] text-muted text-center">F2 search · F4 tracking · F8 place order · F9 pending bills · Esc close</p>
 
               {cart.length > 0 && (
                 <button
@@ -971,7 +1123,7 @@ export const PosPage: React.FC = () => {
                   </span>
                 </div>
                 <div className="mt-1 text-[11px] text-muted flex justify-between">
-                  <span>Covers {activePaymentOrder.items?.length || 0} dishes</span>
+                  <span>Covers {activePaymentOrder.items?.filter((it: any) => it.status !== 'cancelled').length || 0} dishes</span>
                   {Number(activePaymentOrder.total_paid || 0) > 0 && (
                     <span>Total: ₹{Number(activePaymentOrder.total_amount).toFixed(2)} · Paid: ₹{Number(activePaymentOrder.total_paid).toFixed(2)}</span>
                   )}
@@ -1129,8 +1281,9 @@ export const PosPage: React.FC = () => {
             )}
 
             {payError && (
-              <div role="alert" className="p-2.5 rounded-lg bg-danger/10 border border-danger/30 text-danger-fg text-xs">
-                {payError}
+              <div role="alert" data-testid="pay-error" className="p-2.5 rounded-lg bg-danger/10 border border-danger/30 text-danger-fg text-xs space-y-1.5">
+                <p>{payError}</p>
+                {payBlockedItems.length > 0 && <OutstandingItems items={payBlockedItems} />}
               </div>
             )}
             </div>

@@ -197,6 +197,7 @@ const logout = async () => {
   const cashierNav = await page.locator('aside nav a').allInnerTexts();
   check('C-02', 'Cashier menu hides owner-only sections', !cashierNav.some((n) => /Staff|Reports|Food Court Settings|Dashboard/.test(n)), cashierNav.join(', '));
 
+  await page.click('[data-category-chip="All Categories"]'); // the POS opens on one category; these dishes span several
   await page.waitForSelector(`[data-menu-item="Masala Dosa ${run}"]`);
   await page.click(`[data-menu-item="Masala Dosa ${run}"]`);
   await page.click(`[data-menu-item="Masala Dosa ${run}"]`);
@@ -295,18 +296,6 @@ const logout = async () => {
   await go('#/payments');
   await page.getByText(orderNumber).first().waitFor();
   check('P-04', 'Payment appears in Payment History', true);
-  await go('#/cashier-closing');
-  await page.locator('[data-testid="expected-cash"]').waitFor();
-  const expectedText = await page.locator('[data-testid="expected-cash"]').innerText();
-  const expected = sql(`SELECT COALESCE(SUM(amount),0) FROM payments WHERE cashier_id=(SELECT id FROM users WHERE email=${lit(staff.cashier.email)}) AND payment_method='cash'`);
-  await page.locator('form input[type=number]').fill(expected);
-  await page.click('button:has-text("Record closing")');
-  await page.getByText('Cashier closing recorded.').waitFor();
-  const closing = sql(`SELECT expected_cash || '|' || counted_cash || '|' || variance FROM cashier_closings WHERE cashier_id=(SELECT id FROM users WHERE email=${lit(staff.cashier.email)})`);
-  check('P-05', 'Cashier closing: expected cash from payments, zero variance (DB)', closing === `${expected}|${expected}|0.00`, `${closing} (screen ${expectedText})`);
-  const inHistory = await page.locator('td', { hasText: staff.cashier.name }).first().waitFor({ timeout: 10000 }).then(() => true, () => false);
-  check('P-06', 'The new closing appears in the closing history table', inHistory);
-  await shot('05-cashier-closing');
   await logout();
 
   // ------------------------------------------------------------------ owner reports & closing
@@ -368,7 +357,7 @@ const logout = async () => {
 
   // ------------------------------------------------------------------ audit
   sec('Audit trail');
-  const audit = sql(`SELECT string_agg(DISTINCT action, ',') FROM audit_logs WHERE created_at > (now() AT TIME ZONE 'UTC') - interval '1 hour' AND action IN ('settings_updated','staff_created','table_created','customer_created','order_created','payment_created','cashier_closed','daily_closing_created','login_success','logout')`);
+  const audit = sql(`SELECT string_agg(DISTINCT action, ',') FROM audit_logs WHERE created_at > (now() AT TIME ZONE 'UTC') - interval '1 hour' AND action IN ('settings_updated','staff_created','table_created','customer_created','order_created','payment_created','daily_closing_created','login_success','logout')`);
   check('A-01', 'Settings, staff, table, customer, order, payment, closings and logins audited (DB)', audit.split(',').length === 10, audit);
 
   const pass = results.filter((r) => r.result === 'PASS').length;

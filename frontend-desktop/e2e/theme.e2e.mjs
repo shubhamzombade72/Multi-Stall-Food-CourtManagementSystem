@@ -8,7 +8,7 @@
  * For light and dark: Welcome, Dashboard, POS (new order, pending bills, settle/payment modal), Kitchen (tickets in New,
  * Preparing incl. one LATE, Ready at the warning ring; ticket history), Orders & Table Tracking (expanded card, LATE label),
  * Orders (+ detail modal), Daily Closing (+ payout details when the day is reported closed), Reports, Food Court
- * Settings, Device Settings, Payment History, Floor & Tables, Waiter Station, Cashier Closing, Menu, Staff, Stalls,
+ * Settings, Device Settings, Payment History, Floor & Tables, Waiter Station, Menu, Staff, Stalls,
  * Inventory, Purchases, Customers (+ order history with a cancelled order) and Login are screenshotted to
  * qa/desktop/results/theme/,
  * <html data-theme> is asserted, and in dark mode no visible element (WHITE_SCAN below) may have a white or
@@ -61,7 +61,7 @@ const contrastLog = [];
 const launch = () =>
   electron.launch({
     args: [APP_DIR],
-    env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: '' },
+    env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_PIN_LOCK: 'off', FOODCOURT_API_URL: '' },
     colorScheme: 'light',
     timeout: 60000,
   });
@@ -332,7 +332,10 @@ try {
   // ------------------------------------------------------------------ app screens in both themes
   const screens = [
     ['dashboard', 'Dashboard', '#/dashboard', () => page.getByRole('heading', { name: /Dashboard/i }).first().waitFor({ timeout: 15000 })],
-    ['pos', 'Cashier POS', '#/pos', () => page.getByText('Margherita').first().waitFor({ timeout: 15000 })],
+    ['pos', 'Cashier POS', '#/pos', async () => {
+      await page.locator('[data-category-chip="All Categories"]').click();
+      await page.getByText('Margherita').first().waitFor({ timeout: 15000 });
+    }],
     ['tracking', 'Orders & Table Tracking (expanded card)', '#/tracking', async () => {
       const c = page.getByTestId(`order-card-${order1.id}`);
       await c.waitFor({ timeout: 20000 });
@@ -346,7 +349,6 @@ try {
     ['device-settings', 'Device Settings', '#/settings', () => page.getByText('Backup & recovery').waitFor({ timeout: 15000 })],
     ['payments', 'Payment History', '#/payments', () => page.getByText(order2.order_number).first().waitFor({ timeout: 15000 })],
     ['tables', 'Floor & Tables', '#/tables', () => page.getByText(table1.table_number).first().waitFor({ timeout: 15000 })],
-    ['cashier-closing', 'Cashier Closing', '#/cashier-closing', () => page.getByText('Cashier Closing').first().waitFor({ timeout: 15000 })],
     ['menu', 'Menu', '#/menu', () => page.getByText('Garlic Bread').first().waitFor({ timeout: 15000 })],
     ['staff', 'Staff', '#/staff', () => page.getByText('Theme Cashier').first().waitFor({ timeout: 15000 })],
     ['stalls', 'Stalls', '#/stalls', () => page.getByText(stallA.name).first().waitFor({ timeout: 15000 })],
