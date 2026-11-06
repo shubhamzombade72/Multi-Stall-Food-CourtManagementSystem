@@ -3,11 +3,11 @@ import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { NotificationBell } from './NotificationBell';
 import { ThemeToggle } from './ThemeToggle';
-import { LogOut, User as UserIcon } from 'lucide-react';
+import { Lock, LogOut, User as UserIcon } from 'lucide-react';
 import logoImg from '../assets/logo.jpg';
 
 export const Navbar: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, lock, pinEnabled } = useAuth();
   const { settings } = useSettings();
 
   const getRoleBadge = (role?: string) => {
@@ -64,9 +64,19 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
 
+        {pinEnabled && (
+          <button
+            onClick={lock}
+            title="Lock (PIN needed to return)"
+            className="ml-2 text-muted hover:text-fg p-2 rounded-lg hover:bg-surface-2 transition"
+          >
+            <Lock className="w-5 h-5" />
+          </button>
+        )}
+
         <button
-          onClick={logout}
-          title="Sign Out"
+          onClick={() => void logout()}
+          title={pinEnabled ? 'Sign Out (removes the PIN from this computer)' : 'Sign Out'}
           className="ml-2 text-muted hover:text-danger-fg p-2 rounded-lg hover:bg-surface-2 transition"
         >
           <LogOut className="w-5 h-5" />

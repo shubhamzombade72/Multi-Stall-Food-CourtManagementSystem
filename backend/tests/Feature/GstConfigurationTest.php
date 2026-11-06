@@ -10,6 +10,7 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\TaxService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Tests\Concerns\ServesOrders;
 use Tests\TestCase;
 
 /**
@@ -20,6 +21,7 @@ use Tests\TestCase;
 class GstConfigurationTest extends TestCase
 {
     use DatabaseTransactions;
+    use ServesOrders;
 
     private function user(string $role): User
     {
@@ -48,7 +50,10 @@ class GstConfigurationTest extends TestCase
             'idempotency_key' => 'gst-test-' . uniqid('', true),
         ])->assertStatus(201);
 
-        return Order::where('order_number', $res->json('data.order_number'))->firstOrFail();
+        $order = Order::where('order_number', $res->json('data.order_number'))->firstOrFail();
+        $this->serveAllItems($order); // these tests are about money: the food has already gone out
+
+        return $order;
     }
 
     private function vectors(): array

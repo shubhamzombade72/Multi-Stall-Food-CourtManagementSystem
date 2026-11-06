@@ -12,9 +12,10 @@
  *  L-05  changing the UPI ID drops the confirmation and the handle warning follows the new ID
  *  L-06  POS: a generated QR is Pending (bill unpaid); "customer started paying" is Initiated (bill still unpaid)
  *  L-07  "payment failed" closes that QR and shows a new one with a new reference; the bill is still unpaid
- *  L-08  only the cashier's manual verification pays the bill; the receipt says MANUALLY VERIFIED, by whom and when
+ *  L-08  only the cashier's manual verification pays the bill; the verifier and time are stored on the server; the paid receipt prints no paid title and no UPI ID
  */
 import { _electron as electron } from 'playwright-core';
+import { serveAll } from './serve-order.mjs';
 import { createRequire } from 'node:module';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -90,7 +91,7 @@ const decodeSvg = async (locator) => {
 };
 
 try {
-  app = await electron.launch({ args: [APP_DIR], env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: '' }, timeout: 60000 });
+  app = await electron.launch({ args: [APP_DIR], env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_PIN_LOCK: 'off', FOODCOURT_API_URL: '' }, timeout: 60000 });
   page = await app.firstWindow();
   page.on('pageerror', (e) => pageErrors.push(String(e?.message || e)));
   page.on('console', (m) => m.type() === 'error' && pageErrors.push(m.text()));
@@ -119,6 +120,7 @@ try {
   const placeOrder = async () => {
     const res = await api(cashierToken, 'POST', '/orders', { order_type: 'takeaway', items: [{ menu_item_id: dish.id, quantity: 1 }] });
     const o = res.data.order ?? res.data;
+    await serveAll(API, cashierToken, o.id);
     return { id: o.id, number: o.order_number, total: String(o.total_amount) };
   };
 
@@ -227,13 +229,13 @@ try {
   await page.getByRole('dialog').first().waitFor({ timeout: 15000 });
   await page.getByTestId('receipt-preview-open').click();
   await page.getByTestId('receipt-preview').waitFor({ timeout: 15000 });
-  const title = await page.getByTestId('receipt-upi-title').innerText();
+  const title = await page.getByTestId('receipt-upi-title').count();
   const extraNotes = await page.getByTestId('receipt-upi-instruction').count();
   const paperText = await page.getByTestId('receipt-preview-paper').innerText();
   await page.getByTestId('receipt-preview-paper').screenshot({ path: join(shots, 'preview-80mm-manually-verified.png') });
-  check('L-08', 'Only the cashier\'s manual verification pays the bill; the receipt says PAID VIA UPI - MANUALLY VERIFIED (no extra note printed; verifier and time are recorded on the server) and makes no automatic-receipt claim',
+  check('L-08', 'Only the cashier\'s manual verification pays the bill; the receipt prints no paid title, UPI ID or extra note (verifier and time are recorded on the server) and makes no automatic-receipt claim',
     receipt.order.payment_status === 'paid' && receipt.upi.status === 'paid' && v.method === 'manual' && v.verified_by === 'UPI Owner' && !!v.verified_at &&
-      title === 'PAID VIA UPI - MANUALLY VERIFIED' && extraNotes === 0 && !/Verified manually by|Checked by the cashier|Keep this receipt|payment received/i.test(paperText),
+      title === 0 && extraNotes === 0 && !/PAID VIA UPI|MANUALLY VERIFIED|UPI ID:|Verified manually by|Checked by the cashier|Keep this receipt|payment received/i.test(paperText),
     title);
 
   // Same filter as upi-qr.e2e.mjs: the production CSP meta tag's frame-ancestors notice and failed resource loads are known/pre-existing

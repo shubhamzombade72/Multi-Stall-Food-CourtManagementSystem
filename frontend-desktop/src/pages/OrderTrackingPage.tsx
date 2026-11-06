@@ -162,6 +162,7 @@ export const OrderTrackingPage: React.FC = () => {
       track(order.id, -1);
       busyRef.current.delete(item.id);
       mutationSeq.current += 1;
+      window.dispatchEvent(new Event('pending-bills-updated')); // the item may have made this bill ready: recount now
       if (mounted.current) {
         setBusyItems((s) => {
           const n = new Set(s);
@@ -261,6 +262,7 @@ export const OrderTrackingPage: React.FC = () => {
     } finally {
       track(order.id, -1);
       mutationSeq.current += 1;
+      window.dispatchEvent(new Event('pending-bills-updated')); // the bill may be ready now: recount immediately
       if (mounted.current) {
         setServingOrders((s) => {
           const n = new Set(s);

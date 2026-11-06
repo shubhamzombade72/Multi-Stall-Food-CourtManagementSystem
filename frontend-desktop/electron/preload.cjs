@@ -18,6 +18,17 @@ contextBridge.exposeInMainWorld('desktop', {
   chooseBackupFolder: () => ipcRenderer.invoke('desktop:choose-backup-folder'),
   restoreBackup: (name) => ipcRenderer.invoke('desktop:restore-backup', typeof name === 'string' ? name : null),
   log: (level, message) => ipcRenderer.invoke('desktop:log', String(level), String(message).slice(0, 2000)),
+  // Device sign-in (electron/auth-vault.cjs). The main process counts attempts and checks the PIN; the renderer cannot.
+  authVaultStatus: () => ipcRenderer.invoke('auth:status'),
+  authVaultSetup: (request) => ipcRenderer.invoke('auth:setup', request),
+  authVaultUnlock: (pin) => ipcRenderer.invoke('auth:unlock', String(pin).slice(0, 16)),
+  authVaultClear: () => ipcRenderer.invoke('auth:clear'),
+  // Software updates (electron/update/*). Nothing installs without updateNow, which only the Updates screen calls.
+  updateGetState: () => ipcRenderer.invoke('update:get-state'),
+  updateCheck: () => ipcRenderer.invoke('update:check'),
+  updateEnroll: (code) => ipcRenderer.invoke('update:enroll', String(code).slice(0, 40)),
+  updateNow: () => ipcRenderer.invoke('update:now'),
+  updateRemindLater: () => ipcRenderer.invoke('update:remind-later'),
   listPrinters: () => ipcRenderer.invoke('desktop:list-printers'),
   print: (options) => ipcRenderer.invoke('desktop:print', options && typeof options === 'object' ? { deviceName: options.deviceName } : {}),
   // Thermal printing (electron/printing/*). Inputs are validated again in the main process.

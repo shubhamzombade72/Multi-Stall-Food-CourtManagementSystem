@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const desktopDir = resolve(here, '..');
 const backendSrc = resolve(desktopDir, '..', 'backend');
-const stage = join(desktopDir, 'build-server');
+const stage = process.env.FOODCOURT_SERVER_STAGE ? resolve(process.env.FOODCOURT_SERVER_STAGE) : join(desktopDir, 'build-server');
 
 const phpDir = (() => {
   if (process.env.FOODCOURT_PHP_DIR) return resolve(process.env.FOODCOURT_PHP_DIR);

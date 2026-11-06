@@ -34,6 +34,7 @@ class ReportController extends Controller
             ->join('stalls', 'order_items.stall_id', '=', 'stalls.id')
             ->whereDate('orders.created_at', $today)
             ->where('orders.payment_status', 'paid')
+            ->where('order_items.status', '!=', 'cancelled')
             ->select(
                 'stalls.id',
                 'stalls.name',
@@ -51,7 +52,9 @@ class ReportController extends Controller
             ->get();
 
         // Everything below is read straight from the database; no profit, commission or settlement is derived.
-        $pending = Order::where('payment_status', 'unpaid')->where('status', '!=', 'cancelled');
+        // Same list the cashier sees: orders still in the kitchen are not bills yet
+        $eligibility = app(\App\Services\BillingEligibility::class);
+        $pendingBills = $eligibility->presentPendingBills($eligibility->pendingBillsQuery()->get());
         $paymentMethods = DB::table('payments')
             ->whereDate('created_at', $today)->where('status', 'success')
             ->select('payment_method', DB::raw('COUNT(*) as count'), DB::raw('SUM(amount) as total'))
@@ -78,7 +81,7 @@ class ReportController extends Controller
                 'total_stalls' => $stallsCount,
                 'stall_sales' => $stallSalesToday,
                 'recent_orders' => $recentOrders,
-                'pending_bills' => ['count' => (clone $pending)->count(), 'amount' => (string) ((clone $pending)->sum('total_amount'))],
+                'pending_bills' => ['count' => $pendingBills->count(), 'amount' => (string) $pendingBills->reduce(fn ($sum, $o) => bcadd($sum, (string) $o->remaining_balance, 2), '0.00')],
                 'payment_methods_today' => $paymentMethods,
                 'low_stock_items' => $lowStock,
                 'purchases_today' => $purchasesToday,
@@ -134,6 +137,7 @@ class ReportController extends Controller
             ->join('stalls', 'order_items.stall_id', '=', 'stalls.id')
             ->whereBetween(DB::raw('DATE(orders.created_at)'), [$start, $end])
             ->where('orders.payment_status', 'paid')
+            ->where('order_items.status', '!=', 'cancelled')
             ->select(
                 'order_items.menu_item_id',
                 'order_items.item_name',
@@ -166,6 +170,7 @@ class ReportController extends Controller
             ->join('stalls', 'order_items.stall_id', '=', 'stalls.id')
             ->whereBetween(DB::raw('DATE(orders.created_at)'), [$startDate, $endDate])
             ->where('orders.payment_status', 'paid')
+            ->where('order_items.status', '!=', 'cancelled')
             ->select(
                 'stalls.id as stall_id',
                 'stalls.name as stall_name',

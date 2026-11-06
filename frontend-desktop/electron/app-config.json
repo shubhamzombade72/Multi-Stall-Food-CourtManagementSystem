@@ -1,4 +1,5 @@
 {
   "_comment": "Release setting. Set apiBaseUrl to the real production API (https://<host>/api) BEFORE running `pnpm dist:win` to pre-configure installers. Leave empty to make first launch show the Server Setup screen. Never put credentials here; a user's own saved Server settings always take precedence.",
-  "apiBaseUrl": ""
+  "apiBaseUrl": "",
+  "updateServerUrl": ""
 }

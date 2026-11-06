@@ -29,7 +29,7 @@ class MasterSecurityTest extends TestCase
         $endpoints = [
             ['GET', '/api/settings'], ['PUT', '/api/settings/business_profile'], ['GET', '/api/customers'],
             ['POST', '/api/customers'], ['GET', '/api/customers/lookup?phone=999999'], ['GET', '/api/notifications'],
-            ['GET', '/api/cashier-closings'], ['POST', '/api/cashier-closings'], ['GET', '/api/reports/sales-summary'],
+            ['GET', '/api/reports/sales-summary'],
             ['GET', '/api/reports/inventory'], ['GET', '/api/reports/staff-activity'], ['PUT', '/api/tables/1'],
             ['GET', '/api/tables/sections'], ['GET', '/api/suppliers/1'], ['PUT', '/api/suppliers/1'],
         ];
@@ -52,17 +52,15 @@ class MasterSecurityTest extends TestCase
             $this->actingAs($u, 'sanctum')->putJson('/api/settings/payment_methods', ['enabled' => ['cash']])->assertStatus(403);
             $this->actingAs($u, 'sanctum')->getJson('/api/customers')->assertStatus(403);
             $this->actingAs($u, 'sanctum')->postJson('/api/customers', ['name' => 'X', 'phone' => '9876543210'])->assertStatus(403);
-            $this->actingAs($u, 'sanctum')->getJson('/api/cashier-closings')->assertStatus(403);
             $this->actingAs($u, 'sanctum')->getJson('/api/reports/sales-summary')->assertStatus(403);
             $this->actingAs($u, 'sanctum')->getJson('/api/reports/audit-logs')->assertStatus(403);
             $this->actingAs($u, 'sanctum')->postJson('/api/tables', ['table_number' => 'HACK', 'capacity' => 2])->assertStatus(403);
         }
 
-        // A cashier cannot change settings, read owner reports or close another cashier
+        // A cashier cannot change settings or read owner reports
         $cashier = $this->user('cashier');
         $this->actingAs($cashier, 'sanctum')->putJson('/api/settings/receipt', ['show_gstin' => true])->assertStatus(403);
         $this->actingAs($cashier, 'sanctum')->getJson('/api/reports/staff-activity')->assertStatus(403);
-        $this->actingAs($cashier, 'sanctum')->getJson('/api/cashier-closings/preview?date=' . now()->toDateString() . '&cashier_id=' . $this->user('owner')->id)->assertStatus(403);
     }
 
     public function test_stall_staff_cannot_reach_other_stalls_through_new_endpoints(): void

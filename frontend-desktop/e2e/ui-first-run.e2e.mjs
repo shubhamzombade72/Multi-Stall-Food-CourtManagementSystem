@@ -37,7 +37,7 @@ const FORBIDDEN = /localhost|127\.0\.0\.1|:\d{4,5}|laravel|postgres|sqlite|artis
 const launch = () =>
   electron.launch({
     ...(EXE_ARG && !EXE_ARG.endsWith('.asar') ? { executablePath: EXE_ARG } : { args: [EXE_ARG || APP_DIR] }),
-    env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: '', FOODCOURT_FIRST_BACKUP_DELAY_MS: '4000' },
+    env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_PIN_LOCK: 'off', FOODCOURT_API_URL: '', FOODCOURT_FIRST_BACKUP_DELAY_MS: '4000' },
     timeout: 60000,
   });
 
@@ -199,7 +199,7 @@ try {
   mkdirSync(join(bad, 'server'), { recursive: true });
   const junk = Buffer.from('this is not a database '.repeat(400));
   writeFileSync(join(bad, 'server', 'foodcourt.sqlite'), junk);
-  const badApp = await electron.launch({ ...(EXE_ARG && !EXE_ARG.endsWith('.asar') ? { executablePath: EXE_ARG } : { args: [EXE_ARG || APP_DIR] }), env: { ...process.env, FOODCOURT_USER_DATA_DIR: bad, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: '' }, timeout: 60000 });
+  const badApp = await electron.launch({ ...(EXE_ARG && !EXE_ARG.endsWith('.asar') ? { executablePath: EXE_ARG } : { args: [EXE_ARG || APP_DIR] }), env: { ...process.env, FOODCOURT_USER_DATA_DIR: bad, FOODCOURT_SMOKE_TEST: '', FOODCOURT_PIN_LOCK: 'off', FOODCOURT_API_URL: '' }, timeout: 60000 });
   try {
     const bp = await badApp.firstWindow();
     await bp.getByText('Service unavailable. Contact your administrator.').waitFor({ timeout: 60000 });
@@ -214,7 +214,7 @@ try {
   }
 
   const away = mkdtempSync(join(tmpdir(), 'foodcourt-ui-away-'));
-  const awayApp = await electron.launch({ ...(EXE_ARG && !EXE_ARG.endsWith('.asar') ? { executablePath: EXE_ARG } : { args: [EXE_ARG || APP_DIR] }), env: { ...process.env, FOODCOURT_USER_DATA_DIR: away, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: 'http://127.0.0.1:9/api' }, timeout: 60000 });
+  const awayApp = await electron.launch({ ...(EXE_ARG && !EXE_ARG.endsWith('.asar') ? { executablePath: EXE_ARG } : { args: [EXE_ARG || APP_DIR] }), env: { ...process.env, FOODCOURT_USER_DATA_DIR: away, FOODCOURT_SMOKE_TEST: '', FOODCOURT_PIN_LOCK: 'off', FOODCOURT_API_URL: 'http://127.0.0.1:9/api' }, timeout: 60000 });
   try {
     const ap = await awayApp.firstWindow();
     await ap.getByText('Cannot reach the food court', { exact: true }).waitFor({ timeout: 30000 });

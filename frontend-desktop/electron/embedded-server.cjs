@@ -27,6 +27,7 @@ const START_TIMEOUT_MS = 40000;
 const START_ATTEMPTS = 3; // a different free port is tried if PHP cannot bind the first one
 const READY_TIMEOUT_MS = 15000;
 const MIGRATE_TIMEOUT_MS = 120000;
+const UPDATE_COMMAND_TIMEOUT_MS = 60 * 60 * 1000; // a backup or migration of a large database must not be killed half way
 const WATCHDOG_INTERVAL_MS = 10000;
 const WATCHDOG_FAILURES = 3;
 const KEEP_BACKUPS = 5;
@@ -38,6 +39,7 @@ const FAILURE = {
   database_unavailable: 'The database on this computer could not be opened. Your data has not been changed. Restore a backup, or contact your administrator.',
   migration_failed: 'The database could not be brought up to date for this version. Your data has not been changed. Contact your administrator.',
   server_timeout: 'The Food Court services did not start in time. Close the application and open it again. If this repeats, restart the computer.',
+  schema_incompatible: 'The database was updated by a newer version than this one. Your data has not been changed. Contact your administrator.',
   not_ready: 'The Food Court services started but are not healthy. Close the application and open it again, or contact your administrator.',
 };
 
@@ -296,7 +298,7 @@ function runArtisan(runtime, dataDir, env, args) {
     const collect = (b) => (out = (out + b.toString()).slice(-4000));
     child.stdout.on('data', collect);
     child.stderr.on('data', collect);
-    const timer = setTimeout(() => child.kill(), MIGRATE_TIMEOUT_MS);
+    const timer = setTimeout(() => child.kill(), String(args[0]).startsWith('foodcourt:') ? UPDATE_COMMAND_TIMEOUT_MS : MIGRATE_TIMEOUT_MS);
     child.on('error', (e) => {
       clearTimeout(timer);
       reject(e);
@@ -325,6 +327,7 @@ function classifyMigrationFailure(message) {
  */
 async function startEmbeddedServer({ runtime, dataDir, version, log, onStatus, portFinder = findFreePort }) {
   let current = { phase: 'starting', message: 'Starting application…' };
+  const managed = process.env.FOODCOURT_MANAGED_RELEASE === '1';
   const setStatus = (phase, message, extra = {}) => {
     current = { phase, message, ...extra };
     try {
@@ -345,9 +348,11 @@ async function startEmbeddedServer({ runtime, dataDir, version, log, onStatus, p
     let env;
     try {
       ensureDataDirs(dataDir);
-      env = buildServerEnv(dataDir, ensureAppKey(dataDir));
+      env = { ...buildServerEnv(dataDir, ensureAppKey(dataDir)), FOODCOURT_APP_VERSION: version };
       await reclaimOrphan(dataDir, log);
-      backupBeforeUpgrade(dataDir, version, log);
+      // A managed release already went through a verified recovery point and the update engine
+      if (managed) fs.writeFileSync(path.join(dataDir, 'last-version.txt'), version, 'utf8');
+      else backupBeforeUpgrade(dataDir, version, log);
       installDemoDatabaseIfFirstRun(runtime, dataDir, log);
       fs.closeSync(fs.openSync(path.join(dataDir, 'foodcourt.sqlite'), 'a')); // create the empty database file on first run
     } catch (err) {
@@ -355,12 +360,16 @@ async function startEmbeddedServer({ runtime, dataDir, version, log, onStatus, p
     }
 
     setStatus('preparing_database', 'Preparing database…');
-    try {
-      await runArtisan(runtime, dataDir, env, ['migrate', '--force']);
-    } catch (err) {
-      throw new StartupError(classifyMigrationFailure(err.message), err.message);
+    // A managed release never migrates on start: its migrations ran, checked, in the update. If any are still pending
+    // the readiness report below says so and the start fails, rather than running them unverified.
+    if (!managed) {
+      try {
+        await runArtisan(runtime, dataDir, env, ['migrate', '--force']);
+      } catch (err) {
+        throw new StartupError(classifyMigrationFailure(err.message), err.message);
+      }
+      log('INFO', 'Database migrations applied');
     }
-    log('INFO', 'Database migrations applied');
 
     setStatus('connecting', 'Connecting to food court services…');
 
@@ -450,7 +459,7 @@ async function startEmbeddedServer({ runtime, dataDir, version, log, onStatus, p
       await sleep(400);
     }
     if (!ready || !ready.ready) {
-      const code = ready && ready.database === false ? 'database_unavailable' : ready && ready.migrations_current === false ? 'migration_failed' : 'not_ready';
+      const code = ready && ready.database === false ? 'database_unavailable' : ready && ready.migrations_current === false ? 'migration_failed' : ready && ready.schema_compatible === false ? 'schema_incompatible' : 'not_ready';
       throw new StartupError(code, JSON.stringify(ready));
     }
 

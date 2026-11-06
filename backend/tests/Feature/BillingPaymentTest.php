@@ -6,10 +6,13 @@ use App\Models\DiningTable;
 use App\Models\MenuItem;
 use App\Models\Order;
 use App\Models\User;
+use Tests\Concerns\ServesOrders;
 use Tests\TestCase;
 
 class BillingPaymentTest extends TestCase
 {
+    use ServesOrders;
+
     public function test_cashier_can_settle_consolidated_bill_and_free_table(): void
     {
         $cashier = User::where('email', 'cashier@foodcourt.com')->first();
@@ -31,6 +34,8 @@ class BillingPaymentTest extends TestCase
 
         $orderId = Order::where('order_number', $orderResponse->json('data.order_number'))->value('id');
         $totalAmount = $orderResponse->json('data.total_amount');
+
+        $this->serveAllItems($orderId);
 
         // Cashier records payment
         $paymentResponse = $this->actingAs($cashier)

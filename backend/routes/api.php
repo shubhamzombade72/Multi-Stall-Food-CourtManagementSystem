@@ -3,7 +3,6 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BillingController;
 use App\Http\Controllers\Api\BulkDeleteController;
-use App\Http\Controllers\Api\CashierClosingController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DiningTableController;
 use App\Http\Controllers\Api\FulfillmentController;
@@ -23,6 +22,8 @@ use App\Http\Controllers\Api\SettlementController;
 use App\Http\Controllers\Api\StaffController;
 use App\Http\Controllers\Api\StallController;
 use App\Http\Controllers\Api\SystemController;
+use App\Http\Controllers\Api\UpdateAdminController;
+use App\Http\Controllers\Api\UpdateClientController;
 use App\Http\Controllers\Api\WaiterController;
 use Illuminate\Support\Facades\Route;
 
@@ -48,6 +49,44 @@ Route::post('/pairing/redeem', [PairingController::class, 'redeem'])->middleware
 
 // Readiness for the desktop app and monitors: booleans only
 Route::get('/system/ready', [SystemController::class, 'ready'])->middleware('throttle:system-ready');
+Route::get('/system/compat', [SystemController::class, 'compat'])->middleware('throttle:system-ready');
+
+/*
+|--------------------------------------------------------------------------
+| Update service (404 unless FOODCOURT_UPDATE_SERVICE=true; never on a PC's built-in server)
+|--------------------------------------------------------------------------
+*/
+Route::middleware('update.service')->group(function () {
+    Route::post('/updates/client/enroll', [UpdateClientController::class, 'enroll'])->middleware('throttle:update-enroll');
+
+    Route::middleware(['update.device', 'throttle:update-device'])->prefix('updates/client')->group(function () {
+        Route::post('/check', [UpdateClientController::class, 'check']);
+        Route::get('/history', [UpdateClientController::class, 'history']);
+        Route::get('/targets/{id}/release', [UpdateClientController::class, 'release'])->whereNumber('id');
+        Route::post('/targets/{id}/decision', [UpdateClientController::class, 'decide'])->whereNumber('id');
+        Route::post('/targets/{id}/download-token', [UpdateClientController::class, 'downloadToken'])->whereNumber('id');
+        Route::post('/targets/{id}/status', [UpdateClientController::class, 'status'])->whereNumber('id');
+        Route::get('/download/{token}', [UpdateClientController::class, 'download'])->where('token', '[A-Za-z0-9]{64}');
+    });
+
+    Route::middleware(['auth:sanctum', 'active'])->prefix('update-admin')->group(function () {
+        Route::get('/releases', [UpdateAdminController::class, 'releases']);
+        Route::post('/releases', [UpdateAdminController::class, 'createRelease']);
+        Route::put('/releases/{id}', [UpdateAdminController::class, 'updateRelease'])->whereNumber('id');
+        Route::post('/releases/{id}/packages', [UpdateAdminController::class, 'addPackage'])->whereNumber('id');
+        Route::put('/releases/{id}/packages/{packageId}/payload', [UpdateAdminController::class, 'uploadPayload'])->whereNumber('id')->whereNumber('packageId');
+        Route::post('/releases/{id}/publish', [UpdateAdminController::class, 'publish'])->whereNumber('id');
+        Route::post('/releases/{id}/unpublish', [UpdateAdminController::class, 'unpublish'])->whereNumber('id');
+        Route::get('/clients', [UpdateAdminController::class, 'clients']);
+        Route::post('/enrollment-codes', [UpdateAdminController::class, 'createEnrollmentCode']);
+        Route::put('/clients/{id}', [UpdateAdminController::class, 'updateClient'])->whereNumber('id');
+        Route::get('/deployments', [UpdateAdminController::class, 'deployments']);
+        Route::post('/deployments', [UpdateAdminController::class, 'createDeployment']);
+        Route::get('/deployments/{id}', [UpdateAdminController::class, 'showDeployment'])->whereNumber('id');
+        Route::post('/deployments/{id}/cancel', [UpdateAdminController::class, 'cancelDeployment'])->whereNumber('id');
+        Route::get('/monitoring', [UpdateAdminController::class, 'monitoring']);
+    });
+});
 
 Route::prefix('public')->group(function () {
     Route::get('/stalls', [StallController::class, 'index']);
@@ -143,6 +182,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     // Cashier POS & Billing
     Route::get('/billing/pending', [BillingController::class, 'getPendingBills']);
+    Route::get('/billing/orders/{orderId}/open', [BillingController::class, 'openBill'])->whereNumber('orderId');
     Route::post('/billing/pay', [BillingController::class, 'processPayment']);
     Route::get('/billing/receipt/{orderId}', [BillingController::class, 'getOrderReceipt']);
     Route::post('/billing/orders/{orderId}/upi-request', [BillingController::class, 'upiRequest'])->whereNumber('orderId');
@@ -191,11 +231,6 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/stall-owners', [StallOwnerController::class, 'index']);
     Route::post('/stall-owners', [StallOwnerController::class, 'store']);
     Route::put('/stall-owners/{id}', [StallOwnerController::class, 'update'])->whereNumber('id');
-
-    // Cashier-wise closing (cash count against the cashier's own cash payments)
-    Route::get('/cashier-closings', [CashierClosingController::class, 'index']);
-    Route::get('/cashier-closings/preview', [CashierClosingController::class, 'preview']);
-    Route::post('/cashier-closings', [CashierClosingController::class, 'store']);
 
     // Reports & Analytics
     Route::get('/reports/dashboard', [ReportController::class, 'dashboardStats']);

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AuditLog;
+use App\Models\MenuItem;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Setting;
@@ -43,7 +44,7 @@ class UpiQrPaymentTest extends TestCase
 
     private function makeOrder(float $total, string $status = 'confirmed'): Order
     {
-        return Order::create([
+        $order = Order::create([
             'order_type' => 'takeaway',
             'order_channel' => 'cashier_pos',
             'status' => $status,
@@ -54,6 +55,13 @@ class UpiQrPaymentTest extends TestCase
             'payment_status' => 'unpaid',
             'idempotency_key' => 'upi-test-' . uniqid('', true),
         ]);
+        $menu = MenuItem::firstOrFail();
+        $order->items()->create([
+            'stall_id' => $menu->stall_id, 'menu_item_id' => $menu->id, 'item_name' => $menu->name,
+            'unit_price' => $total, 'quantity' => 1, 'subtotal' => $total, 'status' => 'served',
+        ]);
+
+        return $order;
     }
 
     private function qr(Order $order, ?User $as = null)

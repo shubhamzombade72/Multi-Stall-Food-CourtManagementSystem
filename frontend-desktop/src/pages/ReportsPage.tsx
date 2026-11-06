@@ -13,7 +13,6 @@ type Tab =
   | 'stalls'
   | 'menu'
   | 'cashiers'
-  | 'cashier_closings'
   | 'closings'
   | 'staff'
   | 'logins'
@@ -62,7 +61,7 @@ const REPORTS: Record<Tab, ReportDef> = {
     label: 'Orders',
     title: 'Order report',
     stall: true,
-    note: 'Latest 200 orders in the range. Use Orders & Receipts for full search and paging.',
+    note: 'Latest 200 orders in the range. Use Payments & Closing > Orders for full search and paging.',
     columns: [
       { header: 'Order', value: (r) => r.order_number },
       { header: 'Time', value: (r) => when(r.created_at) },
@@ -119,21 +118,6 @@ const REPORTS: Record<Tab, ReportDef> = {
       { header: 'Amount (₹)', value: (r) => amt(r.total_amount), align: 'right', numeric: true },
     ],
     load: async ({ end }) => (await get('/reports/cashier-activity', { date: end })).rows,
-  },
-  cashier_closings: {
-    label: 'Cashier Closings',
-    title: 'Cashier closings',
-    columns: [
-      { header: 'Date', value: (r) => String(r.business_date).slice(0, 10) },
-      { header: 'Cashier', value: (r) => r.cashier?.name },
-      { header: 'Payments', value: (r) => r.payments_count, align: 'right', numeric: true },
-      { header: 'Expected cash (₹)', value: (r) => amt(r.expected_cash), align: 'right', numeric: true },
-      { header: 'Counted (₹)', value: (r) => amt(r.counted_cash), align: 'right', numeric: true },
-      { header: 'Variance (₹)', value: (r) => amt(r.variance), align: 'right', numeric: true },
-      { header: 'Non-cash (₹)', value: (r) => amt(r.non_cash_total), align: 'right', numeric: true },
-      { header: 'Note', value: (r) => r.notes || '' },
-    ],
-    load: async ({ start, end }) => (await get('/cashier-closings', { date_from: start, date_to: end, per_page: 200 })).data,
   },
   closings: {
     label: 'Daily Closings',

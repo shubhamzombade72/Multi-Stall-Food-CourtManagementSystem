@@ -72,12 +72,14 @@ test('no UPI section when UPI is disabled or the bill has no request', () => {
   assert.equal(upiSection({ upi_enabled: true, order: { payment_status: 'unpaid' } }), null);
 });
 
-test('a paid UPI bill reprints its ORIGINAL payment record, labelled paid, even if UPI was switched off since', () => {
+test('a paid UPI bill reprints its ORIGINAL QR and amount, without the UPI ID or a paid title, even if UPI was switched off since', () => {
   const s = upiSection({ upi_enabled: false, upi: { ...UPI, status: 'paid', vpa: 'old@upi', amount: '200.00' }, order: { payment_status: 'paid' } });
   assert.ok(s);
   assert.equal(s.paid, true);
-  assert.match(s.title, /PAID/);
-  assert.equal(s.vpaLine, 'UPI ID: old@upi');
+  assert.equal(s.title, '');
+  assert.equal(s.vpaLine, '');
+  assert.match(s.qrText, /pa=old@upi/);
+  assert.match(s.amountLine, /200\.00/);
 });
 
 test('the QR text is rebuilt from the request, so a tampered stored URI cannot show another amount', () => {

@@ -21,7 +21,9 @@ const { normalizeApiUrl, classifyNetworkError, parseBundledConfig, shouldUseSave
 const { artisanFor, locateRuntime, startEmbeddedServer, FAILURE } = require('./embedded-server.cjs');
 const backup = require('./backup.cjs');
 const pairing = require('./pairing.cjs');
+const { createAuthVault } = require('./auth-vault.cjs');
 const { createPrinting } = require('./printing/index.cjs');
+const { createUpdates } = require('./update/wiring.cjs');
 
 const DEV_URL = process.env.ELECTRON_START_URL || ''; // e.g. http://localhost:3000 for `pnpm dev`
 
@@ -94,6 +96,29 @@ function readConfig() {
   return { apiBaseUrl: null, source: 'none' };
 }
 
+// ------------------------------------------------------------------ device sign-in (PIN)
+let authVaultInstance = null;
+
+const authVault = () => {
+  if (!authVaultInstance) {
+    authVaultInstance = createAuthVault({
+      file: path.join(app.getPath('userData'), 'auth-vault.json'),
+      isAvailable: () => safeStorage.isEncryptionAvailable(),
+      seal: (text) => safeStorage.encryptString(text),
+      unseal: (data) => safeStorage.decryptString(data),
+      log: (level, message) => log(level, message, 'auth'),
+    });
+  }
+  return authVaultInstance;
+};
+
+// Older automated journeys sign in directly. Honoured only in an unpackaged run, so an installed app cannot be
+// started without the PIN lock. It also never releases a saved session: it only leaves the vault unused.
+const pinLockOff = () => !app.isPackaged && process.env.FOODCOURT_PIN_LOCK === 'off';
+
+/** The data this PC talks to changed, so a saved session is meaningless now. Sign in again. */
+const forgetSavedSignIn = () => authVault().clear().catch((err) => log('ERROR', `Could not remove the saved sign-in: ${err.code || 'unknown error'}`));
+
 // ------------------------------------------------------------------ pairing (multi-PC)
 let pairingCache; // undefined = not read yet; null = not paired
 
@@ -159,6 +184,7 @@ async function pairWithHost(pairingString) {
   });
   writeJsonAtomic(configPath(), { apiBaseUrl: decoded.url });
   pairingCache = undefined;
+  await forgetSavedSignIn();
   await shutdownServer(); // this PC now uses the shared host; the built-in server is not needed
   log('INFO', `This computer was connected to the food court host "${body.data.food_court_name}"`);
   return { ok: true, foodCourtName: body.data.food_court_name || '' };
@@ -361,6 +387,10 @@ async function restoreBackup(win, name) {
     await startBuiltInServer();
     return { ok: false, error: 'The restored data would not start, so the previous data was put back.' };
   }
+  // Same person on the same PC: the PIN keeps working. Done now because the server has upgraded the restored data.
+  const vault = pinLockOff() ? null : await authVault().status().catch(() => null);
+  const kept = await backup.keepSession({ artisan: started.artisan, previous: safety, account: vault && vault.account, log });
+  if (!kept) await forgetSavedSignIn();
   return { ok: true };
 }
 
@@ -577,11 +607,12 @@ function buildMenu() {
 // ------------------------------------------------------------------ IPC (allowlist)
 // Keep in sync with preload.cjs and the smoke test: this is the renderer's entire reach into the main process.
 const BRIDGE_KEYS = [
-  'backupNow', 'chooseBackupFolder', 'connectToHost', 'enqueuePrintJob', 'getAppInfo', 'getBackupStatus', 'getConfig', 'getDiagnostics', 'getPrintConfig',
+  'authVaultClear', 'authVaultSetup', 'authVaultStatus', 'authVaultUnlock', 'backupNow', 'chooseBackupFolder', 'connectToHost', 'enqueuePrintJob', 'getAppInfo', 'getBackupStatus', 'getConfig', 'getDiagnostics', 'getPrintConfig',
   'getPrinterStatus', 'getStartupStatus', 'listPrintJobs', 'listPrinters', 'log', 'onPrintJobsChanged', 'previewPrintDocument', 'print', 'reprintPrintJob',
-  'restoreBackup', 'retryPrintJob', 'retryStart', 'sendTestPrint', 'setPrintConfig', 'useBuiltInServer',
+  'restoreBackup', 'retryPrintJob', 'retryStart', 'sendTestPrint', 'setPrintConfig', 'updateCheck', 'updateEnroll', 'updateGetState', 'updateNow', 'updateRemindLater', 'useBuiltInServer',
 ].sort();
 
+let updates = null; // software updates (electron/update), created once the app is ready
 let printing = null; // thermal printing service (electron/printing), created once the app is ready
 
 function fromApp(event) {
@@ -612,11 +643,18 @@ function registerIpc() {
   // Back to this computer's own database (an administrator task: the UI offers it under Support only)
   handle('desktop:use-builtin-server', async () => {
     clearPairing();
+    await forgetSavedSignIn();
     log('INFO', 'Connection to the shared host removed; using this computer\'s own database');
     return resolveConfig();
   });
 
   handle('desktop:connect-to-host', (_e, pairingString) => pairWithHost(String(pairingString || '')));
+
+  // Device sign-in. Arguments are never logged: they carry the PIN and the session token.
+  handle('auth:status', () => (pinLockOff() ? { state: 'disabled' } : authVault().status()));
+  handle('auth:setup', (_e, request) => (pinLockOff() ? { ok: false, code: 'unavailable' } : authVault().setup(request)));
+  handle('auth:unlock', (_e, pin) => (pinLockOff() ? { ok: false, code: 'unavailable' } : authVault().unlock(pin)));
+  handle('auth:clear', () => authVault().clear());
 
   handle('desktop:get-app-info', () => ({
     name: app.getName(),
@@ -629,6 +667,12 @@ function registerIpc() {
   }));
 
   handle('desktop:get-diagnostics', () => collectDiagnostics());
+
+  handle('update:get-state', () => updates.agent.publicState());
+  handle('update:check', () => updates.agent.check());
+  handle('update:enroll', (_e, code) => updates.agent.enroll(code, os.hostname()));
+  handle('update:now', () => updates.agent.updateNow());
+  handle('update:remind-later', () => updates.agent.remindLater());
 
   handle('desktop:get-backup-status', () => backupStatus());
   handle('desktop:backup-now', () => runBackup('manual'));
@@ -722,11 +766,13 @@ if (diagnoseArg) {
       log,
       listPrinters: async () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents.getPrintersAsync() : []),
     });
+    updates = createUpdates({ app, net, safeStorage, log, shutdownServer, dataDir, readConfig, resolveConfig, probe, getStartup: () => startup });
     registerIpc();
     printing.registerIpc();
     buildMenu();
     if (!readConfig().apiBaseUrl) startBuiltInServer(); // start services while the window loads
     createWindow();
+    updates.afterWindow(mainWindow);
     printing.start(); // resumes queued jobs; jobs that were mid-print at the last shutdown are marked failed, never re-sent
     log('INFO', `Started v${app.getVersion()} (electron ${process.versions.electron})`);
   });

@@ -175,7 +175,7 @@ const BackupSection: React.FC = () => {
   };
 
   const restore = async (name: string | null) => {
-    const r = await run(() => desktop()!.restoreBackup(name), 'Backup restored. Signing you out…');
+    const r = await run(() => desktop()!.restoreBackup(name), 'Backup restored. Locking the app…');
     if (r?.ok) {
       localStorage.removeItem('fc_auth_token');
       localStorage.removeItem('fc_auth_user');

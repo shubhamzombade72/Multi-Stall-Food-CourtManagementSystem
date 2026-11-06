@@ -13,6 +13,7 @@ use App\Models\StallSettlementRecord;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Tests\Concerns\ServesOrders;
 use Tests\TestCase;
 
 /**
@@ -22,6 +23,7 @@ use Tests\TestCase;
 class StagingHardeningTest extends TestCase
 {
     use DatabaseTransactions;
+    use ServesOrders;
 
     private function user(string $role, ?int $stallId = null): User
     {
@@ -112,6 +114,7 @@ class StagingHardeningTest extends TestCase
     {
         $cashier = $this->user('cashier');
         $order = $this->placeOrderAs($cashier, [MenuItem::where('is_available', true)->first()->id]);
+        $this->serveAllItems($order);
 
         $this->actingAs($cashier, 'sanctum')->postJson('/api/billing/pay', [
             'order_id' => $order->id,
@@ -204,13 +207,22 @@ class StagingHardeningTest extends TestCase
         // Kitchen staff is not a waiter
         $this->actingAs($kitchen, 'sanctum')->postJson("/api/waiter/tickets/{$ticket->id}/served")->assertStatus(403);
 
-        // Customer pays before the waiter confirms serving
+        // Ready is not served: the customer cannot pay until the waiter has confirmed serving
+        $this->actingAs($cashier, 'sanctum')->postJson('/api/billing/pay', [
+            'order_id' => $order->id,
+            'payment_method' => 'upi_qr',
+            'amount' => (string) $order->total_amount,
+        ])->assertStatus(422)->assertJsonPath('error', 'billing_not_eligible');
+
+        $this->actingAs($waiter, 'sanctum')->postJson("/api/waiter/tickets/{$ticket->id}/served")->assertStatus(200);
+
         $this->actingAs($cashier, 'sanctum')->postJson('/api/billing/pay', [
             'order_id' => $order->id,
             'payment_method' => 'upi_qr',
             'amount' => (string) $order->total_amount,
         ])->assertStatus(200);
 
+        // Repeating the waiter's confirmation must not reopen a settled order
         $this->actingAs($waiter, 'sanctum')->postJson("/api/waiter/tickets/{$ticket->id}/served")->assertStatus(200);
 
         $fresh = $order->fresh();

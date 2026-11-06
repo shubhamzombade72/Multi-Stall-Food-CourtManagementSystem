@@ -55,6 +55,8 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('recovery-key', fn (Request $request) => Limit::perMinute(5)->by('recovery-key|' . ($request->user()?->id ?? $request->ip())));
         RateLimiter::for('pairing-redeem', fn (Request $request) => Limit::perMinute(10)->by('pairing-redeem|' . $request->ip()));
         RateLimiter::for('pairing-codes', fn (Request $request) => Limit::perMinute(10)->by('pairing-codes|' . ($request->user()?->id ?? $request->ip())));
+        RateLimiter::for('update-enroll', fn (Request $request) => Limit::perMinute(10)->by('update-enroll|' . $request->ip()));
+        RateLimiter::for('update-device', fn (Request $request) => Limit::perMinute(300)->by('update-device|' . ($request->header('X-Update-Device') ?: $request->ip())));
         RateLimiter::for('system-ready', fn (Request $request) => Limit::perMinute(120)->by('system-ready|' . $request->ip()));
 
         // Public QR ordering: flood control per table, plus a ceiling per source IP that still allows a

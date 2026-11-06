@@ -12,14 +12,14 @@ import {
   BarChart3,
   Receipt,
   Users,
-  CreditCard,
+  ClipboardList,
   Settings,
   LayoutGrid,
-  Calculator,
   Contact,
   Building2,
   ListChecks,
   Clock,
+  CloudDownload,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -41,12 +41,11 @@ export const Sidebar: React.FC = () => {
         { to: '/pos', label: 'Cashier POS', icon: ShoppingCart, show: isCashier || isOwner },
         {
           to: '/pos?mode=pending_bills',
-          label: 'Pending Table Bills',
+          label: 'Pending Bills',
           icon: Clock,
           show: isCashier || isOwner,
           badge: pendingBillsCount,
         },
-        { to: '/orders', label: 'Orders & Receipts', icon: Receipt, show: isOwner || isCashier },
         { to: '/tracking', label: 'Orders & Table Tracking', icon: ListChecks, show: isOwner || isCashier || isWaiter || role === 'kitchen_staff' || role === 'stall_manager' },
         { to: '/tables', label: 'Floor & Tables', icon: LayoutGrid, show: isOwner || isCashier || isWaiter },
       ],
@@ -54,9 +53,9 @@ export const Sidebar: React.FC = () => {
     {
       title: 'Payments & Closing',
       links: [
-        { to: '/payments', label: 'Payment History', icon: CreditCard, show: isOwner || isCashier },
-        { to: '/cashier-closing', label: 'Cashier Closing', icon: Calculator, show: isOwner || isCashier },
-        { to: '/settlements', label: 'End-of-Day Closing & Settlements', icon: CalendarCheck, show: isOwner },
+        { to: '/orders', label: 'Orders', icon: ClipboardList, show: isOwner || isCashier },
+        { to: '/payments', label: 'Receipts', icon: Receipt, show: isOwner || isCashier },
+        { to: '/settlements', label: 'End-of-Day Closing & Stall Settlements', icon: CalendarCheck, show: isOwner },
       ],
     },
     {
@@ -79,6 +78,7 @@ export const Sidebar: React.FC = () => {
       links: [
         { to: '/food-court-settings', label: 'Food Court Settings', icon: Building2, show: isOwner },
         { to: '/settings', label: 'Device Settings', icon: Settings, show: true },
+        { to: '/updates', label: 'Software Updates', icon: CloudDownload, show: isOwner },
       ],
     },
   ];
@@ -113,12 +113,13 @@ export const Sidebar: React.FC = () => {
                   <NavLink
                     key={link.to}
                     to={link.to}
+                    title={link.label}
                     className={`flex items-center space-x-2 px-2 py-1.5 rounded-lg font-medium text-[13px] transition ${
                       active ? 'bg-primary text-primary-fg' : 'text-muted hover:text-fg hover:bg-surface-2'
                     }`}
                   >
                     <Icon className="w-4 h-4 shrink-0" />
-                    <span className="flex-1 truncate">{link.label}</span>
+                    <span className="flex-1 min-w-0 leading-tight">{link.label}</span>
                     {link.badge !== undefined && (
                       <span
                         className={`ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-black tracking-tight ${

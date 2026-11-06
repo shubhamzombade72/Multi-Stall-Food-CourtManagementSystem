@@ -39,6 +39,34 @@ export interface DesktopAppInfo {
   dataDir: string | null;
 }
 
+export interface UpdateState {
+  enabled: boolean;
+  /** why updates cannot run on this installation */
+  blocked: string | null;
+  enrolled: boolean;
+  channel: string | null;
+  currentVersion: string;
+  mode: 'embedded' | 'remote';
+  phase: 'idle' | 'downloading' | 'verifying' | 'installing';
+  progress: { received: number; total: number } | null;
+  error: string | null;
+  message: string | null;
+  checkedAt: string | null;
+  serverBlocked: string | null;
+  update: {
+    version: string;
+    channel: string;
+    required: boolean;
+    releaseDate: string | null;
+    packageType: 'incremental' | 'full';
+    packageSize: number;
+    notes: Record<string, unknown>;
+  } | null;
+  snoozed: boolean;
+  lastResult: { outcome: 'completed' | 'installed' | 'recovered' | 'needs_developer'; version: string; failure?: string | null; restored_database?: boolean; running_version?: string | null; at: string } | null;
+  recoveryPoints: number;
+}
+
 export interface BackupEntry {
   name: string;
   bytes: number;
@@ -79,7 +107,31 @@ export interface DesktopPrinter {
   status: number;
 }
 
+/** The account a device sign-in belongs to: what the PIN screen may show before anything is unlocked. */
+export interface VaultAccount {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export type VaultStatus =
+  | { state: 'none' | 'corrupt' | 'unavailable' | 'disabled' }
+  | { state: 'ready'; account: VaultAccount; pinLength: number; locked: boolean; retryAfterMs: number; attemptsLeft: number };
+
+export type VaultUnlockResult =
+  | { ok: true; token: string; account: VaultAccount }
+  | { ok: false; code: 'wrong_pin' | 'locked' | 'wait' | 'invalid_pin' | 'wiped' | 'no_vault' | 'corrupt' | 'unavailable'; retryAfterMs?: number; attemptsLeft?: number };
+
+export type VaultSetupResult =
+  | { ok: true; account: VaultAccount; pinLength: number }
+  | { ok: false; code: 'invalid_pin' | 'weak_pin' | 'invalid_session' | 'unavailable' };
+
 interface DesktopBridge {
+  authVaultStatus(): Promise<VaultStatus>;
+  authVaultSetup(request: { pin: string; token: string; account: VaultAccount }): Promise<VaultSetupResult>;
+  authVaultUnlock(pin: string): Promise<VaultUnlockResult>;
+  authVaultClear(): Promise<{ ok: boolean }>;
   getConfig(): Promise<DesktopConfig>;
   getStartupStatus(): Promise<StartupStatus>;
   retryStart(): Promise<DesktopConfig>;
@@ -87,6 +139,11 @@ interface DesktopBridge {
   connectToHost(pairingString: string): Promise<{ ok: boolean; error?: string; foodCourtName?: string }>;
   getAppInfo(): Promise<DesktopAppInfo>;
   getDiagnostics(): Promise<DesktopDiagnostics>;
+  updateGetState(): Promise<UpdateState>;
+  updateCheck(): Promise<UpdateState>;
+  updateEnroll(code: string): Promise<{ ok: boolean; error?: string }>;
+  updateNow(): Promise<{ ok: boolean; error?: string; code?: string }>;
+  updateRemindLater(): Promise<UpdateState>;
   getBackupStatus(): Promise<BackupStatus>;
   backupNow(): Promise<BackupResult>;
   chooseBackupFolder(): Promise<BackupResult>;

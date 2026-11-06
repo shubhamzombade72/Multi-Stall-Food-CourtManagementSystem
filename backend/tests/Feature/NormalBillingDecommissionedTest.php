@@ -98,6 +98,7 @@ class NormalBillingDecommissionedTest extends TestCase
             'unit_price' => $amount,
             'quantity' => 1,
             'subtotal' => $amount,
+            'status' => 'served',
         ]);
 
         return $order;

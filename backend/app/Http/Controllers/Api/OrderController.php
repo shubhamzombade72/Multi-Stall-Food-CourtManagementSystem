@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\StallKitchenTicket;
 use App\Models\StallTicketItem;
+use App\Services\BillingEligibility;
 use App\Services\FulfillmentService;
 use App\Services\TaxService;
 use App\Support\Sql;
@@ -95,9 +96,13 @@ class OrderController extends Controller
             'cashier:id,name'
         ])->findOrFail($id);
 
+        $billing = app(BillingEligibility::class)->evaluate($order);
+
         return response()->json([
             'success' => true,
-            'data' => $order,
+            'data' => $order->toArray() + [
+                'billing' => ['eligible' => $billing['eligible'], 'message' => $billing['message'], 'outstanding_items' => $billing['outstanding_items']],
+            ],
         ]);
     }
 

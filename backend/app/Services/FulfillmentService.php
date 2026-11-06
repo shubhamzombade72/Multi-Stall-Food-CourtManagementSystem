@@ -563,7 +563,7 @@ class FulfillmentService
      *
      * @return array{0: Order, 1: Collection<int, StallKitchenTicket>, 2: Collection<int, StallTicketItem>}
      */
-    private function lockOrder(int $orderId, ?array $ticketIds): array
+    public function lockOrder(int $orderId, ?array $ticketIds): array
     {
         $order = Order::whereKey($orderId)->lockForUpdate()->firstOrFail();
 

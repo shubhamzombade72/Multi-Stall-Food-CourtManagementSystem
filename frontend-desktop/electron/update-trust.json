@@ -1,0 +1,4 @@
+{
+  "_comment": "PUBLIC Ed25519 keys allowed to sign updates, as { \"keys\": { \"<key id>\": \"<base64>\" } }. Created by scripts/release/keygen.mjs. Empty means updates are disabled. Never put a private key here.",
+  "keys": {}
+}

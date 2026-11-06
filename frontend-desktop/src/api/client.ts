@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { desktop, isDesktopApp, logError, type DesktopConfig } from '../desktop/bridge';
 import { API_NOT_CONFIGURED } from '../lib/apiErrors';
+import { clearAuthToken, getAuthToken } from '../lib/authToken';
 
 // Web build: VITE_API_BASE_URL or same-origin /api (the web build is served next to the API).
 // Desktop (Electron): there is NO build-time default and nobody types an address. The main process reports
@@ -54,11 +55,18 @@ export const healthUrl = (): string => {
 
 export const SESSION_EXPIRED_KEY = 'fc_session_expired';
 
+let onSessionRejected: (() => void) | null = null;
+
+/** AuthContext registers here: it owns what happens when the server stops accepting this session. */
+export const setSessionRejectedHandler = (handler: (() => void) | null): void => {
+  onSessionRejected = handler;
+};
+
 apiClient.interceptors.request.use((config) => {
   if (!isApiConfigured()) {
     return Promise.reject(Object.assign(new Error('No server address is configured'), { code: API_NOT_CONFIGURED, config }));
   }
-  const token = localStorage.getItem('fc_auth_token');
+  const token = getAuthToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -71,18 +79,17 @@ apiClient.interceptors.response.use(
     if (error.response && error.response.status === 401) {
       // A 401 on the sign-in call itself is a credentials problem, not an expired session
       const isLogin = String(error.config?.url || '').includes('/auth/login');
-      const hadSession = Boolean(localStorage.getItem('fc_auth_token'));
-      localStorage.removeItem('fc_auth_token');
-      localStorage.removeItem('fc_auth_user');
-      if (!isLogin && hadSession) {
+      const current = getAuthToken();
+      // A late answer to a request made with an older token (before a lock or a new sign-in) says nothing about this session
+      const sameSession = Boolean(current) && error.config?.headers?.Authorization === `Bearer ${current}`;
+      if (!isLogin && sameSession) {
+        clearAuthToken();
         try {
           sessionStorage.setItem(SESSION_EXPIRED_KEY, '1');
         } catch {
           // storage unavailable: the user simply lands on the sign-in page
         }
-      }
-      if (!window.location.hash.startsWith('#/login')) {
-        window.location.hash = '#/login';
+        onSessionRejected?.();
       }
     } else if (error.code === API_NOT_CONFIGURED) {
       // expected until the operator enters the server address; not worth logging per request

@@ -77,11 +77,13 @@ export const ReceiptContent: React.FC<{ receipt: any; settings?: FoodCourtSettin
       {upi && (
         <div data-testid="receipt-upi" style={{ breakInside: 'avoid', pageBreakInside: 'avoid', textAlign: 'center' }}>
           <div style={{ borderTop: '1px dashed #000', margin: '6px 0 4px' }} />
-          <div data-testid="receipt-upi-title" style={{ fontWeight: 700 }}>
-            {upi.title}
-          </div>
+          {upi.title && (
+            <div data-testid="receipt-upi-title" style={{ fontWeight: 700 }}>
+              {upi.title}
+            </div>
+          )}
           <UpiQr text={upi.qrText} paper={width} />
-          <div style={{ wordBreak: 'break-all' }}>{upi.vpaLine}</div>
+          {upi.vpaLine && <div style={{ wordBreak: 'break-all' }}>{upi.vpaLine}</div>}
           <div data-testid="receipt-upi-amount" style={{ fontWeight: 700 }}>{upi.amountLine}</div>
           <div style={{ wordBreak: 'break-all' }}>{upi.referenceLine}</div>
           {upi.instructionLine && <div data-testid="receipt-upi-instruction" style={{ marginTop: 2, fontSize: width === 58 ? 9 : 10, wordBreak: 'break-word' }}>{upi.instructionLine}</div>}

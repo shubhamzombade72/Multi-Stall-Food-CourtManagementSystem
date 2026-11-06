@@ -139,6 +139,10 @@ class FulfillmentController extends Controller
 
         DB::transaction(function () use ($ticketItem, $order, $validated, $request) {
             $order = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            // A payment may have committed since the check above; a settled bill must never change underneath it
+            if ($order->status === 'cancelled' || $order->payments()->exists()) {
+                abort(422, 'Order has existing payments and cannot be modified.');
+            }
             $ticketItem = StallTicketItem::whereKey($ticketItem->id)->lockForUpdate()->firstOrFail();
             $orderItem = OrderItem::whereKey($ticketItem->order_item_id)->lockForUpdate()->first();
 
@@ -247,6 +251,10 @@ class FulfillmentController extends Controller
 
         DB::transaction(function () use ($order, $menuItem, $quantity, $unitPrice, $instructions, $request) {
             $order = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            // A payment may have committed since the check above; a settled bill must never change underneath it
+            if ($order->status === 'cancelled' || $order->payments()->exists()) {
+                abort(422, 'Order has existing payments and items cannot be added.');
+            }
 
             // Check if there is an existing unserved line for the exact same dish and instructions
             $existingOrderItem = $order->items()

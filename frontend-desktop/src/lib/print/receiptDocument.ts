@@ -59,9 +59,9 @@ export function buildReceiptDocument(receipt: any, settings?: SettingsLike | nul
 
   if (upi) {
     b.push({ t: 'rule' });
-    b.push({ t: 'text', text: upi.title, align: 'center', bold: true });
+    if (upi.title) b.push({ t: 'text', text: upi.title, align: 'center', bold: true });
     b.push({ t: 'qr', data: upi.qrText, modules: qrRows(upi.qrText) });
-    b.push({ t: 'text', text: upi.vpaLine, align: 'center' });
+    if (upi.vpaLine) b.push({ t: 'text', text: upi.vpaLine, align: 'center' });
     b.push({ t: 'text', text: upi.amountLine, align: 'center', bold: true });
     b.push({ t: 'text', text: upi.referenceLine, align: 'center' });
     if (upi.instructionLine) b.push({ t: 'text', text: upi.instructionLine, align: 'center' });

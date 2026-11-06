@@ -99,7 +99,7 @@ const auditRows = async (ownerToken, actions) => {
 
 try {
   // ------------------------------------------------------------------ fresh profile, owner via Welcome
-  const launchEnv = { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: '' };
+  const launchEnv = { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_PIN_LOCK: 'off', FOODCOURT_API_URL: '' };
   delete launchEnv.ELECTRON_RUN_AS_NODE;
   app = await electron.launch({
     executablePath: electronPath,

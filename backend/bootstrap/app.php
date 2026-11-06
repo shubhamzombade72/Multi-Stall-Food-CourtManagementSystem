@@ -20,7 +20,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'active' => \App\Http\Middleware\EnsureUserIsActive::class,
+            'update.service' => \App\Http\Middleware\EnsureUpdateService::class,
+            'update.device' => \App\Http\Middleware\AuthenticateUpdateDevice::class,
         ]);
+        $middleware->replace(\Illuminate\Http\Middleware\ValidatePostSize::class, \App\Http\Middleware\ValidatePostSizeExceptPackageUpload::class);
         $middleware->appendToGroup('api', \App\Http\Middleware\RequirePairedDevice::class);
         $middleware->appendToGroup('api', \App\Http\Middleware\LogAccessDenied::class);
     })

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiClient } from '../api/client';
 import { PrintReceiptButton, ReceiptPreviewButton } from '../components/Receipt';
-import { CreditCard } from 'lucide-react';
+import { Receipt } from 'lucide-react';
 
 const METHODS = [
   { value: '', label: 'All methods' },
@@ -43,10 +43,10 @@ export const PaymentsPage: React.FC = () => {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-bold text-fg tracking-tight flex items-center space-x-2">
-            <CreditCard className="w-5 h-5" />
-            <span>Payment History</span>
+            <Receipt className="w-5 h-5" />
+            <span>Receipts</span>
           </h2>
-          <p className="text-sm text-muted mt-1">Every recorded payment; reprint the customer receipt at any time</p>
+          <p className="text-sm text-muted mt-1">Every recorded payment; preview or reprint the customer receipt at any time</p>
         </div>
         <div className="flex items-center space-x-2">
           <input aria-label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 rounded-lg border border-line text-sm" />

@@ -61,7 +61,7 @@ const selectedText = () => page.getByTestId('bulk-selected-count').innerText();
 try {
   app = await electron.launch({
     args: [APP_DIR],
-    env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: '' },
+    env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_PIN_LOCK: 'off', FOODCOURT_API_URL: '' },
     timeout: 60000,
   });
   page = await app.firstWindow();
