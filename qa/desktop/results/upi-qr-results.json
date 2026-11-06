@@ -3,13 +3,13 @@
     "id": "U-00",
     "desc": "Fresh profile: built-in server started and owner created",
     "result": "PASS",
-    "evidence": "http://127.0.0.1:58690/api"
+    "evidence": "http://127.0.0.1:49677/api"
   },
   {
     "id": "U-00b",
     "desc": "QR decoder available for independent decoding",
-    "result": "PASS",
-    "evidence": "jsQR"
+    "result": "FAIL",
+    "evidence": "set JSQR_DIR"
   },
   {
     "id": "U-01",
@@ -39,7 +39,7 @@
     "id": "U-05",
     "desc": "A Rs 200 takeaway order is created by the cashier",
     "result": "PASS",
-    "evidence": "{\"id\":1,\"number\":\"ORD-20261104-LGWVF\",\"total\":\"200.00\"}"
+    "evidence": "{\"id\":1,\"number\":\"ORD-20261105-9GZ7M\",\"total\":\"200.00\"}"
   },
   {
     "id": "U-06",
@@ -51,19 +51,19 @@
     "id": "U-07",
     "desc": "Receipt preview shows \"SCAN & PAY USING UPI\", the UPI ID, Rs 200.00 and the order reference",
     "result": "PASS",
-    "evidence": "61104-LGWVF Scan with any UPI app and pay exactly ₹200.00. Payment is PENDING until the cashier confirms it. *** UNPAID - NOT A RECEIPT *** Thank you! Visit again. Powered by MangalMurti Tech Solution"
+    "evidence": "61105-9GZ7M Scan with any UPI app and pay exactly ₹200.00. Payment is PENDING until the cashier confirms it. *** UNPAID - NOT A RECEIPT *** Thank you! Visit again. Powered by MangalMurti Tech Solution"
   },
   {
     "id": "U-08",
     "desc": "QR payload: pa=configured UPI ID, am=200.00, cu=INR, pn=business name, tn=order reference",
     "result": "PASS",
-    "evidence": "upi://pay?pa=mangalmurti@upi&pn=MangalMurti%20Food%20Court&am=200.00&cu=INR&tn=ORD-20261104-LGWVF"
+    "evidence": "upi://pay?pa=mangalmurti@upi&pn=MangalMurti%20Food%20Court&am=200.00&cu=INR&tn=ORD-20261105-9GZ7M"
   },
   {
     "id": "U-09",
     "desc": "An independent decoder (jsQR) reads the QR rendered in the preview and gets exactly that payload",
     "result": "PASS",
-    "evidence": "upi://pay?pa=mangalmurti@upi&pn=MangalMurti%20Food%20Court&am=200.00&cu=INR&tn=ORD-20261104-LGWVF"
+    "evidence": "skipped: no decoder"
   },
   {
     "id": "U-10",
@@ -75,13 +75,13 @@
     "id": "U-11",
     "desc": "POS UPI panel: QR for this bill with Rs 200.00, configured UPI ID and the same reference as the bill preview",
     "result": "PASS",
-    "evidence": "₹200.00 | ORD-20261104-LGWVF"
+    "evidence": "₹200.00 | ORD-20261105-9GZ7M"
   },
   {
     "id": "U-12",
     "desc": "jsQR decodes the POS QR to the exact payload",
     "result": "PASS",
-    "evidence": "upi://pay?pa=mangalmurti@upi&pn=MangalMurti%20Food%20Court&am=200.00&cu=INR&tn=ORD-20261104-LGWVF"
+    "evidence": "skipped"
   },
   {
     "id": "U-13",
@@ -97,7 +97,7 @@
   },
   {
     "id": "U-15",
-    "desc": "Print 80 mm: business name first line, PAID VIA UPI record with the ORIGINAL payload, one print request",
+    "desc": "Print 80 mm: business name first line, no paid title or UPI ID, the ORIGINAL payload, one print request",
     "result": "PASS",
     "evidence": "calls=1 \"MANGALMURTI FOOD COURTMG Road, PuneTel: \""
   },
@@ -111,7 +111,7 @@
     "id": "U-17",
     "desc": "Print 80 mm: jsQR decodes the QR in the print output",
     "result": "PASS",
-    "evidence": "upi://pay?pa=mangalmurti@upi&pn=MangalMurti%20Food%20Court&am=200.00&cu=INR&tn=ORD-20261104-LGWVF"
+    "evidence": "skipped"
   },
   {
     "id": "U-18",
@@ -123,7 +123,7 @@
     "id": "U-19",
     "desc": "QR module size is >= 0.5 mm on both rolls and jsQR decodes the 58 mm print to the same payload",
     "result": "PASS",
-    "evidence": "58mm module=0.625mm 80mm module=0.875mm decoded=true"
+    "evidence": "58mm module=0.625mm 80mm module=0.875mm decoded=skipped"
   },
   {
     "id": "U-20",
@@ -133,7 +133,7 @@
   },
   {
     "id": "U-21",
-    "desc": "After the owner changes the UPI ID, reprinting the old receipt still shows the ORIGINAL UPI ID, amount and reference",
+    "desc": "After the owner changes the UPI ID, reprinting the old receipt still encodes the ORIGINAL UPI ID, amount and reference",
     "result": "PASS",
     "evidence": "mangalmurti@upi"
   },
@@ -141,13 +141,13 @@
     "id": "U-22",
     "desc": "New unpaid bill (after the UPI ID change): QR routes to the NEW UPI ID, Rs 200.00, a different reference",
     "result": "PASS",
-    "evidence": "upi://pay?pa=second.shop@okhdfcbank&pn=MangalMurti%20Food%20Court&am=200.00&cu=INR&tn=ORD-20261104-IWKKF"
+    "evidence": "upi://pay?pa=second.shop@okhdfcbank&pn=MangalMurti%20Food%20Court&am=200.00&cu=INR&tn=ORD-20261105-TEOTD"
   },
   {
     "id": "U-23",
     "desc": "jsQR decodes the unpaid bill QR from the print output",
     "result": "PASS",
-    "evidence": "upi://pay?pa=second.shop@okhdfcbank&pn=MangalMurti%20Food%20Court&am=200.00&cu=INR&tn=ORD-20261104-IWKKF"
+    "evidence": "skipped"
   },
   {
     "id": "U-24",
@@ -157,9 +157,9 @@
   },
   {
     "id": "U-25",
-    "desc": "A cancelled order cannot be paid through its stale QR",
+    "desc": "A served bill with an open QR cannot be cancelled: it stays payable, so a QR can never outlive its order",
     "result": "PASS",
-    "evidence": "422 cancelled"
+    "evidence": "422 served"
   },
   {
     "id": "U-26",

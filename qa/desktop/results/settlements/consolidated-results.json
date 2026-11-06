@@ -3,7 +3,7 @@
     "id": "C-01",
     "desc": "Desktop app runtime launched and authenticated",
     "result": "PASS",
-    "evidence": "http://127.0.0.1:51130/api"
+    "evidence": "http://127.0.0.1:56460/api"
   },
   {
     "id": "C-02",
@@ -51,7 +51,7 @@
     "id": "C-09",
     "desc": "Drawer displays itemized dish orders and amounts",
     "result": "PASS",
-    "evidence": "Paid Bills for Curry House IMYK (2 bills)\n₹750.00\nORDER #\tTIME\tTABLE / TYPE\tDISHES ORDERED\tSTALL SUBTOTAL\tMETHOD\nORD-20261105-VZYG7\t03:57 PM\tTakeaway\t1x Paneer "
+    "evidence": "Paid Bills for Curry House FDBE (2 bills)\n₹750.00\nORDER #\tTIME\tTABLE / TYPE\tDISHES ORDERED\tSTALL SUBTOTAL\tMETHOD\nORD-20261105-KGKPN\t07:38 PM\tTakeaway\t1x Paneer "
   },
   {
     "id": "C-10",
@@ -63,7 +63,7 @@
     "id": "C-11",
     "desc": "Settlement payout completed and receipt displayed with PAY number",
     "result": "PASS",
-    "evidence": "Payout receipt\nUrban Food Court\nSTALL PAYOUT RECEIPT\nReceipt\nPAY-000001\nBusiness date\n05-11-2026\nPaid at\n05/11/2026, 03:57 pm\nStall\nCurry House IMYK\nOwner\nRames"
+    "evidence": "Payout receipt\nUrban Food Court\nSTALL PAYOUT RECEIPT\nReceipt\nPAY-000001\nBusiness date\n05-11-2026\nPaid at\n05/11/2026, 07:38 pm\nStall\nCurry House FDBE\nOwner\nRames"
   },
   {
     "id": "C-12",
@@ -92,7 +92,7 @@
   {
     "id": "C-16",
     "desc": "Payout History tab accessible on same screen with recorded settlement payout",
-    "result": "PASS",
-    "evidence": "historyRows=1"
+    "result": "FAIL",
+    "evidence": "payoutRows=0"
   }
 ]

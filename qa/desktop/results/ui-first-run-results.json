@@ -21,7 +21,7 @@
     "id": "U-14b",
     "desc": "The scheduled automatic backup ran by itself and was recorded as successful",
     "result": "PASS",
-    "evidence": "foodcourt-auto-2026-11-04T06-24-21-214Z.sqlite"
+    "evidence": "foodcourt-auto-2026-11-05T17-40-48-096Z.sqlite"
   },
   {
     "id": "U-04",
@@ -39,7 +39,7 @@
     "id": "U-06",
     "desc": "The owner is shown a one-time recovery key",
     "result": "PASS",
-    "evidence": "TLCR********************"
+    "evidence": "K6GA********************"
   },
   {
     "id": "U-07",
@@ -141,7 +141,7 @@
     "id": "U-23",
     "desc": "The failure text is plain language and says the data was not changed",
     "result": "PASS",
-    "evidence": "Food Court Management Service unavailable. Contact your administrator. The database on t"
+    "evidence": "मंगलमूर्ती POS Service unavailable. Contact your administrator. The database on this com"
   },
   {
     "id": "U-24",
@@ -153,12 +153,12 @@
     "id": "U-25",
     "desc": "A PC whose food court host is switched off is told so in plain words, with Try again",
     "result": "PASS",
-    "evidence": "Food Court Management Cannot reach the food court This computer cannot reach the food co"
+    "evidence": "मंगलमूर्ती POS Cannot reach the food court This computer cannot reach the food court hos"
   },
   {
     "id": "U-LOG",
     "desc": "The support log contains no passwords or tokens",
     "result": "PASS",
-    "evidence": "8 lines"
+    "evidence": "18 lines"
   }
 ]

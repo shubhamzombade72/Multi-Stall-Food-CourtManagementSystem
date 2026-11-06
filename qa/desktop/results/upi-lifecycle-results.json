@@ -3,7 +3,7 @@
     "id": "L-01",
     "desc": "Fresh profile: built-in server started and owner created",
     "result": "PASS",
-    "evidence": "http://127.0.0.1:50325/api"
+    "evidence": "http://127.0.0.1:52572/api"
   },
   {
     "id": "L-02",
@@ -15,13 +15,13 @@
     "id": "L-03",
     "desc": "Test QR decodes (from the rendered SVG) to Rs 1.00 for the saved UPI ID with a TEST reference, and creates no order or payment",
     "result": "PASS",
-    "evidence": "upi://pay?pa=shubh.test@oksb&pn=Urban%20Food%20Court&am=1.00&cu=INR&tn=TEST-037DA057"
+    "evidence": "upi://pay?pa=shubh.test@oksb&pn=Urban%20Food%20Court&am=1.00&cu=INR&tn=TEST-3B455DDF"
   },
   {
     "id": "L-04",
     "desc": "A failed test stays untested; \"correct payee\" is recorded as the OWNER's confirmation (not a bank verification) and the handle warning remains",
     "result": "PASS",
-    "evidence": "Test scan confirmed by the owner on 11/4/2026, 3:40:21 PM. This is the owner's own confirmation, not a bank verification."
+    "evidence": "Test scan confirmed by the owner on 11/5/2026, 8:15:41 PM. This is the owner's own confirmation, not a bank verification."
   },
   {
     "id": "L-05",
@@ -33,7 +33,7 @@
     "id": "L-06a",
     "desc": "POS: QR generated = Pending, bill unpaid, amount 26.25 and reference in the decoded QR, untested-UPI-ID warning shown",
     "result": "PASS",
-    "evidence": "pending upi://pay?pa=shubh.test@oksbi&pn=Urban%20Food%20Court&am=26.25&cu=INR&tn=ORD-20261104-ARW4Z"
+    "evidence": "pending upi://pay?pa=shubh.test@oksbi&pn=Urban%20Food%20Court&am=26.25&cu=INR&tn=ORD-20261105-OB1BX"
   },
   {
     "id": "L-06b",
@@ -45,13 +45,13 @@
     "id": "L-07",
     "desc": "Payment failed: that QR is closed (cannot settle), a NEW QR with a new reference is Pending, and the bill is still unpaid",
     "result": "PASS",
-    "evidence": "ORD-20261104-ARW4Z -> ORD-20261104-ARW4Z-2; old reference pay=422"
+    "evidence": "ORD-20261105-OB1BX -> ORD-20261105-OB1BX-2; old reference pay=422"
   },
   {
     "id": "L-08",
-    "desc": "Only the cashier's manual verification pays the bill; the receipt says PAID VIA UPI - MANUALLY VERIFIED (no extra note printed; verifier and time are recorded on the server) and makes no automatic-receipt claim",
+    "desc": "Only the cashier's manual verification pays the bill; the receipt prints no paid title, UPI ID or extra note (verifier and time are recorded on the server) and makes no automatic-receipt claim",
     "result": "PASS",
-    "evidence": "PAID VIA UPI - MANUALLY VERIFIED"
+    "evidence": "0"
   },
   {
     "id": "L-09",

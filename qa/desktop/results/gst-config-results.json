@@ -3,7 +3,7 @@
     "id": "G-00",
     "desc": "Fresh profile: built-in server started and owner created",
     "result": "PASS",
-    "evidence": "http://127.0.0.1:52784/api"
+    "evidence": "http://127.0.0.1:63404/api"
   },
   {
     "id": "G-01",
@@ -45,7 +45,7 @@
     "id": "G-07",
     "desc": "Payment modal total equals the cart total (Rs 112.00)",
     "result": "PASS",
-    "evidence": "112.00 Consolidated Bill Settlement Order #ORD-20261104-KUJWV • Takeaway ✕ Total Bill Amount ₹112.00 Covers 1 dishes across participating kitchens Select Tender Method"
+    "evidence": "112.00 Consolidated Bill Settlement Order #ORD-20261106-NLMTC • Takeaway ✕ Total Bill Amount ₹112.00 Covers 1 dishes Select Tender Method Cash UPI QR Card POS Cash Rec"
   },
   {
     "id": "G-08",
@@ -57,7 +57,7 @@
     "id": "G-09",
     "desc": "Receipt 80 mm: Subtotal 100.00, GST (12%) 12.00, TOTAL 112.00 - no fixed 5%",
     "result": "PASS",
-    "evidence": "URBAN FOOD COURTConsolidated BillBill: ORD-20261104-KUJWVDate: 11/4/2026, 3:26:11 PMTakeaway1 x Thali100.00Subtotal100.00GST (12%)12.00TOTAL112.00Paid (CASH)112.00Tendered112.00Change0.00Receipt: PAY-20261104-DTJ25Cashier: GST OwnerThank you! Visit again.Power"
+    "evidence": "URBAN FOOD COURTConsolidated BillBill: ORD-20261106-NLMTCDate: 11/7/2026, 12:32:37 AMTakeaway1 x Thali100.00Subtotal100.00GST (12%)12.00TOTAL112.00Paid (CASH)112.00Tendered112.00Change0.00Receipt: PAY-20261106-MHVYMCashier: GST OwnerThank you! Visit again.Powe"
   },
   {
     "id": "G-10",
@@ -81,19 +81,19 @@
     "id": "G-12",
     "desc": "UPI QR amount is the GST-inclusive payable amount: panel Pay Rs 118.00 and QR am=118.00",
     "result": "PASS",
-    "evidence": "₹118.00 upi://pay?pa=gst.shop@upi&pn=Urban%20Food%20Court&am=118.00&cu=INR&tn=ORD-20261104-H20YW"
+    "evidence": "₹118.00 upi://pay?pa=gst.shop@upi&pn=Urban%20Food%20Court&am=118.00&cu=INR&tn=ORD-20261106-JKFGO"
   },
   {
     "id": "G-13",
     "desc": "A client still using the old 5% total (105.00) is refused by the server",
     "result": "PASS",
-    "evidence": "422 Payment amount 105.00 does not match the bill total 118.00."
+    "evidence": "409 The bill changed while it was open. The amount due is now 118.00. Please review it and confirm again."
   },
   {
     "id": "G-14",
     "desc": "UPI payment settles Rs 118.00; receipt shows GST (18%) 18.00 and TOTAL 118.00",
     "result": "PASS",
-    "evidence": "URBAN FOOD COURTConsolidated BillBill: ORD-20261104-H20YWDate: 11/4/2026, 3:26:13 PMTakeaway1 x Thali100.00Subtotal100.00GST (18%)18.00TOTAL118.00Paid (UPI_QR)118.00Receipt: PAY-20261104-LIVE9UPI Ref:"
+    "evidence": "URBAN FOOD COURTConsolidated BillBill: ORD-20261106-JKFGODate: 11/7/2026, 12:32:40 AMTakeaway1 x Thali100.00Subtotal100.00GST (18%)18.00TOTAL118.00Paid (UPI_QR)118.00Receipt: PAY-20261106-9JQL4UPI Ref"
   },
   {
     "id": "G-15",
@@ -105,60 +105,12 @@
     "id": "G-16",
     "desc": "Inclusive receipts (80 mm and 58 mm): Subtotal (including GST) 105.00, GST Included (5%) 5.00, TOTAL 105.00",
     "result": "PASS",
-    "evidence": "5 PMTakeaway1 x Combo105.00Subtotal (including GST)105.00GST Included (5%)5.00TOTAL105.00Paid (CARD)105.00Receipt: PAY-20261104-0RVL8Cashier: GST OwnerThank you"
+    "evidence": "43 AMTakeaway1 x Combo105.00Subtotal (including GST)105.00GST Included (5%)5.00TOTAL105.00Paid (CARD)105.00Receipt: PAY-20261106-ZUUMDCashier: GST OwnerThank yo"
   },
   {
-    "id": "G-17",
-    "desc": "GST disabled: the cart shows only Subtotal 100.00 and Grand Total 100.00; payment modal 100.00",
-    "result": "PASS",
-    "evidence": "Subtotal: ₹100.00 | Grand Total: ₹100.00"
-  },
-  {
-    "id": "G-18",
-    "desc": "GST-disabled receipt: no GST line, no percentage, TOTAL 100.00",
-    "result": "PASS",
-    "evidence": "URBAN FOOD COURTConsolidated BillBill: ORD-20261104-NQTAJDate: 11/4/2026, 3:26:17 PMTakeaway1 x Thali100.00Subtotal100.00TOTAL100.00Paid (SPLIT)100.00Receipt: PAY-20261104-2OMTKCashier: GST OwnerThank"
-  },
-  {
-    "id": "G-19",
-    "desc": "GST is now disabled, but the first bill still shows its own GST (12%) 12.00 and total 112.00 in Orders and on a reprint",
-    "result": "PASS",
-    "evidence": "Subtotal ₹100.00 | GST (12%) ₹12.00 || e: 11/4/2026, 3:26:11 PMTakeaway1 x Thali100.00Subtotal100.00GST (12%)12.00TOTAL112.00Paid (CASH)112.00Tendered112.00Change0.00Receipt: PAY-20261104-DTJ25Cashie"
-  },
-  {
-    "id": "G-20",
-    "desc": "Daily closing figures: GST as billed 35.00 (12 + 18 + 5 + 0), net sales 435.00, taxable gross 400.00",
-    "result": "PASS",
-    "evidence": "{\"total_orders\":4,\"gross_sales\":\"400.00\",\"discounts\":\"0.00\",\"net_sales\":\"435.00\",\"tax_collected\":\"35.00\",\"cash_collected\":\"112.00\",\"digital_collected\":\"323.00\"}"
-  },
-  {
-    "id": "G-21",
-    "desc": "Sales report agrees: paid GST 35.00, paid subtotal 400.00, paid total 435.00",
-    "result": "PASS",
-    "evidence": "{\"day\":\"2026-11-04\",\"orders_count\":4,\"cancelled_count\":0,\"paid_count\":4,\"paid_subtotal\":400,\"paid_tax\":35,\"paid_total\":435}"
-  },
-  {
-    "id": "G-22",
-    "desc": "Daily Closing screen shows \"Includes GST ₹35.00 as billed\" (no fixed 5% text)",
-    "result": "PASS",
-    "evidence": "Includes GST ₹35.00 as billed"
-  },
-  {
-    "id": "G-23",
-    "desc": "All four bills kept their own mode/rate/GST after every configuration change",
-    "result": "PASS",
-    "evidence": "100.00:none:0.00:0.00 105.00:inclusive:5.00:5.00 112.00:exclusive:12.00:12.00 118.00:exclusive:18.00:18.00"
-  },
-  {
-    "id": "G-24",
-    "desc": "Every successful GST change (4) is in the audit log with old and new values; refused changes are not",
-    "result": "PASS",
-    "evidence": "4 entries"
-  },
-  {
-    "id": "G-25",
-    "desc": "No unexpected renderer errors",
-    "result": "PASS",
-    "evidence": ""
+    "id": "G-ERR",
+    "desc": "Journey completed without an unexpected error",
+    "result": "FAIL",
+    "evidence": "locator.click: Timeout 30000ms exceeded. Call log: \u001b[2m  - waiting for getByRole('dialog', { name: 'Consolidated bill settlement' }).getByRole('button', { name: 'Split' })\u001b[22m "
   }
 ]
