@@ -189,6 +189,31 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::post('/billing/upi-requests/{reference}/status', [BillingController::class, 'upiRequestStatus'])->where('reference', '[A-Za-z0-9._-]{1,40}');
     Route::get('/billing/payments', [BillingController::class, 'paymentHistory']);
 
+    // Central raw material store
+    Route::get('/store/items', [\App\Http\Controllers\Api\StoreController::class, 'index']);
+    Route::post('/store/items', [\App\Http\Controllers\Api\StoreController::class, 'store']);
+    Route::put('/store/items/{id}', [\App\Http\Controllers\Api\StoreController::class, 'update'])->whereNumber('id');
+    Route::post('/store/items/{id}/issue', [\App\Http\Controllers\Api\StoreController::class, 'issue'])->whereNumber('id');
+    Route::post('/store/items/{id}/return', [\App\Http\Controllers\Api\StoreController::class, 'returnFromStall'])->whereNumber('id');
+    Route::post('/store/items/{id}/waste', [\App\Http\Controllers\Api\StoreController::class, 'waste'])->whereNumber('id');
+    Route::post('/store/items/{id}/count', [\App\Http\Controllers\Api\StoreController::class, 'count'])->whereNumber('id');
+    Route::get('/store/movements', [\App\Http\Controllers\Api\StoreController::class, 'movements']);
+    Route::get('/store/import', [\App\Http\Controllers\Api\StoreController::class, 'importPreview']);
+    Route::post('/store/import', [\App\Http\Controllers\Api\StoreController::class, 'import']);
+    Route::get('/store/suppliers', [\App\Http\Controllers\Api\StorePurchaseController::class, 'suppliers']);
+    Route::post('/store/suppliers', [\App\Http\Controllers\Api\StorePurchaseController::class, 'storeSupplier']);
+    Route::get('/store/suppliers/{id}', [\App\Http\Controllers\Api\StorePurchaseController::class, 'showSupplier'])->whereNumber('id');
+    Route::put('/store/suppliers/{id}', [\App\Http\Controllers\Api\StorePurchaseController::class, 'updateSupplier'])->whereNumber('id');
+    Route::get('/store/purchases', [\App\Http\Controllers\Api\StorePurchaseController::class, 'index']);
+    Route::post('/store/purchases', [\App\Http\Controllers\Api\StorePurchaseController::class, 'store']);
+    Route::post('/store/purchases/{id}/receive', [\App\Http\Controllers\Api\StorePurchaseController::class, 'receive'])->whereNumber('id');
+    Route::post('/store/purchases/{id}/cancel', [\App\Http\Controllers\Api\StorePurchaseController::class, 'cancel'])->whereNumber('id');
+    Route::get('/reports/store-stock', [\App\Http\Controllers\Api\StoreReportController::class, 'stock']);
+    Route::get('/reports/store-issues', [\App\Http\Controllers\Api\StoreReportController::class, 'issues']);
+    Route::get('/reports/store-purchases', [\App\Http\Controllers\Api\StoreReportController::class, 'purchases']);
+    Route::get('/reports/store-waste', [\App\Http\Controllers\Api\StoreReportController::class, 'waste']);
+    Route::get('/reports/store-counts', [\App\Http\Controllers\Api\StoreReportController::class, 'counts']);
+
     // Stall Purchases
     Route::get('/purchases', [PurchaseController::class, 'index']);
     Route::post('/purchases', [PurchaseController::class, 'store']);

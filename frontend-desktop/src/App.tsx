@@ -1,4 +1,5 @@
 import React from 'react';
+import { startUnsavedWorkReporting } from './lib/unsavedWork';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
@@ -28,6 +29,9 @@ import { BackupNotice } from './components/BackupNotice';
 import { PrintFailureBanner } from './components/PrintFailureBanner';
 import { PinLoginPage } from './pages/PinLoginPage';
 import { PinSetupPage } from './pages/PinSetupPage';
+import { StorePage } from './pages/StorePage';
+import { StorePurchasesPage } from './pages/StorePurchasesPage';
+import { StoreReceivedPage } from './pages/StoreReceivedPage';
 
 /** First screen per role (the server still authorizes every request). */
 export const homeFor = (role: string): string => {
@@ -42,6 +46,8 @@ export const homeFor = (role: string): string => {
       return '/tracking';
     case 'waiter':
       return '/tracking';
+    case 'store_staff':
+      return '/store';
     default:
       return '/settings';
   }
@@ -121,6 +127,9 @@ const ProtectedLayout: React.FC = () => {
               <Route path="/menu" element={<MenuPage />} />
               <Route path="/settlements" element={<SettlementsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/store" element={user.role === 'owner' || user.role === 'store_staff' ? <StorePage /> : <Navigate to="/" replace />} />
+              <Route path="/store/purchases" element={user.role === 'owner' || user.role === 'store_staff' ? <StorePurchasesPage /> : <Navigate to="/" replace />} />
+              <Route path="/store/received" element={user.role === 'stall_manager' ? <StoreReceivedPage /> : <Navigate to="/" replace />} />
               <Route path="/food-court-settings" element={<FoodCourtSettingsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/updates" element={user.role === 'owner' ? <UpdatesPage /> : <Navigate to="/" replace />} />
@@ -134,6 +143,7 @@ const ProtectedLayout: React.FC = () => {
 };
 
 export const App: React.FC = () => {
+  React.useEffect(() => startUnsavedWorkReporting(), []);
   return (
     <AuthProvider>
       <HashRouter>

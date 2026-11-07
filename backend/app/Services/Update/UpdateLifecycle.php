@@ -31,12 +31,15 @@ class UpdateLifecycle
 
     public const STATUSES = [self::AVAILABLE, self::APPROVED, self::DOWNLOADING, self::VERIFYING, self::BACKUP, self::MIGRATING, self::INSTALLING, self::HEALTH, self::COMPLETED, self::FAILED, self::RECOVERING, self::RECOVERED];
 
-    /** Forward path. FAILED and RECOVERY_IN_PROGRESS are reachable from any status that is not final (see next()). */
+    /**
+     * Forward path. FAILED and RECOVERY_IN_PROGRESS are reachable from any status that is not final (see next()). A device may
+     * download before anyone approves, so approval can arrive at any point up to verifying, but nothing past that without it.
+     */
     private const FORWARD = [
-        self::AVAILABLE => [self::APPROVED],
-        self::APPROVED => [self::DOWNLOADING],
-        self::DOWNLOADING => [self::VERIFYING],
-        self::VERIFYING => [self::BACKUP, self::DOWNLOADING],
+        self::AVAILABLE => [self::APPROVED, self::DOWNLOADING],
+        self::APPROVED => [self::DOWNLOADING, self::VERIFYING, self::BACKUP, self::INSTALLING],
+        self::DOWNLOADING => [self::VERIFYING, self::APPROVED],
+        self::VERIFYING => [self::BACKUP, self::DOWNLOADING, self::APPROVED],
         self::BACKUP => [self::MIGRATING, self::INSTALLING],
         self::MIGRATING => [self::INSTALLING],
         self::INSTALLING => [self::HEALTH],
@@ -76,6 +79,13 @@ class UpdateLifecycle
                 return self::refuse($locked, $client, $status, 'illegal_transition', "Cannot move from {$locked->status} to {$status}.");
             }
             if ($status === self::VERIFYING && !self::downloadHappened($locked)) {
+                return self::refuse($locked, $client, $status, 'no_download', 'No download of this package was recorded for this device.');
+            }
+            // Having a package is not permission to install it
+            if (in_array($status, [self::BACKUP, self::INSTALLING], true) && $locked->decision !== 'approved') {
+                return self::refuse($locked, $client, $status, 'not_approved', 'This update has not been approved on this computer.');
+            }
+            if (in_array($status, [self::BACKUP, self::INSTALLING], true) && $locked->status === self::APPROVED && !self::downloadHappened($locked)) {
                 return self::refuse($locked, $client, $status, 'no_download', 'No download of this package was recorded for this device.');
             }
 

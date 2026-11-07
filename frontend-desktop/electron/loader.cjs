@@ -18,7 +18,9 @@ const path = require('node:path');
 if (process.env.FOODCOURT_USER_DATA_DIR) app.setPath('userData', path.resolve(process.env.FOODCOURT_USER_DATA_DIR));
 
 const rel = require('./update/releases.cjs');
-const { writeJsonDurable } = require('./update/format.cjs');
+const schedule = require('./update/schedule.cjs');
+const trust = require('./update/trust.cjs');
+const { compareVersions, readJsonOr, writeJsonDurable } = require('./update/format.cjs');
 
 const packaged = app.isPackaged;
 const testRoot = !packaged ? process.env.FOODCOURT_UPDATE_ROOT : '';
@@ -26,14 +28,8 @@ const updatesActive = packaged || Boolean(testRoot);
 const root = testRoot ? path.resolve(testRoot) : rel.defaultRoot();
 const dirs = rel.layout(root);
 
-function loadTrust() {
-  const file = !packaged && process.env.FOODCOURT_UPDATE_TRUST ? process.env.FOODCOURT_UPDATE_TRUST : path.join(__dirname, 'update-trust.json');
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8')).keys || {};
-  } catch {
-    return {};
-  }
-}
+const installedTrustFile = !packaged && process.env.FOODCOURT_UPDATE_TRUST ? process.env.FOODCOURT_UPDATE_TRUST : path.join(__dirname, 'update-trust.json');
+const loadTrust = () => trust.resolveTrust(installedTrustFile, dirs.trustStatement);
 
 const installed = () => ({
   version: app.getVersion(),
@@ -67,8 +63,8 @@ const PROGRESS_PAGE = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doct
 main{width:420px;text-align:center}h1{font-size:18px;font-weight:600;margin:0 0 12px}p{margin:0;color:#94a3b8;line-height:1.5}</style></head>
 <body><main><h1 id="t">Updating the application</h1><p id="m">Please do not turn off this computer.</p></main></body></html>`)}`;
 
-function progressWindow() {
-  const win = new BrowserWindow({ width: 520, height: 220, resizable: false, minimizable: false, maximizable: false, autoHideMenuBar: true, title: 'Updating', backgroundColor: '#0f172a', webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true } });
+function progressWindow({ visible = true } = {}) {
+  const win = new BrowserWindow({ show: visible, width: 520, height: 220, resizable: false, minimizable: false, maximizable: false, autoHideMenuBar: true, title: 'Updating', backgroundColor: '#0f172a', webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true } });
   win.on('close', (e) => e.preventDefault()); // closing must not interrupt an update
   win.loadURL(PROGRESS_PAGE).catch(() => undefined);
   return {
@@ -110,7 +106,7 @@ function makeBootstrap(window) {
 async function takeLock(timeoutMs = 60000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (app.requestSingleInstanceLock()) return true;
+    if (app.hasSingleInstanceLock() || app.requestSingleInstanceLock()) return true;
     await new Promise((r) => setTimeout(r, 300));
   }
   return false;
@@ -122,13 +118,14 @@ function rememberResult(result, version) {
     : { outcome: result.needs_developer ? 'needs_developer' : 'recovered', version, failure: result.failure || result.reason || null, restored_database: Boolean(result.restored_database), running_version: result.running_version || null, at: new Date().toISOString() });
 }
 
-async function runBootstrapper(jobFile) {
+/** `silent`: the app was closed and the PC may be unattended, so nothing appears and the app does not open afterwards. */
+async function runBootstrapper(jobFile, { silent = false } = {}) {
   await app.whenReady();
-  const window = progressWindow();
+  const window = progressWindow({ visible: !silent });
   fileLog('INFO', `Bootstrapper started for ${jobFile}`);
   const finish = (code) => {
     window.destroy();
-    restartApp();
+    if (!silent) restartApp();
     app.exit(code);
   };
   try {
@@ -182,8 +179,53 @@ function runBlocked(message) {
   });
 }
 
+/** With the app closed there is no cart or dialog to lose, but a print job queued for later or an open UPI payment still counts. */
+async function closedAppIsIdle() {
+  const jobs = readJsonOr(path.join(app.getPath('userData'), 'printing', 'jobs.json'))?.jobs || [];
+  if (jobs.some((j) => j.status === 'queued')) return { idle: false, why: 'print jobs are queued' };
+  if (readJsonOr(dirs.pending)?.mode === 'remote') return { idle: true };
+  try {
+    const { artisanFor, locateRuntime } = require('./embedded-server.cjs');
+    const active = rel.readActive(dirs);
+    const runtime = locateRuntime(active?.version ? path.join(rel.releaseDir(dirs, active.version), 'server') : installed().server);
+    const lines = (await artisanFor(runtime, dataDir())(['foodcourt:update-db', 'activity'])).trim().split(/\r?\n/);
+    const report = JSON.parse(lines[lines.length - 1]);
+    return report.ok && report.open_upi === 0 ? { idle: true } : { idle: false, why: 'a UPI payment is open' };
+  } catch {
+    return { idle: false, why: 'open payments could not be checked' }; // unknown means busy
+  }
+}
+
+/** A verified update that is due. Returns the job file to run, or null. Leaves everything alone otherwise. */
+async function dueInstall(trigger) {
+  const pending = readJsonOr(dirs.pending);
+  if (!pending?.version) return null;
+  const decision = schedule.automaticInstall({
+    pending,
+    policy: schedule.normalizePolicy(readJsonOr(dirs.policy)),
+    currentVersion: rel.readActive(dirs)?.version || app.getVersion(),
+    lastResult: readJsonOr(path.join(dirs.state, 'last-result.json')),
+    now: new Date(),
+    trigger,
+    compareVersions,
+    snooze: readJsonOr(dirs.snooze),
+  });
+  if (!decision.install) return null;
+  const gate = await closedAppIsIdle();
+  if (!gate.idle) {
+    fileLog('INFO', `Update ${pending.version} is waiting: ${gate.why}`);
+    return null;
+  }
+  const { writeJob } = require('./update/bootstrap.cjs');
+  const jobFile = writeJob(dirs, { ...pending, parent_pid: 0 });
+  fs.rmSync(dirs.pending, { force: true });
+  fileLog('INFO', `Update ${pending.version} is due (${decision.reason})`);
+  return jobFile;
+}
+
 function runProgram(release) {
   fileLog('INFO', `Program running: ${release ? release.manifest.version : 'installed files'}`);
+  process.env.FOODCOURT_INSTALLED_TRUST_FILE = installedTrustFile;
   if (release) {
     app.setVersion(release.manifest.version);
     process.env.FOODCOURT_ORIGINAL_SERVER_DIR = process.env.FOODCOURT_SERVER_DIR || '';
@@ -203,15 +245,28 @@ async function start() {
   const supportCommand = process.argv.some((a) => a.startsWith('--diagnose-login='));
   if (!updatesActive || supportCommand) return runProgram(null);
 
-  // Another instance, or a running bootstrapper, owns everything below
+  // Another instance, or a running bootstrapper, owns everything below. An open app handles its own maintenance.
+  const maintenance = process.argv.includes('--fc-maintenance');
   if (!app.requestSingleInstanceLock()) return app.quit();
 
-  const decision = rel.decideBoot({ journal: rel.readJournal(dirs), active: rel.readActive(dirs) });
+  const decision = rel.decideBoot({ journal: rel.readJournal(dirs), active: rel.readActive(dirs), installedVersion: app.getVersion() });
   if (decision.action === 'blocked') return runBlocked(decision.message);
   if (decision.action === 'recover') return runRecovery(decision.reason);
+  if (decision.clearActive) {
+    fileLog('INFO', `A newer installer (${app.getVersion()}) replaced release ${rel.readActive(dirs)?.version}; running the installed files`);
+    rel.clearActive(dirs);
+  }
+
+  const dueJob = await dueInstall(maintenance ? 'task' : 'start').catch((err) => {
+    fileLog('ERROR', `Could not check for a due update: ${err.message}`);
+    return null;
+  });
+  if (dueJob) return runBootstrapper(dueJob, { silent: maintenance });
+  if (maintenance) return app.exit(0);
+
   if (!decision.release) return runProgram(null);
 
-  const verified = await rel.verifyReleaseForBoot(dirs, decision.release, loadTrust());
+  const verified = await rel.verifyReleaseForBoot(dirs, decision.release, loadTrust(), Number(process.versions.electron.split('.')[0]));
   if (!verified.ok) {
     fileLog('ERROR', `Release ${decision.release} failed verification: ${verified.problem}`);
     if (decision.trial) return runRecovery(`the new version failed verification: ${verified.problem}`);

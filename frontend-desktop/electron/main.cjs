@@ -13,7 +13,7 @@
  *  - Navigation away from the app, new windows and web permission requests (camera, mic, geolocation...)
  *    are refused.
  */
-const { app, BrowserWindow, dialog, ipcMain, Menu, net, safeStorage, session, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, net, powerMonitor, safeStorage, session, shell } = require('electron');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -298,6 +298,7 @@ const saveSettings = (patch) => writeJsonAtomic(settingsPath(), { ...readSetting
 const backupDir = () => readSettings().backupDir || path.join(dataDir(), 'backups');
 
 let backupBusy = false;
+let restoreBusy = false;
 
 async function runBackup(kind) {
   if (!embedded) return { ok: false, error: 'The application is not running.' };
@@ -609,8 +610,22 @@ function buildMenu() {
 const BRIDGE_KEYS = [
   'authVaultClear', 'authVaultSetup', 'authVaultStatus', 'authVaultUnlock', 'backupNow', 'chooseBackupFolder', 'connectToHost', 'enqueuePrintJob', 'getAppInfo', 'getBackupStatus', 'getConfig', 'getDiagnostics', 'getPrintConfig',
   'getPrinterStatus', 'getStartupStatus', 'listPrintJobs', 'listPrinters', 'log', 'onPrintJobsChanged', 'previewPrintDocument', 'print', 'reprintPrintJob',
-  'restoreBackup', 'retryPrintJob', 'retryStart', 'sendTestPrint', 'setPrintConfig', 'updateCheck', 'updateEnroll', 'updateGetState', 'updateNow', 'updateRemindLater', 'useBuiltInServer',
+  'restoreBackup', 'retryPrintJob', 'retryStart', 'sendTestPrint', 'setPrintConfig', 'updateApprove', 'updateCheck', 'updateEnroll', 'updateGetState', 'updateInstallFromFolder', 'updateNow', 'updatePauseDownload', 'updateRemindLater', 'updateReportActivity', 'updateSetPolicy', 'useBuiltInServer',
 ].sort();
+
+/** Installing and changing update rules are owner tasks. The server says who holds this token, not the renderer. */
+async function isOwnerToken(token) {
+  if (typeof token !== 'string' || !token || token.length > 500) return false;
+  try {
+    const cfg = await resolveConfig();
+    if (!cfg.apiBaseUrl) return false;
+    const res = await net.fetch(`${cfg.apiBaseUrl}/auth/me`, { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }, redirect: 'error' });
+    if (!res.ok) return false;
+    return (await res.json())?.data?.user?.role === 'owner';
+  } catch {
+    return false;
+  }
+}
 
 let updates = null; // software updates (electron/update), created once the app is ready
 let printing = null; // thermal printing service (electron/printing), created once the app is ready
@@ -671,8 +686,25 @@ function registerIpc() {
   handle('update:get-state', () => updates.agent.publicState());
   handle('update:check', () => updates.agent.check());
   handle('update:enroll', (_e, code) => updates.agent.enroll(code, os.hostname()));
-  handle('update:now', () => updates.agent.updateNow());
+  const ownerOnly = (fn) => async (event, token, ...args) => {
+    if (await isOwnerToken(token)) return fn(event, ...args);
+    log('WARN', 'An update action was refused: the signed-in account is not the owner');
+    return { ok: false, code: 'not_owner', error: 'Only the owner can do this.' };
+  };
+  handle('update:now', ownerOnly(() => updates.agent.updateNow()));
   handle('update:remind-later', () => updates.agent.remindLater());
+  handle('update:set-policy', ownerOnly((_e, next) => updates.agent.setPolicy(next)));
+  handle('update:approve', ownerOnly(() => updates.agent.approvePending()));
+  handle('update:pause-download', ownerOnly((_e, paused) => updates.agent.pauseDownload(paused === true)));
+  handle('update:install-from-folder', ownerOnly(async (event) => {
+    const picked = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), { title: 'Choose the update folder (on the pen drive)', properties: ['openDirectory'] });
+    if (picked.canceled || !picked.filePaths[0]) return { ok: false, cancelled: true };
+    return updates.agent.prepareFromFolder(picked.filePaths[0]);
+  }));
+  handle('update:report-activity', (_e, unsaved) => {
+    updates.activity.rendererReport(unsaved);
+    return true;
+  });
 
   handle('desktop:get-backup-status', () => backupStatus());
   handle('desktop:backup-now', () => runBackup('manual'));
@@ -686,7 +718,14 @@ function registerIpc() {
     log('INFO', 'Backup folder changed');
     return { ok: true };
   });
-  handle('desktop:restore-backup', (event, name) => restoreBackup(BrowserWindow.fromWebContents(event.sender), typeof name === 'string' ? name : null));
+  handle('desktop:restore-backup', async (event, name) => {
+    restoreBusy = true;
+    try {
+      return await restoreBackup(BrowserWindow.fromWebContents(event.sender), typeof name === 'string' ? name : null);
+    } finally {
+      restoreBusy = false;
+    }
+  });
 
   handle('desktop:log', (_e, level, message) => {
     const lvl = ['INFO', 'WARN', 'ERROR'].includes(level) ? level : 'INFO';
@@ -766,7 +805,35 @@ if (diagnoseArg) {
       log,
       listPrinters: async () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents.getPrintersAsync() : []),
     });
-    updates = createUpdates({ app, net, safeStorage, log, shutdownServer, dataDir, readConfig, resolveConfig, probe, getStartup: () => startup });
+    updates = createUpdates({
+      powerMonitor,
+      app,
+      net,
+      safeStorage,
+      log,
+      shutdownServer,
+      dataDir,
+      readConfig,
+      resolveConfig,
+      probe,
+      getStartup: () => startup,
+      printBusy: async () => (await printing.service.list(200)).some((j) => j.status === 'queued' || j.status === 'processing'),
+      maintenanceBusy: () => backupBusy || restoreBusy,
+      hasWindow: () => Boolean(mainWindow && !mainWindow.isDestroyed()),
+      // A paired terminal has no payments of its own: the host holds them, and each of its screens reports its own work
+      openUpiCount: async () => {
+        if (readConfig().apiBaseUrl) return 0;
+        const report = backup.parseReport(await embedded.artisan(['foodcourt:update-db', 'activity']));
+        if (!report || !report.ok) throw new Error('no answer');
+        return report.open_upi;
+      },
+    });
+    session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
+      updates.activity.requestStarted(details.id, details.method);
+      callback({});
+    });
+    session.defaultSession.webRequest.onCompleted({ urls: ['http://*/*', 'https://*/*'] }, (details) => updates.activity.requestFinished(details.id));
+    session.defaultSession.webRequest.onErrorOccurred({ urls: ['http://*/*', 'https://*/*'] }, (details) => updates.activity.requestFinished(details.id));
     registerIpc();
     printing.registerIpc();
     buildMenu();

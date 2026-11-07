@@ -45,6 +45,8 @@ return [
         'trusted_keys' => env('FOODCOURT_UPDATE_TRUSTED_KEYS', ''),
         'storage_path' => env('FOODCOURT_UPDATE_STORAGE', storage_path('app/update-packages')),
         'download_ttl_seconds' => (int) env('FOODCOURT_UPDATE_DOWNLOAD_TTL', 600),
+        // A root-signed key change for clients to pick up (scripts/release/rotate-trust.mjs). Public, and verified on the client.
+        'trust_statement' => env('FOODCOURT_UPDATE_TRUST_STATEMENT'),
     ],
     'api_contract' => 1,
     'app_version' => env('FOODCOURT_APP_VERSION'),

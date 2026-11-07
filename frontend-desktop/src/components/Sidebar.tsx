@@ -20,6 +20,9 @@ import {
   ListChecks,
   Clock,
   CloudDownload,
+  Package,
+  PackageCheck,
+  Truck,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -65,6 +68,14 @@ export const Sidebar: React.FC = () => {
         { to: '/menu', label: 'Menu Catalog', icon: UtensilsCrossed, show: isOwner || role === 'stall_manager' },
         { to: '/customers', label: 'Customers', icon: Contact, show: isOwner || isCashier },
         { to: '/staff', label: 'Staff & Permissions', icon: Users, show: isOwner },
+      ],
+    },
+    {
+      title: 'Central Store',
+      links: [
+        { to: '/store', label: 'Raw Materials', icon: Package, show: isOwner || role === 'store_staff' },
+        { to: '/store/purchases', label: 'Purchases & Suppliers', icon: Truck, show: isOwner || role === 'store_staff' },
+        { to: '/store/received', label: 'Stock Received', icon: PackageCheck, show: role === 'stall_manager' },
       ],
     },
     {

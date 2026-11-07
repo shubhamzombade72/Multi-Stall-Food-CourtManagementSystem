@@ -7,6 +7,9 @@ import { isStruck, statusClasses, statusKind, type StatusKind } from '../lib/sta
 export const inputClass =
   'w-full px-2.5 py-1.5 rounded-lg border border-line text-sm bg-surface text-fg placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-focus disabled:bg-surface-2 disabled:text-muted';
 
+/** The same input look for a filter that sits in a row with other controls. */
+export const compactInputClass = inputClass.replace('w-full', 'w-auto');
+
 export const buttonClass = {
   primary: 'px-3 py-1.5 bg-primary text-primary-fg hover:opacity-90 font-semibold text-sm rounded-lg flex items-center space-x-1.5 disabled:opacity-50',
   secondary: 'px-3 py-1.5 border border-line bg-surface hover:bg-surface-2 text-fg font-semibold text-sm rounded-lg flex items-center space-x-1.5 disabled:opacity-50',

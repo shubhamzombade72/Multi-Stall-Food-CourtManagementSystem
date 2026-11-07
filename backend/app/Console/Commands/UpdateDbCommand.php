@@ -16,6 +16,7 @@ use Illuminate\Console\Command;
  *   compare   --before= --after=    differences between two snapshot files
  *   resolve   --before=             after a failure: is the database still as it was before?
  *   describe                        table/column map of this database (the release builder uses it)
+ *   activity                        is a payment open, so that the app must not close for an update?
  */
 class UpdateDbCommand extends Command
 {
@@ -40,11 +41,24 @@ class UpdateDbCommand extends Command
                 'compare' => $this->compare(),
                 'resolve' => $this->finish($engine->resolveIfUnchanged($this->readJson((string) $this->option('before')))),
                 'describe' => $this->finish(['ok' => true, 'schema' => $engine->schema(), 'fingerprint' => LocalMigrationEngine::fingerprint($engine->schema())]),
+                'activity' => $this->finish(['ok' => true, 'open_upi' => $this->openUpiPayments()]),
                 default => $this->finish(['ok' => false, 'problems' => ['Unknown action.']]),
             };
         } catch (\Throwable $e) {
             return $this->finish(['ok' => false, 'code' => 'exception', 'problems' => [mb_substr($e->getMessage(), 0, 500)]]);
         }
+    }
+
+    /**
+     * Open UPI requests touched in the last 12 hours. An older one was abandoned, not in progress, and a QR nobody closed must
+     * not hold back every future update. It stays open for staff to deal with, and survives the update like any other row.
+     */
+    private function openUpiPayments(): int
+    {
+        return \App\Models\UpiPaymentRequest::query()
+            ->whereIn('status', \App\Models\UpiPaymentRequest::OPEN)
+            ->where('updated_at', '>=', now()->subHours(12))
+            ->count();
     }
 
     private function preflight(LocalMigrationEngine $engine): int

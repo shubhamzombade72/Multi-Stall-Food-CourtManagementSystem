@@ -403,7 +403,38 @@ class UpdateServiceTest extends TestCase
     }
 
     // ------------------------------------------------------------------ download
-    public function test_download_requires_approval_and_a_live_token_bound_to_the_device(): void
+    public function test_a_download_needs_no_approval_but_installing_does(): void
+    {
+        $owner = $this->owner();
+        $client = $this->enroll($owner);
+        $this->publishedAndDeployed($owner, $client);
+        $target = $this->check($client)->json('data.update.target_id');
+
+        $token = $this->withHeaders($client['headers'])->postJson("/api/updates/client/targets/{$target}/download-token")->assertOk()->json('data.token');
+        $this->assertNotEmpty($token, 'background download before anyone approved');
+        $this->reportStatus($client, $target, 'DOWNLOADING')->assertOk();
+        $this->withHeaders($client['headers'])->get("/api/updates/client/download/{$token}")->assertOk();
+        $this->reportStatus($client, $target, 'VERIFYING')->assertOk();
+
+        $this->reportStatus($client, $target, 'BACKUP_IN_PROGRESS')->assertStatus(409)->assertJsonPath('code', 'not_approved');
+        $this->assertSame('VERIFYING', UpdateDeploymentTarget::find($target)->status, 'downloaded is not permission to install');
+
+        $this->withHeaders($client['headers'])->postJson("/api/updates/client/targets/{$target}/decision", ['decision' => 'approve', 'source' => 'silent policy'])->assertOk()->assertJsonPath('data.status', 'CLIENT_APPROVED');
+        $this->reportStatus($client, $target, 'BACKUP_IN_PROGRESS')->assertOk();
+    }
+
+    public function test_approval_before_any_download_still_cannot_jump_to_installing(): void
+    {
+        $owner = $this->owner();
+        $client = $this->enroll($owner);
+        $this->publishedAndDeployed($owner, $client);
+        $target = $this->check($client)->json('data.update.target_id');
+        $this->withHeaders($client['headers'])->postJson("/api/updates/client/targets/{$target}/decision", ['decision' => 'approve'])->assertOk();
+
+        $this->reportStatus($client, $target, 'BACKUP_IN_PROGRESS')->assertStatus(409)->assertJsonPath('code', 'no_download');
+    }
+
+    public function test_a_live_download_token_is_bound_to_the_device(): void
     {
         $owner = $this->owner();
         $client = $this->enroll($owner);
@@ -411,9 +442,6 @@ class UpdateServiceTest extends TestCase
         $this->publishedAndDeployed($owner, $client);
         $target = $this->check($client)->json('data.update.target_id');
 
-        $this->withHeaders($client['headers'])->postJson("/api/updates/client/targets/{$target}/download-token")->assertStatus(409)->assertJsonPath('code', 'not_approved');
-
-        $this->withHeaders($client['headers'])->postJson("/api/updates/client/targets/{$target}/decision", ['decision' => 'approve'])->assertOk();
         $token = $this->withHeaders($client['headers'])->postJson("/api/updates/client/targets/{$target}/download-token")->assertOk()->json('data.token');
         $this->assertDatabaseMissing('update_download_tokens', ['token_hash' => $token]);
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { setUnsavedWork } from '../lib/unsavedWork';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { statusChip } from '../lib/status';
 import { apiClient } from '../api/client';
@@ -231,6 +232,16 @@ export const PosPage: React.FC = () => {
   };
 
   const clearCart = () => setCart([]);
+
+  // An update must never close the app under an open cart or payment
+  useEffect(() => {
+    setUnsavedWork('cart', cart.length > 0);
+    return () => setUnsavedWork('cart', false);
+  }, [cart.length]);
+  useEffect(() => {
+    setUnsavedWork('payment', Boolean(activePaymentOrder));
+    return () => setUnsavedWork('payment', false);
+  }, [activePaymentOrder]);
 
   // A changed order is a different order: new key. An unchanged retry keeps the key (no duplicate).
   useEffect(() => {

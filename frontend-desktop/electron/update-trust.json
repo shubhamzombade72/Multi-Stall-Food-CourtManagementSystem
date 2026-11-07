@@ -1,4 +1,9 @@
 {
-  "_comment": "PUBLIC Ed25519 keys allowed to sign updates, as { \"keys\": { \"<key id>\": \"<base64>\" } }. Created by scripts/release/keygen.mjs. Empty means updates are disabled. Never put a private key here.",
-  "keys": {}
+  "_comment": "PUBLIC Ed25519 keys allowed to sign updates. root rotates signing keys and is kept offline. Never put a private key here.",
+  "root": {
+    "root-2026": "fel+J4TDSwRQkYNSZUYgB36Eu4SUX6xFnfAcDTWabV8="
+  },
+  "keys": {
+    "prod-2026": "g5IVQWFVPxX7bL7MSWjQg218I8qcJZAm6bPSP3WzNUY="
+  }
 }

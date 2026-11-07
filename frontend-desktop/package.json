@@ -4,7 +4,7 @@
   "description": "MangalMurti POS - Food Court Management & Point of Sale System for Windows desktop (Owner, Cashier POS, Orders & Table Tracking). Runs on one PC with its own database, or joins a shared food court host.",
   "author": "MangalMurti Tech Solution",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.3.3",
   "type": "module",
   "main": "electron/loader.cjs",
   "scripts": {
@@ -22,7 +22,11 @@
     "release:keygen": "node scripts/release/keygen.mjs",
     "release:baseline": "node scripts/release/baseline.mjs",
     "release:build": "node scripts/release/build-release.mjs",
-    "release:publish": "node scripts/release/publish-release.mjs"
+    "release:publish": "node scripts/release/publish-release.mjs",
+    "release": "node scripts/release/release.mjs",
+    "release:export": "node scripts/release/export-offline.mjs",
+    "send-update": "node scripts/release/send-update.mjs",
+    "release:rotate": "node scripts/release/rotate-trust.mjs"
   },
   "dependencies": {
     "axios": "^1.7.7",

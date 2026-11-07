@@ -39,10 +39,25 @@ export interface DesktopAppInfo {
   dataDir: string | null;
 }
 
+export interface UpdatePolicy {
+  mode: 'idle' | 'silent' | 'approve_once' | 'ask';
+  window: { start: string; end: string };
+}
+
 export interface UpdateState {
   enabled: boolean;
-  /** why updates cannot run on this installation */
+  /** why online updates cannot run on this installation */
   blocked: string | null;
+  /** a pen-drive update needs only this */
+  hasKeys: boolean;
+  policy: UpdatePolicy;
+  /** one fixed rule for every PC, so there is nothing to choose */
+  policyLocked?: boolean;
+  /** downloaded and verified, waiting for its install time */
+  pending: { version: string; source: 'online' | 'file'; readyAt: string; approved: boolean; installAt: string | null } | null;
+  /** why the idle gate last said no */
+  waitingFor: string[];
+  paused: boolean;
   enrolled: boolean;
   channel: string | null;
   currentVersion: string;
@@ -142,8 +157,13 @@ interface DesktopBridge {
   updateGetState(): Promise<UpdateState>;
   updateCheck(): Promise<UpdateState>;
   updateEnroll(code: string): Promise<{ ok: boolean; error?: string }>;
-  updateNow(): Promise<{ ok: boolean; error?: string; code?: string }>;
+  updateNow(token: string): Promise<{ ok: boolean; error?: string; code?: string }>;
   updateRemindLater(): Promise<UpdateState>;
+  updateSetPolicy(token: string, policy: UpdatePolicy): Promise<UpdateState & { ok?: boolean; error?: string }>;
+  updateApprove(token: string): Promise<UpdateState & { ok?: boolean; error?: string }>;
+  updatePauseDownload(token: string, paused: boolean): Promise<UpdateState & { ok?: boolean; error?: string }>;
+  updateInstallFromFolder(token: string): Promise<{ ok: boolean; version?: string; error?: string; cancelled?: boolean }>;
+  updateReportActivity(unsaved: string[]): Promise<boolean>;
   getBackupStatus(): Promise<BackupStatus>;
   backupNow(): Promise<BackupResult>;
   chooseBackupFolder(): Promise<BackupResult>;

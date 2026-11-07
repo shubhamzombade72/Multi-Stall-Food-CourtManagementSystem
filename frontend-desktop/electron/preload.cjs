@@ -23,12 +23,17 @@ contextBridge.exposeInMainWorld('desktop', {
   authVaultSetup: (request) => ipcRenderer.invoke('auth:setup', request),
   authVaultUnlock: (pin) => ipcRenderer.invoke('auth:unlock', String(pin).slice(0, 16)),
   authVaultClear: () => ipcRenderer.invoke('auth:clear'),
-  // Software updates (electron/update/*). Nothing installs without updateNow, which only the Updates screen calls.
+  // Software updates (electron/update/*). The token lets the main process ask the server whether this is really the owner.
   updateGetState: () => ipcRenderer.invoke('update:get-state'),
   updateCheck: () => ipcRenderer.invoke('update:check'),
   updateEnroll: (code) => ipcRenderer.invoke('update:enroll', String(code).slice(0, 40)),
-  updateNow: () => ipcRenderer.invoke('update:now'),
+  updateNow: (token) => ipcRenderer.invoke('update:now', String(token)),
   updateRemindLater: () => ipcRenderer.invoke('update:remind-later'),
+  updateSetPolicy: (token, policy) => ipcRenderer.invoke('update:set-policy', String(token), policy),
+  updateApprove: (token) => ipcRenderer.invoke('update:approve', String(token)),
+  updatePauseDownload: (token, paused) => ipcRenderer.invoke('update:pause-download', String(token), paused === true),
+  updateInstallFromFolder: (token) => ipcRenderer.invoke('update:install-from-folder', String(token)),
+  updateReportActivity: (unsaved) => ipcRenderer.invoke('update:report-activity', Array.isArray(unsaved) ? unsaved.map(String).slice(0, 20) : []),
   listPrinters: () => ipcRenderer.invoke('desktop:list-printers'),
   print: (options) => ipcRenderer.invoke('desktop:print', options && typeof options === 'object' ? { deviceName: options.deviceName } : {}),
   // Thermal printing (electron/printing/*). Inputs are validated again in the main process.

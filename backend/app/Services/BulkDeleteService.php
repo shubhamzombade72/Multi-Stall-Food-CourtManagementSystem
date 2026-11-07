@@ -73,6 +73,7 @@ class BulkDeleteService
             'assigned staff account(s)' => DB::table('users')->where('stall_id', $id)->count(),
             'supplier(s)' => DB::table('suppliers')->where('stall_id', $id)->count(),
             'inventory item(s)' => DB::table('inventory_items')->where('stall_id', $id)->count(),
+            'central store issue(s)' => DB::table('store_movements')->where('stall_id', $id)->count(),
         ];
         $blockers = [];
         foreach ($links as $label => $n) {

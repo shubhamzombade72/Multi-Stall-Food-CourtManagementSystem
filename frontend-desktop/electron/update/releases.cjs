@@ -54,6 +54,9 @@ function layout(root) {
     device: path.join(root, 'state', 'device.json'),
     highest: path.join(root, 'state', 'highest-version.json'),
     snooze: path.join(root, 'state', 'snooze.json'),
+    pending: path.join(root, 'state', 'pending.json'),
+    policy: path.join(root, 'state', 'policy.json'),
+    trustStatement: path.join(root, 'state', 'trust-statement.json'),
   };
 }
 
@@ -225,6 +228,24 @@ async function verifyInstalledTree(dir, manifest, { only } = {}) {
   return { ok: true };
 }
 
+const RENAME_RETRY_MS = 30000;
+
+/**
+ * Windows refuses to rename a folder while anything has a file in it open, and an antivirus or indexer looks at new files
+ * briefly. That passes by itself, so it must not fail an update, which would then not be retried.
+ */
+function renameWithRetry(from, to, { rename = fs.renameSync, timeoutMs = RENAME_RETRY_MS } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  for (let wait = 100; ; wait = Math.min(wait * 2, 2000)) {
+    try {
+      return rename(from, to);
+    } catch (err) {
+      if (!['EPERM', 'EACCES', 'EBUSY'].includes(err.code) || Date.now() >= deadline) throw err;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, wait);
+    }
+  }
+}
+
 /** Moves a verified staged release into place. An old folder of the same version from a failed try is set aside first. */
 function promoteRelease(dirs, staged, version) {
   fs.mkdirSync(dirs.releases, { recursive: true });
@@ -232,9 +253,9 @@ function promoteRelease(dirs, staged, version) {
   if (fs.existsSync(target)) {
     const active = readActive(dirs);
     if (active && active.version === version) throw new Error('That release is the active one and cannot be replaced.');
-    fs.renameSync(target, path.join(dirs.staging, `old-${version}-${randomBytes(4).toString('hex')}`));
+    renameWithRetry(target, path.join(dirs.staging, `old-${version}-${randomBytes(4).toString('hex')}`));
   }
-  fs.renameSync(staged, target);
+  renameWithRetry(staged, target);
   return target;
 }
 
@@ -245,7 +266,7 @@ function promoteRelease(dirs, staged, version) {
  *   { action: 'blocked', message }      a person must look at this before the app starts
  */
 const MAX_TRIAL_BOOTS = 2;
-function decideBoot({ journal, active }) {
+function decideBoot({ journal, active, installedVersion }) {
   if (journal && journal.phase === 'NEEDS_DEVELOPER') {
     return { action: 'blocked', message: journal.message || 'An update could not be finished safely. Your data has been left untouched. Contact support before using the application.' };
   }
@@ -254,11 +275,18 @@ function decideBoot({ journal, active }) {
     if ((active.boot_attempts || 0) >= MAX_TRIAL_BOOTS) return { action: 'recover', reason: 'the new version did not confirm that it started' };
     return { action: 'run', release: active.version, trial: true };
   }
+  // A newer installer has been run over this release: the installed files win, or the installer would change nothing
+  if (active?.version && installedVersion && compareVersions(installedVersion, active.version) > 0) {
+    return { action: 'run', release: null, trial: false, clearActive: true };
+  }
   return { action: 'run', release: active?.version || null, trial: false };
 }
 
-/** Verifies an active release before running it: signature and every file of the desktop program (not the large server tree). */
-async function verifyReleaseForBoot(dirs, version, trusted) {
+/**
+ * Verifies an active release before running it: signature, that it was built for this Electron, and every file of the
+ * desktop program (not the large server tree). `electronMajor` is left out only by callers that do not start the release.
+ */
+async function verifyReleaseForBoot(dirs, version, trusted, electronMajor) {
   const dir = releaseDir(dirs, version);
   try {
     const raw = fs.readFileSync(path.join(dir, 'release.json'), 'utf8');
@@ -267,6 +295,8 @@ async function verifyReleaseForBoot(dirs, version, trusted) {
     const loaded = loadManifest(raw, signature, keyId, trusted);
     if (!loaded.ok) return { ok: false, problem: loaded.problem };
     if (loaded.manifest.version !== version) return { ok: false, problem: 'The release folder holds another version.' };
+    const built = loaded.manifest.compatibility?.electron_major;
+    if (electronMajor && built && built !== electronMajor) return { ok: false, problem: `This release was built for Electron ${built}, and the installed program runs ${electronMajor}.` };
     const tree = await verifyInstalledTree(dir, loaded.manifest, { only: 'app/' });
     if (!tree.ok) return { ok: false, problem: tree.problem };
     return { ok: true, manifest: loaded.manifest, dir };
@@ -322,6 +352,7 @@ module.exports = {
   buildStagedRelease,
   verifyInstalledTree,
   promoteRelease,
+  renameWithRetry,
   decideBoot,
   verifyReleaseForBoot,
   pruneReleases,

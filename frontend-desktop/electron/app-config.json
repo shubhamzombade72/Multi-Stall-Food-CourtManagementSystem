@@ -1,5 +1,6 @@
 {
-  "_comment": "Release setting. Set apiBaseUrl to the real production API (https://<host>/api) BEFORE running `pnpm dist:win` to pre-configure installers. Leave empty to make first launch show the Server Setup screen. Never put credentials here; a user's own saved Server settings always take precedence.",
+  "_comment": "Release setting. Set apiBaseUrl to the real production API (https://<host>/api) BEFORE running `pnpm dist:win` to pre-configure installers. Leave empty to make first launch show the Server Setup screen. Never put credentials here; a user's own saved Server settings always take precedence. updateFeedUrl is the no-server update host: a folder of signed release files, published by pnpm send-update.",
   "apiBaseUrl": "",
-  "updateServerUrl": ""
+  "updateServerUrl": "",
+  "updateFeedUrl": "https://github.com/shubhamzombade72/mangalmurti-pos-updates/releases/latest/download"
 }

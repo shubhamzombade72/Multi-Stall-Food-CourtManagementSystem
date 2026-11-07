@@ -133,8 +133,11 @@ test('a private signing key inside the repository is refused', () => {
 
 test('the private key is not anywhere in what ships', () => {
   const trust = JSON.parse(readFileSync(resolve('electron/update-trust.json'), 'utf8'));
-  assert.deepEqual(trust.keys, {}, 'no key is committed; the owner adds their public key');
+  for (const value of [...Object.values(trust.keys), ...Object.values(trust.root)]) {
+    assert.equal(Buffer.from(value as string, 'base64').length, 32, 'only bare Ed25519 public keys belong here');
+  }
   assert.doesNotMatch(readFileSync(resolve('electron/update-trust.json'), 'utf8'), /PRIVATE KEY/);
+  assert.doesNotMatch(readFileSync(resolve('electron/app-config.json'), 'utf8'), /PRIVATE KEY/);
 });
 
 // ------------------------------------------------------------------ change detection
@@ -315,19 +318,45 @@ test('without a key or a service the agent reports why, and contacts nothing', a
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('the agent installs nothing by itself: a check with an offer only reports it', async () => {
+test('a check with an offer starts the download by itself but never installs', async () => {
   const dir = temp();
-  const fetchImpl = async (url) => new Response(JSON.stringify(url.endsWith('/enroll')
-    ? { data: { token: 't'.repeat(64), client_id: 1, channel: 'stable' } }
-    : { data: { update: { target_id: 1, version: '1.3.0', status: 'UPDATE_AVAILABLE', required: false, package_type: 'full', package_size: 5, notes: { features: ['x'] } } } }), { status: url.endsWith('/enroll') ? 201 : 200 });
-  const agent = agentFor(dir, { fetchImpl });
+  const urls = [];
+  const fetchImpl = async (url) => {
+    urls.push(url);
+    return new Response(JSON.stringify(url.endsWith('/enroll')
+      ? { data: { token: 't'.repeat(64), client_id: 1, channel: 'stable' } }
+      : { data: { update: { target_id: 1, version: '1.3.0', status: 'UPDATE_AVAILABLE', required: false, package_type: 'full', package_size: 5, notes: { features: ['x'] } } } }), { status: url.endsWith('/enroll') ? 201 : 200 });
+  };
+  const agent = agentFor(dir, { fetchImpl }); // startBootstrap fails this test if it is ever called
   assert.equal((await agent.enroll('CODE', 'pc')).ok, true);
   const state = await agent.check();
   assert.equal(state.update.version, '1.3.0');
-  assert.equal(state.phase, 'idle');
+  assert.equal(state.phase, 'downloading', 'the download begins without anyone pressing anything');
+  while (agent.publicState().phase !== 'idle') await new Promise((r) => setTimeout(r, 10));
+  assert.ok(urls.some((u) => u.includes('/download-token')), 'it asked to download');
+  assert.ok(!urls.some((u) => u.includes('/decision')), 'nobody was recorded as approving: this download failed its checks and never became ready');
+  assert.equal(agent.usablePending(), null, 'a package that failed its signature check is never ready to install');
   agent.remindLater();
   assert.equal(agent.publicState().snoozed, true);
-  rmSync(dir, { recursive: true, force: true });
+  rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+});
+
+test('a folder locked for a moment does not fail the install, and a real refusal still does', () => {
+  let tries = 0;
+  const locked = (code, times) => () => {
+    tries += 1;
+    if (tries <= times) throw Object.assign(new Error('locked'), { code });
+    return 'moved';
+  };
+  assert.equal(rel.renameWithRetry('a', 'b', { rename: locked('EPERM', 3) }), 'moved');
+  assert.equal(tries, 4);
+
+  tries = 0;
+  assert.throws(() => rel.renameWithRetry('a', 'b', { rename: locked('ENOENT', 9) }), /locked/, 'a missing folder is not worth waiting for');
+  assert.equal(tries, 1);
+
+  tries = 0;
+  assert.throws(() => rel.renameWithRetry('a', 'b', { rename: locked('EBUSY', 1e9), timeoutMs: 200 }), /locked/, 'it does not wait for ever');
 });
 
 test('the device token is sealed on disk and an older or equal offer is ignored', async () => {

@@ -99,9 +99,12 @@ class UpdateClientController extends Controller
             'last_check_at' => now(),
         ])->save();
 
+        $statementFile = config('foodcourt.updates.trust_statement');
+        $statement = $statementFile && is_file($statementFile) ? json_decode((string) file_get_contents($statementFile), true) : null;
+
         $target = UpdateOffers::current($client);
         if (!$target) {
-            return response()->json(['success' => true, 'data' => ['update' => null, 'install_unknown' => UpdateOffers::installIsUnknown($client)]]);
+            return response()->json(['success' => true, 'data' => ['update' => null, 'trust_statement' => $statement, 'install_unknown' => UpdateOffers::installIsUnknown($client)]]);
         }
 
         $release = $target->release;
@@ -117,6 +120,7 @@ class UpdateClientController extends Controller
 
         return response()->json(['success' => true, 'data' => [
             'install_unknown' => UpdateOffers::installIsUnknown($client),
+            'trust_statement' => $statement,
             'update' => [
                 'target_id' => $target->id,
                 'status' => $target->status,
@@ -151,7 +155,7 @@ class UpdateClientController extends Controller
 
     public function decide(Request $request, $targetId)
     {
-        $data = $request->validate(['decision' => ['required', Rule::in(['approve', 'reject'])]]);
+        $data = $request->validate(['decision' => ['required', Rule::in(['approve', 'reject'])], 'source' => 'nullable|string|in:owner approval,silent policy']);
         $target = $this->target($request, $targetId);
         abort_unless($target->release->isPublished(), 404);
 
@@ -162,7 +166,7 @@ class UpdateClientController extends Controller
             return response()->json(['success' => true, 'data' => ['status' => $target->status, 'decision' => 'rejected']]);
         }
 
-        $result = UpdateLifecycle::report($target, UpdateLifecycle::APPROVED, ['message' => 'Approved on the device.']);
+        $result = UpdateLifecycle::report($target, UpdateLifecycle::APPROVED, ['message' => 'Approved on the device: ' . ($data['source'] ?? 'owner approval') . '.']);
         if (!$result['ok']) {
             return response()->json(['success' => false, 'code' => $result['code'], 'message' => $result['message']], 409);
         }
@@ -171,7 +175,10 @@ class UpdateClientController extends Controller
         return response()->json(['success' => true, 'data' => ['status' => $result['status'], 'decision' => 'approved']]);
     }
 
-    /** Short-lived, single-device, single-package authorization. `full=true` is what a device asks for when its install fails verification. */
+    /**
+     * Short-lived, single-device, single-package authorization. `full=true` is what a device asks for when its install fails
+     * verification. Downloading needs no approval, because it changes nothing: only an explicit rejection stops it.
+     */
     public function downloadToken(Request $request, $targetId)
     {
         $data = $request->validate(['full' => 'nullable|boolean']);
@@ -179,8 +186,11 @@ class UpdateClientController extends Controller
         $client = $this->client($request);
         abort_unless($target->release->isPublished(), 404);
 
-        if ($target->decision !== 'approved' || !in_array($target->status, [UpdateLifecycle::APPROVED, UpdateLifecycle::DOWNLOADING, UpdateLifecycle::VERIFYING], true)) {
-            return response()->json(['success' => false, 'code' => 'not_approved', 'message' => 'This update has not been approved on this computer.'], 409);
+        if ($target->decision === 'rejected') {
+            return response()->json(['success' => false, 'code' => 'rejected', 'message' => 'This update was declined on this computer.'], 409);
+        }
+        if (!in_array($target->status, [UpdateLifecycle::AVAILABLE, UpdateLifecycle::APPROVED, UpdateLifecycle::DOWNLOADING, UpdateLifecycle::VERIFYING, UpdateLifecycle::FAILED, UpdateLifecycle::RECOVERED], true)) {
+            return response()->json(['success' => false, 'code' => 'not_downloadable', 'message' => 'This update is already being installed on this computer.'], 409);
         }
         $package = UpdateOffers::choosePackage($client, $target->release, (bool) ($data['full'] ?? false));
         if (!$package) {

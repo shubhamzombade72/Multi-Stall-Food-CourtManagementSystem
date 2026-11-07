@@ -3,35 +3,57 @@
  * bootstrapper process, and confirming a trial boot. main.cjs calls this once; it holds no update logic of its own.
  * Test settings (FOODCOURT_UPDATE_*) are honoured only in an unpackaged run.
  */
-const { execFileSync, spawn } = require('node:child_process');
+const { execFile, execFileSync, spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { createUpdateAgent } = require('./agent.cjs');
+const { createActivity } = require('./activity.cjs');
 const rel = require('./releases.cjs');
+const schedule = require('./schedule.cjs');
+const trust = require('./trust.cjs');
+const { readJsonOr } = require('./format.cjs');
 
 const TRIAL_WATCHDOG_MS = 3 * 60 * 1000;
+const BACKGROUND_DOWNLOAD_BYTES_PER_SECOND = 2 * 1024 * 1024;
 
-function createUpdates({ app, net, safeStorage, log, shutdownServer, dataDir, readConfig, resolveConfig, probe, getStartup }) {
+function createUpdates({ app, net, powerMonitor, safeStorage, log, shutdownServer, dataDir, readConfig, resolveConfig, probe, getStartup, printBusy, maintenanceBusy, hasWindow, openUpiCount }) {
   const packaged = app.isPackaged;
   const updateLog = (level, message) => log(level, message, 'update');
   const root = !packaged && process.env.FOODCOURT_UPDATE_ROOT ? path.resolve(process.env.FOODCOURT_UPDATE_ROOT) : rel.defaultRoot();
   const dirs = rel.layout(root);
 
-  /** Trust and the service address come from the files of the install that is running. */
-  const trusted = (() => {
-    const file = !packaged && process.env.FOODCOURT_UPDATE_TRUST ? process.env.FOODCOURT_UPDATE_TRUST : path.join(__dirname, '..', 'update-trust.json');
-    try {
-      return JSON.parse(fs.readFileSync(file, 'utf8')).keys || {};
-    } catch {
-      return {};
-    }
-  })();
+  /**
+   * Trust always starts from the INSTALLED files, the same place the loader and bootstrapper read, so a release cannot pass
+   * one and fail the other. The loader says where they are, because this code may itself be running from a release folder.
+   */
+  const installedTrustFile = !packaged && process.env.FOODCOURT_UPDATE_TRUST ? process.env.FOODCOURT_UPDATE_TRUST : process.env.FOODCOURT_INSTALLED_TRUST_FILE || path.join(__dirname, '..', 'update-trust.json');
+  const trusted = () => trust.resolveTrust(installedTrustFile, dirs.trustStatement);
+  const applyTrustStatement = (raw, signature, keyId) => trust.applyStatement({ installedFile: installedTrustFile, statementFile: dirs.trustStatement, raw, signature, keyId });
+
+  const activity = createActivity({ printBusy, maintenanceBusy, hasWindow, openUpiCount });
+
+  /** Daily per-user task, so a closed app can still update in the window. Failure only means it waits for the next start. */
+  function ensureMaintenanceTask(policy) {
+    if (!packaged || process.env.FOODCOURT_UPDATE_NO_TASK === '1') return; // the switch keeps tests off the PC's real task
+    const run = (args) => new Promise((resolve) => execFile('schtasks', args, { windowsHide: true, timeout: 15000 }, (err) => resolve(!err)));
+    const job = policy.mode === 'ask' ? run(['/Delete', '/F', '/TN', schedule.TASK_NAME]) : run(schedule.taskCreateArgs(process.execPath, policy.window));
+    job.then((ok) => updateLog(ok || policy.mode === 'ask' ? 'INFO' : 'WARN', ok || policy.mode === 'ask' ? 'Maintenance task is up to date' : 'The maintenance task could not be created; updates will install at the next start')).catch(() => undefined);
+  }
 
   const serverUrl = () => {
     if (!packaged && process.env.FOODCOURT_UPDATE_URL) return process.env.FOODCOURT_UPDATE_URL;
     try {
       return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'app-config.json'), 'utf8')).updateServerUrl || '';
+    } catch {
+      return '';
+    }
+  };
+
+  const feedUrl = () => {
+    if (!packaged && process.env.FOODCOURT_UPDATE_FEED) return process.env.FOODCOURT_UPDATE_FEED;
+    try {
+      return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'app-config.json'), 'utf8')).updateFeedUrl || '';
     } catch {
       return '';
     }
@@ -73,6 +95,10 @@ function createUpdates({ app, net, safeStorage, log, shutdownServer, dataDir, re
   const agent = createUpdateAgent({
     dirs,
     trusted,
+    applyTrustStatement,
+    activity,
+    onPolicyChanged: ensureMaintenanceTask,
+    downloadBytesPerSecond: packaged ? BACKGROUND_DOWNLOAD_BYTES_PER_SECOND : 0,
     log: updateLog,
     fetchImpl: (url, options) => net.fetch(url, options),
     seal: (text) => {
@@ -85,6 +111,8 @@ function createUpdates({ app, net, safeStorage, log, shutdownServer, dataDir, re
     getHostApiBase: () => readConfig().apiBaseUrl,
     getDataDir: dataDir,
     getServerUrl: serverUrl,
+    getFeedUrl: feedUrl,
+    userIdleSeconds: () => powerMonitor.getSystemIdleTime(),
     electronMajor: Number(process.versions.electron.split('.')[0]),
     machineFingerprint,
     installed,
@@ -124,6 +152,8 @@ function createUpdates({ app, net, safeStorage, log, shutdownServer, dataDir, re
     const trial = Boolean(active && active.state === 'trial');
 
     agent.start();
+    ensureMaintenanceTask(schedule.normalizePolicy(readJsonOr(dirs.policy)));
+    win.webContents.on('render-process-gone', () => activity.rendererGone());
     if (!trial) return;
 
     const watchdog = setTimeout(() => startRecoveryAndQuit('it did not finish starting in time'), Number(process.env.FOODCOURT_TRIAL_WATCHDOG_MS) || TRIAL_WATCHDOG_MS);
@@ -143,7 +173,7 @@ function createUpdates({ app, net, safeStorage, log, shutdownServer, dataDir, re
     void getStartup;
   }
 
-  return { agent, afterWindow };
+  return { agent, activity, afterWindow };
 }
 
 module.exports = { createUpdates };

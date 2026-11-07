@@ -396,7 +396,7 @@ try {
   await page.getByTestId('update-snoozed').waitFor({ timeout: 5000 });
   const notInstalled = !existsSync(pcA.active) && !existsSync(pcA.journal);
   const unapproved = (await targetFor('1.3.0', (await http('GET', `${SERVICE}/update-admin/clients`, { token: adminToken })).json.data[0].id)).target;
-  check('CLI-05', 'Remind Me Later installs nothing and the service records no approval', notInstalled && unapproved.status === 'UPDATE_AVAILABLE' && !unapproved.decision, unapproved.status);
+  check('CLI-05', 'Remind Me Later installs nothing, and the download carries on in the background', notInstalled && ['UPDATE_AVAILABLE', 'DOWNLOADING', 'VERIFYING', 'CLIENT_APPROVED'].includes(unapproved.status), unapproved.status);
 
   await clickUpdateNow(page, app, '1.3.0');
   check('CLI-06', 'After approval the app closed and handed over to the bootstrapper', true);
@@ -413,7 +413,8 @@ try {
   }, 60000, 1000);
   check('CLI-08', 'Update service validated and accepted the completion', Boolean(completed), completed?.target?.status);
   const seen = (completed?.events ?? []).map((e) => e.status);
-  const required = ['CLIENT_APPROVED', 'DOWNLOADING', 'VERIFYING', 'BACKUP_IN_PROGRESS', 'MIGRATING', 'INSTALLING', 'HEALTH_CHECK', 'COMPLETED'];
+  const required = ['DOWNLOADING', 'VERIFYING', 'CLIENT_APPROVED', 'BACKUP_IN_PROGRESS', 'MIGRATING', 'INSTALLING', 'HEALTH_CHECK', 'COMPLETED'];
+  check('CLI-09b', 'No status was refused along the way', !(completed?.events ?? []).some((e) => /^Refused/.test(e.message ?? '')), (completed?.events ?? []).filter((e) => /^Refused/.test(e.message ?? '')).map((e) => e.status).join(','));
   check('CLI-09', 'Every lifecycle status reached the service, in order', required.every((s, i) => seen.indexOf(s) >= 0 && (i === 0 || seen.indexOf(s) > seen.indexOf(required[i - 1]))), seen.join(','));
   const afterClient = (await http('GET', `${SERVICE}/update-admin/clients`, { token: adminToken })).json.data[0];
   check('CLI-10', 'Service records the verified version and schema, set only by the validated completion', afterClient.verified_app_version === '1.3.0' && Boolean(afterClient.verified_schema_fingerprint), afterClient.verified_app_version);
@@ -562,7 +563,9 @@ try {
   await goUpdates(page);
   check('SEC-01', 'With no trusted key the app says updates are disabled and offers nothing', /disabled/.test(await page.getByTestId('update-disabled').textContent()));
   const bridge = await page.evaluate(() => Object.keys(window.desktop).sort());
-  check('SEC-02', 'Renderer has no way to install except updateNow, and no filesystem or token access', bridge.filter((k) => /^update/.test(k)).join() === 'updateCheck,updateEnroll,updateGetState,updateNow,updateRemindLater' && (await page.evaluate(() => typeof require)) === 'undefined');
+  check('SEC-02', 'Renderer has only the known update actions, and no filesystem or token access', bridge.filter((k) => /^update/.test(k)).join() === 'updateApprove,updateCheck,updateEnroll,updateGetState,updateInstallFromFolder,updateNow,updatePauseDownload,updateRemindLater,updateReportActivity,updateSetPolicy' && (await page.evaluate(() => typeof require)) === 'undefined');
+  const refused = await page.evaluate(() => window.desktop.updateNow('not-a-real-token'));
+  check('SEC-03', 'The main process itself refuses Update Now without an owner token', refused.ok === false && refused.code === 'not_owner', JSON.stringify(refused));
   await close(app);
 } catch (err) {
   failure = err;

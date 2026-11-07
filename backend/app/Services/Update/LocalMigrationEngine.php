@@ -304,7 +304,10 @@ class LocalMigrationEngine
             }
 
             $this->db()->table(self::STATE_TABLE)->updateOrInsert(['key' => 'schema_version'], ['value' => $releaseVersion]);
-            $this->db()->table(self::STATE_TABLE)->updateOrInsert(['key' => 'schema_fingerprint'], ['value' => $report['schema_fingerprint']]);
+            // An installer's manifest lists migrations only, and describes no schema to fingerprint
+            if (!empty($database['schema'])) {
+                $this->db()->table(self::STATE_TABLE)->updateOrInsert(['key' => 'schema_fingerprint'], ['value' => $report['schema_fingerprint']]);
+            }
             if (!empty($database['min_app_version'])) {
                 $this->db()->table(self::STATE_TABLE)->updateOrInsert(['key' => 'min_app_version'], ['value' => $database['min_app_version']]);
             }

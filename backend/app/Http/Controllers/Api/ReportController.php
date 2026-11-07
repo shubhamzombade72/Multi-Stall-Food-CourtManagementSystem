@@ -59,15 +59,16 @@ class ReportController extends Controller
             ->whereDate('created_at', $today)->where('status', 'success')
             ->select('payment_method', DB::raw('COUNT(*) as count'), DB::raw('SUM(amount) as total'))
             ->groupBy('payment_method')->get();
-        $lowStock = \App\Models\InventoryItem::with('stall:id,name')
+        $lowStock = \App\Models\StoreItem::where('is_active', true)
             ->whereColumn('current_stock', '<=', 'minimum_alert_stock')
-            ->orderBy('current_stock')->get(['id', 'stall_id', 'name', 'unit', 'current_stock', 'minimum_alert_stock']);
+            ->orderBy('current_stock')->get(['id', 'name', 'unit', 'current_stock', 'minimum_alert_stock']);
         $closing = \App\Models\DailyClosing::where('closing_date', $today)->first(['id', 'closing_date', 'status', 'created_at']);
         $staff = \App\Models\User::select('role', DB::raw('COUNT(*) FILTER (WHERE is_active) as active'), DB::raw('COUNT(*) as total'))
             ->groupBy('role')->get();
         $recentActivity = AuditLog::with('user:id,name,role')->orderByDesc('id')->limit(8)
             ->get(['id', 'user_id', 'action', 'entity_type', 'entity_id', 'created_at']);
-        $purchasesToday = \App\Models\PurchaseOrder::whereDate('created_at', $today)
+        $purchasesToday = \App\Models\StorePurchaseOrder::where('order_date', \App\Models\StoreMovement::businessToday())
+            ->where('status', '!=', 'cancelled')
             ->select(DB::raw('COUNT(*) as count'), DB::raw('COALESCE(SUM(total_amount),0) as total'))->first();
 
         return response()->json([
