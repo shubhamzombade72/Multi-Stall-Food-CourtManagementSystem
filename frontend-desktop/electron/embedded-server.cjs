@@ -22,11 +22,13 @@ const fs = require('node:fs');
 const http = require('node:http');
 const net = require('node:net');
 const path = require('node:path');
+const { parseReport } = require('./backup.cjs');
 
 const START_TIMEOUT_MS = 40000;
 const START_ATTEMPTS = 3; // a different free port is tried if PHP cannot bind the first one
 const READY_TIMEOUT_MS = 15000;
 const MIGRATE_TIMEOUT_MS = 120000;
+const UPDATE_COMMAND_TIMEOUT_MS = 60 * 60 * 1000; // a backup or migration of a large database must not be killed half way
 const WATCHDOG_INTERVAL_MS = 10000;
 const WATCHDOG_FAILURES = 3;
 const KEEP_BACKUPS = 5;
@@ -38,6 +40,7 @@ const FAILURE = {
   database_unavailable: 'The database on this computer could not be opened. Your data has not been changed. Restore a backup, or contact your administrator.',
   migration_failed: 'The database could not be brought up to date for this version. Your data has not been changed. Contact your administrator.',
   server_timeout: 'The Food Court services did not start in time. Close the application and open it again. If this repeats, restart the computer.',
+  schema_incompatible: 'The database was updated by a newer version than this one. Your data has not been changed. Contact your administrator.',
   not_ready: 'The Food Court services started but are not healthy. Close the application and open it again, or contact your administrator.',
 };
 
@@ -190,6 +193,86 @@ function backupBeforeUpgrade(dataDir, version, log) {
   fs.writeFileSync(marker, version, 'utf8');
 }
 
+/**
+ * First start after an installer. Goes through the same engine as a managed update: verified backup, one transaction per
+ * migration, checksums, ledger, then a comparison of the business data. An installer has already replaced the old program, so
+ * failure cannot roll back to it: the database goes back as it was, and the start stops with a clear message. Nothing runs on a
+ * half-migrated database, and the failed copy and the backup are both kept.
+ *
+ * Only for an installed build: `manifestFile` is created by prepare:server. A developer tree without one uses plain migrate.
+ * Returns { ran, restored }. Throws StartupError.
+ */
+async function migrateInstalled({ manifestFile, dataDir, version, artisanJson, log }) {
+  const db = path.join(dataDir, 'foodcourt.sqlite');
+  const marker = path.join(dataDir, 'last-migration-manifest.txt');
+  const manifestSha = crypto.createHash('sha256').update(fs.readFileSync(manifestFile)).digest('hex');
+  let previous = '';
+  try {
+    previous = fs.readFileSync(marker, 'utf8').trim();
+  } catch {
+    // none yet
+  }
+  if (previous === manifestSha) return { ran: false, restored: false };
+
+  const hasData = fs.existsSync(db) && fs.statSync(db).size > 0;
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupsDir = path.join(dataDir, 'backups');
+  const backupFile = path.join(backupsDir, `foodcourt-before-install-${version}-${stamp}.sqlite`);
+  const snapshotFile = path.join(backupsDir, `snapshot-before-${version}-${stamp}.json`);
+  fs.mkdirSync(backupsDir, { recursive: true });
+
+  const putBack = (why) => {
+    const failedCopy = path.join(backupsDir, `foodcourt-failed-${version}-${stamp}.sqlite`);
+    if (fs.existsSync(db)) fs.copyFileSync(db, failedCopy);
+    if (hasData) {
+      const staged = `${db}.restoring`;
+      fs.copyFileSync(backupFile, staged);
+      ['-wal', '-shm', '-journal'].forEach((s) => fs.rmSync(db + s, { force: true }));
+      fs.renameSync(staged, db);
+    } else {
+      fs.writeFileSync(db, ''); // a new install held nothing, and the failed attempt is kept above
+    }
+    log('ERROR', `Database put back after a failed upgrade: ${why}`);
+  };
+
+  if (hasData) {
+    const report = await artisanJson(['foodcourt:backup', backupFile]);
+    if (!report || !report.ok) throw new StartupError('migration_failed', `backup before upgrade failed: ${report?.problems?.[0] || 'no report'}`);
+    const snapshot = await artisanJson(['foodcourt:update-db', 'snapshot']);
+    if (!snapshot || !snapshot.ok) throw new StartupError('migration_failed', 'the data could not be measured before upgrading');
+    if (snapshot.snapshot.integrity !== 'ok') throw new StartupError('database_unavailable', 'the database failed its integrity check; it was not changed');
+    fs.writeFileSync(snapshotFile, JSON.stringify(snapshot.snapshot));
+  }
+
+  const applied = await artisanJson(['foodcourt:update-db', 'apply', `--manifest=${manifestFile}`, `--release=${version}`]);
+  if (!applied || !applied.ok) {
+    const why = applied?.problems?.[0] || 'no report';
+    putBack(why);
+    throw new StartupError('migration_failed', why);
+  }
+
+  if (hasData) {
+    const after = await artisanJson(['foodcourt:update-db', 'snapshot']);
+    const afterFile = `${snapshotFile}.after`;
+    let problem = null;
+    if (!after || !after.ok) problem = 'the data could not be measured after upgrading';
+    else {
+      fs.writeFileSync(afterFile, JSON.stringify(after.snapshot));
+      const compared = await artisanJson(['foodcourt:update-db', 'compare', `--before=${snapshotFile}`, `--after=${afterFile}`, `--manifest=${manifestFile}`]);
+      if (!compared || !compared.ok) problem = compared?.problems?.[0] || 'the data comparison gave no answer';
+      fs.rmSync(afterFile, { force: true });
+    }
+    if (problem) {
+      putBack(problem);
+      throw new StartupError('migration_failed', `business data changed during the upgrade: ${problem}`);
+    }
+  }
+
+  fs.writeFileSync(marker, manifestSha, 'utf8');
+  log('INFO', `Database upgraded through the migration engine (${applied.applied?.length || 0} applied, ${applied.adopted?.length || 0} recorded)`);
+  return { ran: true, restored: false };
+}
+
 // ------------------------------------------------------------------ process ownership
 
 const pidFile = (dataDir) => path.join(dataDir, 'server.pid');
@@ -296,7 +379,7 @@ function runArtisan(runtime, dataDir, env, args) {
     const collect = (b) => (out = (out + b.toString()).slice(-4000));
     child.stdout.on('data', collect);
     child.stderr.on('data', collect);
-    const timer = setTimeout(() => child.kill(), MIGRATE_TIMEOUT_MS);
+    const timer = setTimeout(() => child.kill(), String(args[0]).startsWith('foodcourt:') ? UPDATE_COMMAND_TIMEOUT_MS : MIGRATE_TIMEOUT_MS);
     child.on('error', (e) => {
       clearTimeout(timer);
       reject(e);
@@ -325,6 +408,7 @@ function classifyMigrationFailure(message) {
  */
 async function startEmbeddedServer({ runtime, dataDir, version, log, onStatus, portFinder = findFreePort }) {
   let current = { phase: 'starting', message: 'Starting application…' };
+  const managed = process.env.FOODCOURT_MANAGED_RELEASE === '1';
   const setStatus = (phase, message, extra = {}) => {
     current = { phase, message, ...extra };
     try {
@@ -345,9 +429,11 @@ async function startEmbeddedServer({ runtime, dataDir, version, log, onStatus, p
     let env;
     try {
       ensureDataDirs(dataDir);
-      env = buildServerEnv(dataDir, ensureAppKey(dataDir));
+      env = { ...buildServerEnv(dataDir, ensureAppKey(dataDir)), FOODCOURT_APP_VERSION: version };
       await reclaimOrphan(dataDir, log);
-      backupBeforeUpgrade(dataDir, version, log);
+      // A managed release already went through a verified recovery point and the update engine
+      if (managed) fs.writeFileSync(path.join(dataDir, 'last-version.txt'), version, 'utf8');
+      else backupBeforeUpgrade(dataDir, version, log);
       installDemoDatabaseIfFirstRun(runtime, dataDir, log);
       fs.closeSync(fs.openSync(path.join(dataDir, 'foodcourt.sqlite'), 'a')); // create the empty database file on first run
     } catch (err) {
@@ -355,12 +441,30 @@ async function startEmbeddedServer({ runtime, dataDir, version, log, onStatus, p
     }
 
     setStatus('preparing_database', 'Preparing database…');
-    try {
-      await runArtisan(runtime, dataDir, env, ['migrate', '--force']);
-    } catch (err) {
-      throw new StartupError(classifyMigrationFailure(err.message), err.message);
+    // A managed release never migrates on start: its migrations ran, checked, in the update. If any are still pending
+    // the readiness report below says so and the start fails, rather than running them unverified.
+    if (!managed) {
+      const manifestFile = path.join(runtime.backendDir, 'database', 'migration-manifest.json');
+      if (fs.existsSync(manifestFile)) {
+        const artisanJson = async (args) => {
+          let output;
+          try {
+            output = await runArtisan(runtime, dataDir, env, args);
+          } catch (err) {
+            output = err && err.output;
+          }
+          return parseReport(output);
+        };
+        await migrateInstalled({ manifestFile, dataDir, version, artisanJson, log });
+      } else {
+        try {
+          await runArtisan(runtime, dataDir, env, ['migrate', '--force']);
+        } catch (err) {
+          throw new StartupError(classifyMigrationFailure(err.message), err.message);
+        }
+        log('INFO', 'Database migrations applied');
+      }
     }
-    log('INFO', 'Database migrations applied');
 
     setStatus('connecting', 'Connecting to food court services…');
 
@@ -450,7 +554,7 @@ async function startEmbeddedServer({ runtime, dataDir, version, log, onStatus, p
       await sleep(400);
     }
     if (!ready || !ready.ready) {
-      const code = ready && ready.database === false ? 'database_unavailable' : ready && ready.migrations_current === false ? 'migration_failed' : 'not_ready';
+      const code = ready && ready.database === false ? 'database_unavailable' : ready && ready.migrations_current === false ? 'migration_failed' : ready && ready.schema_compatible === false ? 'schema_incompatible' : 'not_ready';
       throw new StartupError(code, JSON.stringify(ready));
     }
 
@@ -537,6 +641,7 @@ module.exports = {
   buildServerEnv,
   ensureAppKey,
   backupBeforeUpgrade,
+  migrateInstalled,
   installDemoDatabaseIfFirstRun,
   isOurProcess,
   reclaimOrphan,

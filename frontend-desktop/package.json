@@ -4,9 +4,9 @@
   "description": "MangalMurti POS - Food Court Management & Point of Sale System for Windows desktop (Owner, Cashier POS, Orders & Table Tracking). Runs on one PC with its own database, or joins a shared food court host.",
   "author": "MangalMurti Tech Solution",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.3.8",
   "type": "module",
-  "main": "electron/main.cjs",
+  "main": "electron/loader.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -18,7 +18,15 @@
     "pack:dir:demo": "pnpm build && set FOODCOURT_DEMO_DATA=1&& pnpm prepare:server && electron-builder --win --x64 --dir",
     "dist:win": "pnpm build && pnpm prepare:server && electron-builder --win --x64",
     "dist:win:demo": "pnpm build && set FOODCOURT_DEMO_DATA=1&& pnpm prepare:server && electron-builder --win --x64 --config.win.artifactName=MangalMurti-POS-DEMO-Setup-${version}.${ext}",
-    "prepare:server": "node scripts/prepare-embedded-server.mjs"
+    "prepare:server": "node scripts/prepare-embedded-server.mjs",
+    "release:keygen": "node scripts/release/keygen.mjs",
+    "release:baseline": "node scripts/release/baseline.mjs",
+    "release:build": "node scripts/release/build-release.mjs",
+    "release:publish": "node scripts/release/publish-release.mjs",
+    "release": "node scripts/release/release.mjs",
+    "release:export": "node scripts/release/export-offline.mjs",
+    "send-update": "node scripts/release/send-update.mjs",
+    "release:rotate": "node scripts/release/rotate-trust.mjs"
   },
   "dependencies": {
     "axios": "^1.7.7",

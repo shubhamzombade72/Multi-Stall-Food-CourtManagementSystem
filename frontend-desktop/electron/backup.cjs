@@ -134,8 +134,27 @@ function rollbackDatabase({ dataDir, safety }) {
   if (fs.existsSync(safety)) fs.copyFileSync(safety, db);
 }
 
+/**
+ * After a restore: carries this PC's session into the restored data so its PIN keeps working. `previous` is the safety
+ * copy from swapDatabase. Resolves true only when the API confirms it; on any doubt the caller falls back to the password.
+ */
+async function keepSession({ artisan, previous, account, log }) {
+  if (!account) return false;
+  let output;
+  try {
+    output = await artisan(['foodcourt:keep-session', previous, `--user-id=${account.id}`, `--email=${account.email}`, `--role=${account.role}`]);
+  } catch (err) {
+    output = err && err.output;
+  }
+  const report = parseReport(output);
+  if (report && report.kept === true) return true;
+  log('INFO', `The saved sign-in does not fit the restored data (${(report && report.reason) || 'no answer'}); the password is required`);
+  return false;
+}
+
 module.exports = {
   KEEP_AUTO,
+  keepSession,
   backupFileName,
   selectToPrune,
   parseReport,

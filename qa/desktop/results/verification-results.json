@@ -3,7 +3,7 @@
     "id": "V-01",
     "desc": "Desktop application running with embedded runtime & authenticated owner",
     "result": "PASS",
-    "evidence": "http://127.0.0.1:52415/api"
+    "evidence": "http://127.0.0.1:57665/api"
   },
   {
     "id": "V-02",
@@ -21,13 +21,13 @@
     "id": "V-04",
     "desc": "Card label has NO elapsed-minute indicator (e.g. 15m)",
     "result": "PASS",
-    "evidence": "label=\"T-HFYT · 0/2 Served\""
+    "evidence": "label=\"T-L0G4 · 0/2 Served\""
   },
   {
     "id": "V-05",
     "desc": "Card label contains table, guest count, and served ratio",
     "result": "PASS",
-    "evidence": "label=\"T-HFYT · 0/2 Served\""
+    "evidence": "label=\"T-L0G4 · 0/2 Served\""
   },
   {
     "id": "V-06",
@@ -51,7 +51,7 @@
     "id": "V-09",
     "desc": "Dish actions work and updated label still contains NO elapsed minutes",
     "result": "PASS",
-    "evidence": "updatedLabel=\"T-HFYT · 2/2 Served\""
+    "evidence": "updatedLabel=\"T-L0G4 · 2/2 Served\""
   },
   {
     "id": "V-10",
@@ -63,7 +63,7 @@
     "id": "V-11",
     "desc": "Audit history intact: audit logs recorded for operations",
     "result": "PASS",
-    "evidence": "auditCount=18"
+    "evidence": "auditCount=19"
   },
   {
     "id": "V-12",

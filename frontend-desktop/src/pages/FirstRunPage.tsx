@@ -143,7 +143,7 @@ export const FirstRunPage: React.FC = () => {
         </form>
         <p className="text-xs text-muted mt-4 text-center">Write the password down somewhere safe. This account manages stalls, staff and reports.</p>
         <p className="text-xs text-center mt-3">
-          <Link to="/connect" className="font-semibold text-primary hover:underline">Connect to an existing food court instead</Link>
+          <Link to="/connect-host" className="font-semibold text-primary hover:underline">Connect to an existing food court instead</Link>
         </p>
         {desktop() && (
           <p className="text-xs text-center mt-2">

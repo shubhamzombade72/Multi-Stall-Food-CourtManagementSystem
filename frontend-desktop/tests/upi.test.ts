@@ -198,20 +198,21 @@ test('payment initiated but not confirmed: still pending wording, still no paid 
   assert.doesNotMatch(`${s.title} ${s.instructionLine}`, /paid via|payment received|verified/i);
 });
 
-test('only a request the server marked paid shows the paid record, labelled as a MANUAL verification with who and when', () => {
+test('only a request the server marked paid shows the paid record, with no title, UPI ID or verifier printed', () => {
   const s = upiSection(receipt(request({ status: 'paid', verification: { method: 'manual', verified_at: '2026-11-04T09:09:12+00:00', verified_by: 'Asha Cashier' } })))!;
   assert.equal(s.paid, true);
-  assert.equal(s.title, 'PAID VIA UPI - MANUALLY VERIFIED');
-  assert.equal(s.instructionLine, '', 'no extra note is printed under a paid title');
+  assert.equal(s.title, '');
+  assert.equal(s.vpaLine, '');
+  assert.equal(s.instructionLine, '', 'no extra note is printed on a paid receipt');
   assert.equal(s.verificationLine, null, 'who verified and when is stored on the server, not printed');
   assert.doesNotMatch(`${s.title} ${s.instructionLine}`, /payment received/i, 'no claim of automatic receipt');
 });
 
-test('a paid request without a recorded verifier prints the same manual label (older records)', () => {
+test('a paid request without a recorded verifier prints the same way (older records)', () => {
   const s = upiSection(receipt(request({ status: 'paid', verification: null })))!;
   assert.equal(s.verificationLine, null);
   assert.equal(s.instructionLine, '');
-  assert.equal(s.title, 'PAID VIA UPI - MANUALLY VERIFIED');
+  assert.equal(s.title, '');
 });
 
 test('failed, cancelled, superseded and refunded requests print no QR at all', () => {
@@ -255,9 +256,9 @@ test('preview, print and historical reprint of the same bill carry the same QR p
   assert.equal(decode(encodeQr(preview.qrText)), preview.qrText, 'the QR that is drawn decodes to that payload');
 });
 
-test('a reprint after the merchant UPI ID changed still shows the ORIGINAL request, not the new settings', () => {
+test('a reprint after the merchant UPI ID changed still encodes the ORIGINAL request, not the new settings', () => {
   const original = request({ status: 'paid', vpa: 'old.merchant@oksbi' });
   const s = upiSection({ ...receipt(original), settings_vpa_now: 'new.merchant@okaxis' } as never)!;
   assert.equal(parseUpiUri(s.qrText).pa, 'old.merchant@oksbi');
-  assert.equal(s.vpaLine, 'UPI ID: old.merchant@oksbi');
+  assert.equal(s.vpaLine, '');
 });

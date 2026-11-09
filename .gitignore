@@ -31,6 +31,32 @@ docs/
 !**/CONTRIBUTING.md
 !.claude/skills/**/SKILL.md
 
+# Planning and AI-tool working files
+.superpowers/
+
+# Local run logs at the repository root
+/*_err.txt
+/*_out.txt
+/*.log
+
+# Screenshots, photos and PDFs, except the images the apps actually ship
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.bmp
+*.pdf
+!frontend-desktop/build-resources/**
+!frontend-desktop/public/**
+!frontend-desktop/src/assets/**
+!frontend-customer/public/**
+!frontend-customer/src/assets/**
+!mobile-app/assets/**
+
+# QA run output: screenshots and result JSON (qa/tax-vectors.json is a test input and stays)
+qa/**/results/
+
 # Build & compiled outputs
 dist/
 **/dist/
@@ -107,3 +133,6 @@ __pycache__/
 
 # Added by code-review-graph
 .code-review-graph/
+
+# Developer release tooling is source, unlike the release/ build output ignored above
+!frontend-desktop/scripts/release/

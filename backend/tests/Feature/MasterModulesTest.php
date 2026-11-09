@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\AuditLog;
-use App\Models\CashierClosing;
 use App\Models\Customer;
 use App\Models\DiningTable;
 use App\Models\MenuItem;
@@ -14,15 +13,17 @@ use App\Models\StallKitchenTicket;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Tests\Concerns\ServesOrders;
 use Tests\TestCase;
 
 /**
- * Master PRD modules: settings, tables, customers, suppliers, order management, cashier closing,
+ * Master PRD modules: settings, tables, customers, suppliers, order management,
  * reports, notifications, login history and denied-access auditing.
  */
 class MasterModulesTest extends TestCase
 {
     use DatabaseTransactions;
+    use ServesOrders;
 
     private function user(string $role, ?int $stallId = null): User
     {
@@ -89,6 +90,7 @@ class MasterModulesTest extends TestCase
         $this->actingAs($owner, 'sanctum')->putJson('/api/settings/payment_methods', ['enabled' => ['bitcoin']])->assertStatus(422);
 
         $order = $this->placeOrder($cashier);
+        $this->serveAllItems($order['id']);
         $this->actingAs($cashier, 'sanctum')->postJson('/api/billing/pay', [
             'order_id' => $order['id'], 'payment_method' => 'card', 'amount' => $order['total_amount'],
         ])->assertStatus(422)->assertJsonValidationErrors('payment_method');
@@ -216,38 +218,6 @@ class MasterModulesTest extends TestCase
         $this->assertSame('occupied', $table->fresh()->status);
     }
 
-    // ------------------------------------------------------------- cashier closing
-
-    public function test_cashier_closing_computes_expected_cash_and_variance_once_per_day(): void
-    {
-        $cashier = $this->user('cashier');
-        $owner = $this->user('owner');
-        $today = now()->toDateString();
-        $before = \App\Http\Controllers\Api\CashierClosingController::totals($cashier->id, $today);
-
-        $order = $this->placeOrder($cashier);
-        $this->actingAs($cashier, 'sanctum')->postJson('/api/billing/pay', [
-            'order_id' => $order['id'], 'payment_method' => 'cash', 'amount' => $order['total_amount'], 'cash_tendered' => 2000,
-        ])->assertStatus(200);
-
-        $expected = bcadd($before['expected_cash'], (string) $order['total_amount'], 2);
-        $this->actingAs($cashier, 'sanctum')->getJson("/api/cashier-closings/preview?date={$today}")
-            ->assertStatus(200)->assertJsonPath('data.totals.expected_cash', $expected);
-
-        // A cashier cannot close somebody else; a kitchen user cannot close at all
-        $this->actingAs($cashier, 'sanctum')->postJson('/api/cashier-closings', ['date' => $today, 'counted_cash' => 1, 'cashier_id' => $owner->id])->assertStatus(403);
-        $this->actingAs($this->user('kitchen_staff'), 'sanctum')->postJson('/api/cashier-closings', ['date' => $today, 'counted_cash' => 1])->assertStatus(403);
-
-        CashierClosing::where('cashier_id', $cashier->id)->whereDate('business_date', $today)->delete();
-        $counted = bcsub($expected, '10.00', 2);
-        $res = $this->actingAs($cashier, 'sanctum')->postJson('/api/cashier-closings', ['date' => $today, 'counted_cash' => $counted, 'notes' => 'Short']);
-        $res->assertStatus(201)->assertJsonPath('data.expected_cash', $expected)->assertJsonPath('data.variance', '-10.00');
-        $this->actingAs($cashier, 'sanctum')->postJson('/api/cashier-closings', ['date' => $today, 'counted_cash' => $counted])->assertStatus(422);
-
-        $this->assertTrue(collect($this->actingAs($owner, 'sanctum')->getJson("/api/cashier-closings?date_from={$today}")->json('data.data'))->contains('id', $res->json('data.id')));
-        $this->assertNotNull(AuditLog::where('action', 'cashier_closed')->where('entity_id', (string) $res->json('data.id'))->first());
-    }
-
     // ------------------------------------------------------------- reports
 
     public function test_new_reports_are_owner_only_and_reflect_payments(): void
@@ -258,6 +228,7 @@ class MasterModulesTest extends TestCase
         $paidBefore = (string) Payment::where('status', 'success')->whereDate('created_at', $today)->sum('amount');
 
         $order = $this->placeOrder($cashier);
+        $this->serveAllItems($order['id']);
         $this->actingAs($cashier, 'sanctum')->postJson('/api/billing/pay', [
             'order_id' => $order['id'], 'payment_method' => 'upi_qr', 'amount' => $order['total_amount'],
         ])->assertStatus(200);

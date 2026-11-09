@@ -197,6 +197,7 @@ const logout = async () => {
   const cashierNav = await page.locator('aside nav a').allInnerTexts();
   check('C-02', 'Cashier menu hides owner-only sections', !cashierNav.some((n) => /Staff|Reports|Food Court Settings|Dashboard/.test(n)), cashierNav.join(', '));
 
+  await page.locator('[data-testid="pos-category-select"]').selectOption('all'); // the POS opens on one category; these dishes span several
   await page.waitForSelector(`[data-menu-item="Masala Dosa ${run}"]`);
   await page.click(`[data-menu-item="Masala Dosa ${run}"]`);
   await page.click(`[data-menu-item="Masala Dosa ${run}"]`);
@@ -210,7 +211,7 @@ const logout = async () => {
   await page.locator('label:has-text("Save to customers") input[type=checkbox]').check();
   await page.fill('input[aria-label="Order notes"]', `E2E run ${run}`);
   // double click: the button disables while sending and the idempotency key is per cart
-  await page.dblclick('button:has-text("Send & Pay")');
+  await page.dblclick('button:has-text("Place Order")');
   await page.getByText(/sent to 2 stall kitchen/).waitFor();
   const orderRow = sql(`SELECT id || '|' || order_number || '|' || status || '|' || order_channel || '|' || total_amount FROM orders WHERE notes=${lit(`E2E run ${run}`)}`);
   const orderCount = Number(sql(`SELECT COUNT(*) FROM orders WHERE notes=${lit(`E2E run ${run}`)}`));
@@ -225,51 +226,34 @@ const logout = async () => {
   await logout();
 
   // ------------------------------------------------------------------ kitchen
-  sec('Kitchen display: stall isolation and preparation');
+  // The Kitchen display (Accept / Start Preparing / Mark Ready) is gone: kitchen staff watch the tracking board, and food
+  // goes straight to Served there. Only the owner, cashier and waiter may mark it served.
+  sec('Kitchen staff: watch-only tracking board');
   await login(staff.kitchen.email, NEW_PASSWORD);
-  check('K-01', 'Kitchen user lands on the KDS', (await page.evaluate(() => location.hash)) === '#/kitchen');
-  const ownTicket = sql(`SELECT ticket_number FROM stall_kitchen_tickets WHERE order_id=${orderId} AND stall_id=${stallId}`);
-  const otherTicket = sql(`SELECT ticket_number FROM stall_kitchen_tickets WHERE order_id=${orderId} AND stall_id=${otherStallId}`);
-  const card = page.locator(`[data-ticket="${ownTicket}"]`);
+  check('K-01', 'Kitchen user lands on Orders & Table Tracking', (await page.evaluate(() => location.hash)) === '#/tracking');
+  const card = page.getByTestId(`order-card-${orderId}`);
   await card.waitFor();
-  check('K-02', 'KDS shows the own-stall ticket and not the other stall ticket', (await page.locator(`[data-ticket="${otherTicket}"]`).count()) === 0, `${ownTicket} visible, ${otherTicket} hidden`);
-  // wait for the card to show the NEXT step each time (the button reads "Updating…" while the request runs)
-  const steps = [
-    ['Accept', 'Start Preparing'],
-    ['Start Preparing', 'Mark Ready'],
-    ['Mark Ready', 'Waiting for pickup'],
-  ];
-  for (const [label, next] of steps) {
-    await card.locator(`button:has-text("${label}")`).click();
-    await card.getByText(next).waitFor();
-  }
-  check('K-03', 'Kitchen prepares its ticket to ready through the KDS buttons (DB)', sql(`SELECT status FROM stall_kitchen_tickets WHERE ticket_number=${lit(ownTicket)}`) === 'ready');
+  const kitchenActions = { markReady: await card.getByRole('button', { name: 'Mark Ready' }).count(), markServed: await card.getByRole('button', { name: 'Mark Served' }).count() };
+  check('K-02', 'Kitchen sees the order but has no Mark Ready or Mark Served button', kitchenActions.markReady === 0 && kitchenActions.markServed === 0, JSON.stringify(kitchenActions));
   const navKitchen = await page.locator('aside nav a').allInnerTexts();
-  check('K-04', 'Kitchen user has no payment or POS screens', !navKitchen.some((n) => /POS|Payment|Orders/.test(n)), navKitchen.join(', '));
-  await shot('03-kds');
+  check('K-04', 'Kitchen user has no payment or POS screens', !navKitchen.some((n) => /POS|Payment|Orders$/.test(n)), navKitchen.join(', '));
+  await shot('03-tracking-kitchen');
   await logout();
 
-  // The other stall's kitchen prepares its ticket (its own seeded kitchen account, through the API)
-  const otherChef = sql(`SELECT email FROM users WHERE role='kitchen_staff' AND stall_id=${otherStallId} AND is_active LIMIT 1`);
-  const tok = (await (await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ email: otherChef, password: SEED_PASSWORD }) })).json()).data.token;
-  const otherTicketId = sql(`SELECT id FROM stall_kitchen_tickets WHERE ticket_number=${lit(otherTicket)}`);
-  for (const status of ['accepted', 'preparing', 'ready']) {
-    await fetch(`${API}/kitchen/tickets/${otherTicketId}/status`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${tok}` }, body: JSON.stringify({ status }) });
-  }
-  check('K-05', `${otherStallName} kitchen marks its ticket ready (DB)`, sql(`SELECT status FROM stall_kitchen_tickets WHERE id=${otherTicketId}`) === 'ready');
-
   // ------------------------------------------------------------------ waiter
-  sec('Waiter desktop: pickup and serving');
+  sec('Waiter: serving from the tracking board');
   await login(staff.waiter.email, NEW_PASSWORD);
-  check('W-01', 'Waiter lands on the Waiter Station', (await page.evaluate(() => location.hash)) === '#/waiter');
-  await page.click('button:has-text("Ready to Serve")');
-  for (const t of [ownTicket, otherTicket]) {
-    await page.locator(`[data-serve-ticket="${t}"]`).click();
-    await page.locator(`[data-serve-ticket="${t}"]`).waitFor({ state: 'detached' });
+  check('W-01', 'Waiter lands on Orders & Table Tracking', (await page.evaluate(() => location.hash)) === '#/tracking');
+  const waiterCard = page.getByTestId(`order-card-${orderId}`);
+  await waiterCard.waitFor();
+  check('W-01b', 'Waiter sees Mark Served on every item and no Mark Ready', (await waiterCard.getByRole('button', { name: 'Mark Ready' }).count()) === 0 && (await waiterCard.getByRole('button', { name: 'Mark Served' }).count()) === 2); // Masala Dosa x2 and the other stall's dish
+  for (let left = await waiterCard.getByRole('button', { name: 'Mark Served' }).count(); left > 0; left--) {
+    await waiterCard.getByRole('button', { name: 'Mark Served' }).first().click();
+    await page.waitForFunction(([id, n]) => [...document.querySelectorAll(`[data-testid="order-card-${id}"] button`)].filter((b) => b.textContent.trim() === 'Mark Served').length < n, [orderId, left]).catch(() => undefined);
   }
-  const served = sql(`SELECT string_agg(status, ',') FROM stall_kitchen_tickets WHERE order_id=${orderId}`);
-  check('W-02', 'Waiter confirms serving for both tickets; order becomes served (DB)', served === 'picked_up,picked_up' && sql(`SELECT status FROM orders WHERE id=${orderId}`) === 'served', served);
-  await shot('04-waiter');
+  const served = sql(`SELECT string_agg(DISTINCT i.status, ',') FROM stall_ticket_items i JOIN stall_kitchen_tickets t ON t.id = i.ticket_id WHERE t.order_id=${orderId}`);
+  check('W-02', 'Waiter marks every item served straight from Cooking; the order becomes served (DB)', served === 'served' && sql(`SELECT status FROM orders WHERE id=${orderId}`) === 'served', served);
+  await shot('04-waiter-served');
   await logout();
 
   // ------------------------------------------------------------------ cashier payment
@@ -295,18 +279,6 @@ const logout = async () => {
   await go('#/payments');
   await page.getByText(orderNumber).first().waitFor();
   check('P-04', 'Payment appears in Payment History', true);
-  await go('#/cashier-closing');
-  await page.locator('[data-testid="expected-cash"]').waitFor();
-  const expectedText = await page.locator('[data-testid="expected-cash"]').innerText();
-  const expected = sql(`SELECT COALESCE(SUM(amount),0) FROM payments WHERE cashier_id=(SELECT id FROM users WHERE email=${lit(staff.cashier.email)}) AND payment_method='cash'`);
-  await page.locator('form input[type=number]').fill(expected);
-  await page.click('button:has-text("Record closing")');
-  await page.getByText('Cashier closing recorded.').waitFor();
-  const closing = sql(`SELECT expected_cash || '|' || counted_cash || '|' || variance FROM cashier_closings WHERE cashier_id=(SELECT id FROM users WHERE email=${lit(staff.cashier.email)})`);
-  check('P-05', 'Cashier closing: expected cash from payments, zero variance (DB)', closing === `${expected}|${expected}|0.00`, `${closing} (screen ${expectedText})`);
-  const inHistory = await page.locator('td', { hasText: staff.cashier.name }).first().waitFor({ timeout: 10000 }).then(() => true, () => false);
-  check('P-06', 'The new closing appears in the closing history table', inHistory);
-  await shot('05-cashier-closing');
   await logout();
 
   // ------------------------------------------------------------------ owner reports & closing
@@ -368,7 +340,7 @@ const logout = async () => {
 
   // ------------------------------------------------------------------ audit
   sec('Audit trail');
-  const audit = sql(`SELECT string_agg(DISTINCT action, ',') FROM audit_logs WHERE created_at > (now() AT TIME ZONE 'UTC') - interval '1 hour' AND action IN ('settings_updated','staff_created','table_created','customer_created','order_created','payment_created','cashier_closed','daily_closing_created','login_success','logout')`);
+  const audit = sql(`SELECT string_agg(DISTINCT action, ',') FROM audit_logs WHERE created_at > (now() AT TIME ZONE 'UTC') - interval '1 hour' AND action IN ('settings_updated','staff_created','table_created','customer_created','order_created','payment_created','daily_closing_created','login_success','logout')`);
   check('A-01', 'Settings, staff, table, customer, order, payment, closings and logins audited (DB)', audit.split(',').length === 10, audit);
 
   const pass = results.filter((r) => r.result === 'PASS').length;

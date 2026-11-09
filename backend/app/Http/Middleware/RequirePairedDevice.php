@@ -14,7 +14,7 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class RequirePairedDevice
 {
-    private const OPEN = ['api/pairing/redeem', 'api/public/*', 'api/system/ready'];
+    private const OPEN = ['api/pairing/redeem', 'api/public/*', 'api/system/ready', 'api/system/compat', 'api/updates/client/*'];
 
     public function handle(Request $request, Closure $next): Response
     {

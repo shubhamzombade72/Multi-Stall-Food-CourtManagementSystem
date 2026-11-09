@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { setUnsavedWork } from '../lib/unsavedWork';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { statusChip } from '../lib/status';
 import { apiClient } from '../api/client';
@@ -11,7 +12,32 @@ import { apiError } from '../lib/format';
 import { sound } from '../lib/sound/index';
 import { PrintOrderKotButton } from '../components/PrintKotButtons';
 import { upiConfigWarnings, upiStatusView } from '../lib/upiStatus';
+import {
+  ALL_CATEGORIES,
+  ALL_STALLS,
+  CatalogCategory,
+  CARD_LAYOUT_STORAGE_KEY,
+  CardLayout,
+  CatalogStall,
+  StallSelection,
+  buildCategoryCards,
+  buildCategoryGroups,
+  buildStallTabs,
+  categoriesOfStall,
+  eligibleItems,
+  filterCatalog,
+  effectiveOrder,
+  itemsOfStall,
+  moveCard,
+  orderCards,
+  parseCardLayout,
+  stepCard,
+  resolveSelectedCategory,
+  resolveSelectedStall,
+} from '../lib/posCatalog';
 import { Modal, Field, inputClass } from '../components/ui';
+import { CategoryCard } from '../components/pos/CategoryCard';
+import { OutstandingItem, OutstandingItems } from '../components/OutstandingItems';
 import {
   Search,
   Plus,
@@ -26,6 +52,11 @@ import {
   QrCode,
   Banknote,
   ListChecks,
+  UtensilsCrossed,
+  ChevronDown,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  RotateCcw,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -35,6 +66,7 @@ interface MenuItem {
   price: string;
   is_veg: boolean;
   is_available: boolean;
+  image_url?: string | null;
   stall: { id: number; name: string; code: string };
   category: { id: number; name: string };
 }
@@ -85,16 +117,24 @@ export const PosPage: React.FC = () => {
   const [kotOrderId, setKotOrderId] = useState<number | null>(null); // last order sent to the kitchen, for the paper-KOT button
   const [isPaying, setIsPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
+  const [payBlockedItems, setPayBlockedItems] = useState<OutstandingItem[]>([]);
+  // A bill the server refused to open: why, and which items are still outstanding
+  const [billBlock, setBillBlock] = useState<{ orderNumber: string; message: string; items: OutstandingItem[] } | null>(null);
   const [cancelBill, setCancelBill] = useState<any | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError] = useState<string | null>(null);
   // One key per cart: a retry after a timeout replays the same order instead of creating a second one
   const orderKey = useRef(newOrderKey());
   const searchInput = useRef<HTMLInputElement>(null);
-  const [stalls, setStalls] = useState<any[]>([]);
+  const stallTabsRow = useRef<HTMLDivElement>(null);
+  const productGrid = useRef<HTMLDivElement>(null);
   const [tables, setTables] = useState<any[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [selectedStallId, setSelectedStallId] = useState<number | 'all'>('all');
+  const [categories, setCategories] = useState<CatalogCategory[] | null>(null);
+  const [stalls, setStalls] = useState<CatalogStall[] | null>(null);
+  const [selectedStall, setSelectedStall] = useState<StallSelection>(ALL_STALLS); // browsing only; the cart is never touched
+  const [catalogStatus, setCatalogStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null); // null until the cashier picks one
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orderType, setOrderType] = useState<'dine_in' | 'takeaway'>('dine_in');
@@ -103,8 +143,10 @@ export const PosPage: React.FC = () => {
 
   // Pending Bills State
   const [pendingBills, setPendingBills] = useState<any[]>([]);
+  const [awaitingFulfilment, setAwaitingFulfilment] = useState(0);
   const [pendingSearch, setPendingSearch] = useState('');
   const [isLoadingPending, setIsLoadingPending] = useState(false);
+  const pendingRequest = useRef(0); // only the newest response may replace the list
 
   // Payment Modal States
   const [activePaymentOrder, setActivePaymentOrder] = useState<any | null>(null);
@@ -133,28 +175,35 @@ export const PosPage: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [stallsRes, tablesRes, menuRes] = await Promise.all([
-        apiClient.get('/stalls'),
+      const [tablesRes, menuRes, categoriesRes, stallsRes] = await Promise.all([
         apiClient.get('/tables'),
         apiClient.get('/menu?available_only=1'),
+        // Without these lists the categories and stall tabs are built from the dishes themselves, so selling never depends on them
+        apiClient.get('/menu-categories').catch(() => null),
+        apiClient.get('/stalls').catch(() => null), // open stalls only, in the server's order
       ]);
-      setStalls(stallsRes.data.data);
       setTables(tablesRes.data.data);
       setMenuItems(menuRes.data.data);
+      setCategories(categoriesRes ? categoriesRes.data.data : null);
+      setStalls(stallsRes ? stallsRes.data.data.map((st: any) => ({ id: st.id, name: st.name, code: st.code, is_active: st.is_active })) : null);
+      setCatalogStatus('ready');
       if (tablesRes.data.data.length > 0) {
         setSelectedTableId(tablesRes.data.data[0].id);
       }
     } catch (err) {
       console.error('Failed to load POS catalog data', err);
+      setCatalogStatus((status) => (status === 'ready' ? status : 'error'));
     }
   };
 
   const loadPendingBills = async () => {
     setIsLoadingPending(true);
+    const request = ++pendingRequest.current;
     try {
       const res = await apiClient.get('/billing/pending');
-      if (res.data.success) {
+      if (res.data.success && request === pendingRequest.current) {
         setPendingBills(res.data.data);
+        setAwaitingFulfilment(res.data.awaiting_fulfilment_count ?? 0);
         window.dispatchEvent(new CustomEvent('pending-bills-updated', { detail: { count: res.data.data.length } }));
       }
     } catch (err) {
@@ -164,7 +213,9 @@ export const PosPage: React.FC = () => {
     }
   };
 
-  const addToCart = (item: MenuItem) => {
+  // Stable, so a category card is not redrawn on every cart change. Same quantity rule as before: a repeat click adds one.
+  const addToCart = useCallback((item: MenuItem) => {
+    if (!item.is_available) return; // the menu is loaded available-only; this guards a dish that went off in between
     setCart((prev) => {
       const existing = prev.find((ci) => ci.menuItem.id === item.id);
       if (existing) {
@@ -174,7 +225,7 @@ export const PosPage: React.FC = () => {
       }
       return [...prev, { menuItem: item, quantity: 1 }];
     });
-  };
+  }, []);
 
   const updateQuantity = (itemId: number, delta: number) => {
     setCart((prev) =>
@@ -191,6 +242,16 @@ export const PosPage: React.FC = () => {
   };
 
   const clearCart = () => setCart([]);
+
+  // An update must never close the app under an open cart or payment
+  useEffect(() => {
+    setUnsavedWork('cart', cart.length > 0);
+    return () => setUnsavedWork('cart', false);
+  }, [cart.length]);
+  useEffect(() => {
+    setUnsavedWork('payment', Boolean(activePaymentOrder));
+    return () => setUnsavedWork('payment', false);
+  }, [activePaymentOrder]);
 
   // A changed order is a different order: new key. An unchanged retry keeps the key (no duplicate).
   useEffect(() => {
@@ -226,16 +287,30 @@ export const PosPage: React.FC = () => {
     }
   };
 
-  const openPayment = (order: any) => {
-    setPayError(null);
-    setUpiRequest(null);
-    setUpiError(null);
-    setUpiUtr('');
-    setUpiVerified(false);
-    setPaymentMethod((enabledMethods[0] as any) || 'cash');
-    const payable = Number(order.remaining_balance ?? order.total_amount);
-    setCashTendered(payable);
-    setActivePaymentOrder(order);
+  // The list may be seconds old: the server re-checks every item before the bill opens and returns the current amounts
+  const openPayment = async (listed: any) => {
+    setBillBlock(null);
+    try {
+      const res = await apiClient.get(`/billing/orders/${listed.id}/open`);
+      const order = res.data.data;
+      setPayError(null);
+      setPayBlockedItems([]);
+      setUpiRequest(null);
+      setUpiError(null);
+      setUpiUtr('');
+      setUpiVerified(false);
+      setPaymentMethod((enabledMethods[0] as any) || 'cash');
+      setCashTendered(Number(order.remaining_balance ?? order.total_amount));
+      setActivePaymentOrder(order);
+    } catch (err: any) {
+      setBillBlock({
+        orderNumber: listed.order_number,
+        message: apiError(err, 'This bill could not be opened.'),
+        items: err?.response?.data?.data?.outstanding_items ?? [],
+      });
+      void sound.play('payment_failed');
+      loadPendingBills();
+    }
   };
 
   // Generate (or reuse) the QR for the bill being paid. The server computes the amount from the order itself.
@@ -286,7 +361,7 @@ export const PosPage: React.FC = () => {
     }
   };
 
-  const handleCreateOrder = async (autoPay: boolean = false) => {
+  const handleCreateOrder = async () => {
     if (cart.length === 0 || isSubmitting) return;
     if (orderType === 'dine_in' && !selectedTableId) {
       setNotice({ ok: false, text: 'Select a dining table for a dine-in order.' });
@@ -326,12 +401,9 @@ export const PosPage: React.FC = () => {
         loadData();
         loadPendingBills();
 
-        if (autoPay) {
-          openPayment(createdOrder);
-        } else {
-          setNotice({ ok: true, text: `Order ${createdOrder.order_number} sent to ${createdOrder.kitchen_tickets?.length ?? 0} stall kitchen(s).` });
-          setKotOrderId(createdOrder.id);
-        }
+        // Billing opens from Pending Bills once every item is Served or Cancelled, never at order time
+        setNotice({ ok: true, text: `Order ${createdOrder.order_number} sent to ${createdOrder.kitchen_tickets?.length ?? 0} stall kitchen(s). The bill appears in Pending Bills once every item is Served or Cancelled.` });
+        setKotOrderId(createdOrder.id);
       }
     } catch (err: any) {
       // The cart keeps its idempotency key, so pressing the button again cannot duplicate the order
@@ -345,6 +417,7 @@ export const PosPage: React.FC = () => {
     if (!activePaymentOrder || isPaying) return;
     setIsPaying(true);
     setPayError(null);
+    setPayBlockedItems([]);
     try {
       const payableAmount = Number(activePaymentOrder.remaining_balance ?? activePaymentOrder.total_amount);
 
@@ -352,6 +425,7 @@ export const PosPage: React.FC = () => {
         order_id: activePaymentOrder.id,
         payment_method: paymentMethod,
         amount: payableAmount,
+        expected_balance: payableAmount,
         cash_tendered: paymentMethod === 'cash' ? cashTendered : payableAmount,
       };
 
@@ -375,8 +449,17 @@ export const PosPage: React.FC = () => {
       }
     } catch (err: any) {
       setPayError(apiError(err, 'Payment processing failed.'));
+      setPayBlockedItems(err?.response?.data?.data?.outstanding_items ?? []);
       void sound.play('payment_failed');
       loadPendingBills();
+      if (err?.response?.data?.error === 'balance_changed') {
+        // Show the new amount; the cashier reviews it and confirms again
+        const fresh = await apiClient.get(`/billing/orders/${activePaymentOrder.id}/open`).catch(() => null);
+        if (fresh) {
+          setActivePaymentOrder(fresh.data.data);
+          setCashTendered(Number(fresh.data.data.remaining_balance ?? fresh.data.data.total_amount));
+        }
+      }
     } finally {
       setIsPaying(false);
     }
@@ -398,7 +481,7 @@ export const PosPage: React.FC = () => {
     }
   };
 
-  // Keyboard shortcuts: F2 search, F4 tracking, F8 send & pay, F9 toggle pending bills, Esc close dialogs
+  // Keyboard shortcuts: F2 search, F4 tracking, F8 place order, F9 toggle pending bills, Esc close dialogs
   const shortcuts = useRef<(e: KeyboardEvent) => void>(() => undefined);
   shortcuts.current = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -419,7 +502,7 @@ export const PosPage: React.FC = () => {
       navigate('/tracking');
     } else if (e.key === 'F8' && posMode === 'new_order') {
       e.preventDefault();
-      handleCreateOrder(true);
+      handleCreateOrder();
     } else if (e.key === 'F9') {
       e.preventDefault();
       switchPosMode(posMode === 'new_order' ? 'pending_bills' : 'new_order');
@@ -431,14 +514,132 @@ export const PosPage: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const filteredItems = menuItems.filter((item) => {
-    const matchesStall = selectedStallId === 'all' || item.stall_id === selectedStallId;
-    const matchesSearch =
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.stall.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.category.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesStall && matchesSearch;
+  // Stall first, then category, then search. All three only decide what is on screen: a dish keeps its own stall_id,
+  // so the cart, order splitting, kitchen tickets and billing are the same whichever tab a dish was picked from.
+  const browsableItems = useMemo(() => eligibleItems(menuItems, categories, stalls), [menuItems, categories, stalls]);
+  const stallTabs = useMemo(() => buildStallTabs(stalls, browsableItems), [stalls, browsableItems]);
+  const activeStall = resolveSelectedStall(stallTabs, selectedStall);
+  const activeStallTab = activeStall === ALL_STALLS ? undefined : stallTabs.find((t) => t.id === activeStall);
+  const stallItems = useMemo(() => itemsOfStall(browsableItems, activeStall), [browsableItems, activeStall]);
+  const categoryGroups = useMemo(
+    () => buildCategoryGroups(categoriesOfStall(categories, activeStall), stallItems),
+    [categories, activeStall, stallItems]
+  );
+  // Every category is on screen as its own card, so the POS opens on All Categories; the picker narrows to one card.
+  const activeCategory = resolveSelectedCategory(categoryGroups, selectedCategory, ALL_CATEGORIES);
+  const activeCategoryName = categoryGroups.find((g) => g.key === activeCategory)?.name;
+  const scopeName = [activeStallTab?.name, activeCategoryName].filter(Boolean).join(' · ');
+  const filteredItems = useMemo(() => filterCatalog(stallItems, activeCategory, searchQuery), [stallItems, activeCategory, searchQuery]);
+  const categoryCards = useMemo(() => buildCategoryCards(categoryGroups, filteredItems), [categoryGroups, filteredItems]);
+  const cartQty = useMemo(() => new Map(cart.map((ci) => [ci.menuItem.id, ci.quantity])), [cart]);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(() => new Set());
+  const toggleCard = useCallback((key: string) => {
+    setExpandedCards((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  }, []);
+  // A search or a single picked category shows every match; with All Stalls each dish row names its stall
+  const showAllDishes = searchQuery.trim() !== '' || activeCategory !== ALL_CATEGORIES;
+
+  // The cashier's card order and folded cards, kept on this PC (display only; the menu itself is never changed)
+  const [cardLayout, setCardLayout] = useState<CardLayout>(() => {
+    try {
+      return parseCardLayout(localStorage.getItem(CARD_LAYOUT_STORAGE_KEY));
+    } catch {
+      return parseCardLayout(null);
+    }
   });
+  useEffect(() => {
+    try {
+      if (cardLayout.order.length || cardLayout.collapsed.length) localStorage.setItem(CARD_LAYOUT_STORAGE_KEY, JSON.stringify(cardLayout));
+      else localStorage.removeItem(CARD_LAYOUT_STORAGE_KEY);
+    } catch {
+      // storage unavailable: the layout lasts until the POS is closed
+    }
+  }, [cardLayout]);
+  // Every category of every stall, in the menu's own order: dragging inside one stall's view keeps the others in place
+  const allCategoryKeys = useMemo(() => buildCategoryGroups(categories, browsableItems).map((g) => g.key), [categories, browsableItems]);
+  const allKeysRef = useRef(allCategoryKeys);
+  allKeysRef.current = allCategoryKeys;
+  const orderedCards = useMemo(() => orderCards(categoryCards, cardLayout.order), [categoryCards, cardLayout.order]);
+  const visibleKeysRef = useRef<string[]>([]);
+  visibleKeysRef.current = orderedCards.map((c) => c.key);
+  const collapsedSet = useMemo(() => new Set(cardLayout.collapsed), [cardLayout.collapsed]);
+  const toggleCollapse = useCallback((key: string) => {
+    setCardLayout((prev) => ({
+      ...prev,
+      collapsed: prev.collapsed.includes(key) ? prev.collapsed.filter((k) => k !== key) : [...prev.collapsed, key],
+    }));
+  }, []);
+  const setAllFolded = (fold: boolean) => {
+    const keys = new Set(visibleKeysRef.current);
+    setCardLayout((prev) => ({
+      ...prev,
+      collapsed: fold ? [...new Set([...prev.collapsed, ...keys])] : prev.collapsed.filter((k) => !keys.has(k)),
+    }));
+  };
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [dropAt, setDropAt] = useState<{ key: string; place: 'before' | 'after' } | null>(null);
+  const dragKeyRef = useRef<string | null>(null);
+  const onCardDragStart = useCallback((key: string) => {
+    dragKeyRef.current = key;
+    setDragKey(key);
+  }, []);
+  const onCardDragOver = useCallback((key: string, place: 'before' | 'after') => {
+    if (!dragKeyRef.current) return;
+    setDropAt((prev) => (key === dragKeyRef.current ? null : prev?.key === key && prev.place === place ? prev : { key, place }));
+  }, []);
+  const onCardDragEnd = useCallback(() => {
+    dragKeyRef.current = null;
+    setDragKey(null);
+    setDropAt(null);
+  }, []);
+  const onCardDrop = useCallback((key: string, place: 'before' | 'after') => {
+    const moving = dragKeyRef.current;
+    if (moving && moving !== key) {
+      setCardLayout((prev) => ({ ...prev, order: moveCard(effectiveOrder(allKeysRef.current, prev.order), moving, key, place) }));
+    }
+    onCardDragEnd();
+  }, [onCardDragEnd]);
+  const onCardStep = useCallback((key: string, delta: -1 | 1) => {
+    setCardLayout((prev) => ({ ...prev, order: stepCard(effectiveOrder(allKeysRef.current, prev.order), visibleKeysRef.current, key, delta) }));
+  }, []);
+  const layoutChanged = cardLayout.order.length > 0 || cardLayout.collapsed.length > 0;
+  const anyOpen = orderedCards.some((c) => !collapsedSet.has(c.key));
+  const multiStallView = activeStall === ALL_STALLS && stallTabs.length > 1;
+
+  // Keep the selected stall tab in view and start each stall/category at its first dish
+  useEffect(() => {
+    stallTabsRow.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [activeStall, posMode, stallTabs.length]);
+  useEffect(() => {
+    productGrid.current?.scrollTo({ top: 0 });
+  }, [activeStall, activeCategory, posMode]);
+
+  const showEverything = () => {
+    setSelectedStall(ALL_STALLS);
+    setSelectedCategory(ALL_CATEGORIES);
+  };
+
+  const onStallTabKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const chips = Array.from(e.currentTarget.querySelectorAll('button'));
+    const next = chips[chips.indexOf(document.activeElement as HTMLButtonElement) + (e.key === 'ArrowRight' ? 1 : -1)];
+    if (next) {
+      e.preventDefault();
+      next.focus();
+      next.click();
+    }
+  };
+
+  const stallTabClass = (selected: boolean) =>
+    `px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 max-w-[16rem] truncate focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
+      selected ? 'bg-primary text-primary-fg shadow-sm' : 'bg-surface-2 text-muted hover:bg-line'
+    }`;
+
+  const trimmedSearch = searchQuery.trim();
 
   const filteredPendingBills = pendingBills.filter((bill) => {
     const term = pendingSearch.toLowerCase();
@@ -490,7 +691,7 @@ export const PosPage: React.FC = () => {
             <RefreshCw className={`w-4 h-4 ${isLoadingPending ? 'animate-spin text-primary' : ''}`} />
           </button>
           <span className="text-muted font-mono">
-            {pendingBills.length} Unpaid Bill{pendingBills.length === 1 ? '' : 's'}
+            {pendingBills.length} Bill{pendingBills.length === 1 ? '' : 's'} to Settle
           </span>
         </div>
       </div>
@@ -515,14 +716,35 @@ export const PosPage: React.FC = () => {
             </p>
           </div>
 
+          {billBlock && (
+            <div role="alert" data-testid="bill-blocked" className="bg-danger/10 border border-danger/30 text-danger-fg rounded-lg p-3 text-xs space-y-1.5">
+              <p className="font-bold">Order {billBlock.orderNumber}: {billBlock.message}</p>
+              {billBlock.items.length > 0 && <OutstandingItems items={billBlock.items} />}
+            </div>
+          )}
+
+          {awaitingFulfilment > 0 && (
+            <button
+              type="button"
+              data-testid="awaiting-fulfilment"
+              onClick={() => navigate('/tracking')}
+              className="w-full text-left bg-surface border border-line rounded-lg px-3 py-2 text-xs text-muted hover:border-primary transition flex items-center gap-2"
+            >
+              <ListChecks className="w-4 h-4 text-primary shrink-0" />
+              <span>
+                <span className="font-bold text-fg">{awaitingFulfilment}</span> more {awaitingFulfilment === 1 ? 'order is' : 'orders are'} still being prepared or served. A bill appears here once every item is Served or Cancelled.
+              </span>
+            </button>
+          )}
+
           {filteredPendingBills.length === 0 ? (
             <div className="bg-surface rounded-lg px-4 py-8 text-center border border-line max-w-md mx-auto mt-8 space-y-3">
               <div className="w-16 h-16 bg-st-served-soft text-st-served-fg rounded-lg flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
-              <h3 className="font-semibold text-base text-fg">All Table Bills Settled</h3>
+              <h3 className="font-semibold text-base text-fg">No Bills Ready to Settle</h3>
               <p className="text-xs text-muted">
-                There are no outstanding table or takeaway orders awaiting payment.
+                No table or takeaway order is fully served and awaiting payment.
               </p>
             </div>
           ) : (
@@ -589,9 +811,9 @@ export const PosPage: React.FC = () => {
                     {/* Items List */}
                     <div className="bg-canvas p-2.5 rounded-lg space-y-1 text-xs">
                       {bill.items?.map((it: any) => (
-                        <div key={it.id} className="flex justify-between text-fg">
+                        <div key={it.id} className={`flex justify-between ${it.status === 'cancelled' ? 'text-muted line-through' : 'text-fg'}`}>
                           <span>{it.quantity}× {it.item_name}</span>
-                          <span className="font-semibold text-fg">₹{it.subtotal}</span>
+                          <span className="font-semibold">{it.status === 'cancelled' ? 'Cancelled' : `₹${it.subtotal}`}</span>
                         </div>
                       ))}
                     </div>
@@ -653,10 +875,10 @@ export const PosPage: React.FC = () => {
         <div className="flex flex-1 overflow-hidden">
           {/* Left Menu & Catalog Column */}
           <div className="flex-1 flex flex-col min-w-0 border-r border-line bg-surface">
-            {/* Top Controls: Search & Stall Filters */}
-            <div className="p-4 border-b border-line space-y-3 bg-surface">
-              <div className="flex items-center space-x-3">
-                <div className="relative flex-1">
+            {/* Top Controls: search + category picker, then the stall tabs. Same two rows as before: nothing taller. */}
+            <div className="px-4 py-3 border-b border-line space-y-2.5 bg-surface">
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1 min-w-0">
                   <Search className="w-4 h-4 text-subtle absolute left-3 top-3" />
                   <input
                     ref={searchInput}
@@ -668,81 +890,178 @@ export const PosPage: React.FC = () => {
                     className="w-full pl-9 pr-4 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-focus"
                   />
                 </div>
+                {/* Categories of the selected stall (or of every stall). Same-named categories of different stalls are one entry. */}
+                <select
+                  aria-label="Product category"
+                  data-testid="pos-category-select"
+                  value={activeCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="w-56 max-w-[40%] shrink-0 py-2 px-2.5 rounded-lg border border-line bg-surface text-sm text-fg focus:outline-none focus:ring-2 focus:ring-focus"
+                >
+                  <option value={ALL_CATEGORIES}>All Categories ({stallItems.length})</option>
+                  {categoryGroups.map((group) => (
+                    <option key={group.key} value={group.key}>
+                      {group.name} ({group.count})
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {/* Stall Selector Tabs */}
-              <div className="flex items-center space-x-2 overflow-x-auto pb-1">
-                <button
-                  onClick={() => setSelectedStallId('all')}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
-                    selectedStallId === 'all'
-                      ? 'bg-primary text-primary-fg'
-                      : 'bg-surface-2 text-muted hover:bg-line'
-                  }`}
+              {/* Stall tabs: browsing only. A dish's stall comes from the dish itself, never from the tab it was picked from. */}
+              <div className="flex items-center gap-2">
+                <div
+                  ref={stallTabsRow}
+                  role="group"
+                  aria-label="Stalls"
+                  data-testid="pos-stall-tabs"
+                  onKeyDown={onStallTabKey}
+                  className="flex flex-1 min-w-0 items-center gap-2 overflow-x-auto pb-1"
                 >
-                  All Stalls ({menuItems.length})
-                </button>
-                {stalls.map((s) => (
                   <button
-                    key={s.id}
-                    onClick={() => setSelectedStallId(s.id)}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition flex items-center space-x-1.5 ${
-                      selectedStallId === s.id
-                        ? 'bg-primary text-primary-fg shadow-sm'
-                        : 'bg-surface-2 text-muted hover:bg-line'
-                    }`}
+                    type="button"
+                    data-stall-tab="all"
+                    aria-pressed={activeStall === ALL_STALLS}
+                    onClick={() => setSelectedStall(ALL_STALLS)}
+                    className={stallTabClass(activeStall === ALL_STALLS)}
                   >
-                    <Store className="w-3.5 h-3.5" />
-                    <span>{s.name}</span>
+                    All Stalls ({browsableItems.length})
                   </button>
-                ))}
+                  {stallTabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      data-stall-tab={tab.id}
+                      aria-pressed={activeStall === tab.id}
+                      title={`${tab.label} · ${tab.name}${tab.code ? ` (${tab.code})` : ''} · ${tab.count} dish${tab.count === 1 ? '' : 'es'}`}
+                      onClick={() => setSelectedStall(tab.id)}
+                      className={stallTabClass(activeStall === tab.id)}
+                    >
+                      {tab.label} · {tab.name}
+                    </button>
+                  ))}
+                </div>
+                {/* Overflow: jump straight to any stall when there are more tabs than fit */}
+                {stallTabs.length > 1 && (
+                  <div className="relative shrink-0 mb-1 w-8 h-7 rounded-lg bg-surface-2 text-muted hover:bg-line flex items-center justify-center focus-within:ring-2 focus-within:ring-focus">
+                    <ChevronDown className="w-4 h-4 pointer-events-none" aria-hidden />
+                    <select
+                      aria-label="Jump to stall"
+                      title="Jump to stall"
+                      data-testid="pos-stall-jump"
+                      value={String(activeStall)}
+                      onChange={(e) => setSelectedStall(e.target.value === ALL_STALLS ? ALL_STALLS : Number(e.target.value))}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    >
+                      <option value={ALL_STALLS}>All Stalls</option>
+                      {stallTabs.map((tab) => (
+                        <option key={tab.id} value={String(tab.id)}>
+                          {tab.label} · {tab.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {/* Card layout: fold/open every card on screen, and undo the cashier's own order and folds */}
+                <div className="flex items-center gap-1 shrink-0 mb-1" role="group" aria-label="Card layout">
+                  <button
+                    type="button"
+                    data-testid="pos-cards-fold-all"
+                    onClick={() => setAllFolded(anyOpen)}
+                    disabled={orderedCards.length === 0}
+                    title={anyOpen ? 'Fold all cards to their names' : 'Open all cards'}
+                    aria-label={anyOpen ? 'Fold all cards' : 'Open all cards'}
+                    className="w-8 h-7 rounded-lg bg-surface-2 text-muted hover:bg-line flex items-center justify-center disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                  >
+                    {anyOpen ? <ChevronsDownUp className="w-4 h-4" /> : <ChevronsUpDown className="w-4 h-4" />}
+                  </button>
+                  {layoutChanged && (
+                    <button
+                      type="button"
+                      data-testid="pos-cards-reset"
+                      onClick={() => setCardLayout(parseCardLayout(null))}
+                      title="Reset card order and open every card"
+                      aria-label="Reset card layout"
+                      className="w-8 h-7 rounded-lg bg-surface-2 text-muted hover:bg-line flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Menu Items Grid */}
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filteredItems.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => addToCart(item)}
-                    data-menu-item={item.name}
-                    className="p-3 min-h-[40px] rounded-lg border border-line hover:border-primary bg-surface hover:shadow-md cursor-pointer transition flex flex-col justify-between group"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[11px] font-semibold text-primary truncate max-w-[120px]">
-                          {item.stall.name}
-                        </span>
-                        <span
-                          className={`w-2.5 h-2.5 rounded-full ${
-                            item.is_veg ? 'bg-success-fg' : 'bg-danger'
-                          }`}
-                          title={item.is_veg ? 'Vegetarian' : 'Non-Vegetarian'}
-                        />
-                      </div>
-                      <h4 className="font-bold text-fg text-sm leading-snug group-hover:text-primary transition">
-                        {item.name}
-                      </h4>
-                      <p className="text-xs text-muted mt-1 line-clamp-2">{item.category.name}</p>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-line">
-                      <span className="font-extrabold text-fg text-sm">
-                        ₹{Number(item.price).toFixed(2)}
-                      </span>
-                      <button className="w-7 h-7 rounded-lg bg-surface-2 group-hover:bg-primary group-hover:text-primary-fg flex items-center justify-center transition">
-                        <Plus className="w-4 h-4" />
+            {/* Category cards: each category with its own dishes, added straight to the cart. Columns follow the space beside the cart */}
+            <div ref={productGrid} className="flex-1 overflow-y-auto p-4">
+              {filteredItems.length === 0 ? (
+                <div data-testid="pos-empty-state" className="h-full flex flex-col items-center justify-center text-center text-muted space-y-2 px-4">
+                  <UtensilsCrossed className="w-10 h-10 opacity-30" />
+                  {catalogStatus === 'loading' ? (
+                    <p className="text-xs font-medium">Loading menu…</p>
+                  ) : catalogStatus === 'error' ? (
+                    <>
+                      <p className="text-sm font-semibold text-fg">The menu could not be loaded</p>
+                      <button type="button" onClick={loadData} className="px-3 py-1.5 border border-line rounded-lg text-xs font-bold text-fg hover:bg-surface-2">
+                        Try again
                       </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    </>
+                  ) : trimmedSearch ? (
+                    <>
+                      <p className="text-sm font-semibold text-fg">
+                        No dishes match “{trimmedSearch}”{scopeName ? ` in ${scopeName}` : ''}
+                      </p>
+                      {(activeCategory !== ALL_CATEGORIES || activeStall !== ALL_STALLS) && (
+                        <button
+                          type="button"
+                          data-testid="pos-search-all-categories"
+                          onClick={showEverything}
+                          className="px-3 py-1.5 border border-line rounded-lg text-xs font-bold text-fg hover:bg-surface-2"
+                        >
+                          {activeStall !== ALL_STALLS ? 'Search all stalls' : 'Search all categories'}
+                        </button>
+                      )}
+                    </>
+                  ) : scopeName ? (
+                    <p className="text-sm font-semibold text-fg">No dishes available in {scopeName}</p>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold text-fg">No dishes to sell yet</p>
+                      <p className="text-xs">Add categories and dishes in Menu Catalog.</p>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div data-testid="pos-category-cards" className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3 items-stretch">
+                  {orderedCards.map((card, index) => (
+                    <CategoryCard
+                      key={card.key}
+                      card={card}
+                      index={index}
+                      cartQty={cartQty}
+                      expanded={expandedCards.has(card.key)}
+                      showAll={showAllDishes}
+                      showStall={multiStallView}
+                      onAdd={addToCart}
+                      onToggle={toggleCard}
+                      scrollRoot={productGrid}
+                      collapsed={collapsedSet.has(card.key)}
+                      onCollapse={toggleCollapse}
+                      dragging={dragKey === card.key}
+                      dropMark={dropAt?.key === card.key ? dropAt.place : null}
+                      onDragStart={onCardDragStart}
+                      onDragOverCard={onCardDragOver}
+                      onDropCard={onCardDrop}
+                      onDragEnd={onCardDragEnd}
+                      onStep={onCardStep}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Right Consolidated Cart Column */}
-          <div className="w-96 flex flex-col bg-surface shrink-0 border-l border-line">
+          {/* Right Consolidated Cart Column. In a short window the whole column scrolls and the totals stay pinned at the
+              bottom, so the cart lines always keep room instead of being squeezed to nothing. */}
+          <div data-testid="pos-cart-column" className="w-72 lg:w-80 xl:w-96 flex flex-col bg-surface shrink-0 border-l border-line overflow-y-auto">
             {/* Order Type & Table Selection */}
             <div className="p-4 border-b border-line space-y-3">
               <div className="grid grid-cols-2 gap-2 bg-surface-2 p-1 rounded-lg">
@@ -831,7 +1150,7 @@ export const PosPage: React.FC = () => {
             </div>
 
             {/* Cart Items List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div data-testid="pos-cart-lines" className="grow shrink-0 basis-auto min-h-[9rem] p-4 space-y-3">
               {cart.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-muted space-y-2">
                   <Store className="w-10 h-10 opacity-30" />
@@ -872,7 +1191,7 @@ export const PosPage: React.FC = () => {
             </div>
 
             {/* Cart Footer & Financial Summary */}
-            <div className="p-4 border-t border-line bg-canvas space-y-3">
+            <div className="sticky bottom-0 z-10 p-3 xl:p-4 border-t border-line bg-canvas space-y-2 xl:space-y-3">
               <div className="space-y-1.5 text-xs">
                 {estimateLines.map((line) => (
                   <div key={line.label} data-testid="cart-tax-line" className="flex justify-between text-muted">
@@ -909,14 +1228,14 @@ export const PosPage: React.FC = () => {
                 </button>
                 <button
                   disabled={cart.length === 0 || isSubmitting}
-                  onClick={() => handleCreateOrder(true)}
+                  onClick={() => handleCreateOrder()}
                   className="py-2 px-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-fg font-extrabold text-xs shadow-md shadow-primary/20 transition disabled:opacity-50 flex items-center justify-center gap-1"
                 >
-                  <span>{isSubmitting ? 'Processing…' : 'Send & Pay (F8)'}</span>
+                  <span>{isSubmitting ? 'Processing…' : 'Place Order (F8)'}</span>
                   <span>➔</span>
                 </button>
               </div>
-              <p className="text-[10px] text-muted text-center">F2 search · F4 tracking · F8 send & pay · F9 pending bills · Esc close</p>
+              <p className="hidden [@media(min-height:700px)]:block text-[10px] text-muted text-center">F2 search · F4 tracking · F8 place order · F9 pending bills · Esc close</p>
 
               {cart.length > 0 && (
                 <button
@@ -971,7 +1290,7 @@ export const PosPage: React.FC = () => {
                   </span>
                 </div>
                 <div className="mt-1 text-[11px] text-muted flex justify-between">
-                  <span>Covers {activePaymentOrder.items?.length || 0} dishes</span>
+                  <span>Covers {activePaymentOrder.items?.filter((it: any) => it.status !== 'cancelled').length || 0} dishes</span>
                   {Number(activePaymentOrder.total_paid || 0) > 0 && (
                     <span>Total: ₹{Number(activePaymentOrder.total_amount).toFixed(2)} · Paid: ₹{Number(activePaymentOrder.total_paid).toFixed(2)}</span>
                   )}
@@ -1129,8 +1448,9 @@ export const PosPage: React.FC = () => {
             )}
 
             {payError && (
-              <div role="alert" className="p-2.5 rounded-lg bg-danger/10 border border-danger/30 text-danger-fg text-xs">
-                {payError}
+              <div role="alert" data-testid="pay-error" className="p-2.5 rounded-lg bg-danger/10 border border-danger/30 text-danger-fg text-xs space-y-1.5">
+                <p>{payError}</p>
+                {payBlockedItems.length > 0 && <OutstandingItems items={payBlockedItems} />}
               </div>
             )}
             </div>
@@ -1173,7 +1493,7 @@ export const PosPage: React.FC = () => {
       {/* ================= SETTLED RECEIPT MODAL ================= */}
       {settledReceipt && (
         <div className="fixed inset-0 !m-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-lg max-w-sm w-full p-4 shadow-2xl border border-line space-y-4">
+          <div className="bg-surface rounded-lg max-w-sm w-full p-4 shadow-2xl border border-line space-y-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
             <div className="text-center border-b border-line pb-4">
               <div className="w-12 h-12 bg-st-served-soft text-st-served-fg rounded-full flex items-center justify-center mx-auto mb-2">
                 <CheckCircle2 className="w-7 h-7" />

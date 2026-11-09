@@ -16,6 +16,7 @@
  */
 import electronPath from 'electron';
 import { _electron as electron } from 'playwright-core';
+import { serveAll } from './serve-order.mjs';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -53,7 +54,7 @@ const api = async (token, method, path, body, allowFail = false) => {
 };
 
 const launch = async () => {
-  const launchEnv = { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: '' };
+  const launchEnv = { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_PIN_LOCK: 'off', FOODCOURT_API_URL: '' };
   delete launchEnv.ELECTRON_RUN_AS_NODE;
   app = await electron.launch({ executablePath: electronPath, args: [APP_DIR], env: launchEnv, timeout: 60000 });
   page = await app.firstWindow();
@@ -140,6 +141,7 @@ try {
     const cat = (await api(ownerToken, 'POST', '/menu-categories', { stall_id: stall.id, name: `Main ${i}` })).data;
     const item = (await api(ownerToken, 'POST', '/menu', { stall_id: stall.id, category_id: cat.id, name: `${name} special`, price: sales })).data;
     const order = (await api(cashierToken, 'POST', '/orders', { order_type: 'takeaway', items: [{ menu_item_id: item.id, quantity: 1 }], idempotency_key: `payout-e2e-${tag}-${i}` })).data;
+    await serveAll(API, cashierToken, order.id);
     await api(cashierToken, 'POST', '/billing/pay', { order_id: order.id, payment_method: 'cash', amount: order.total_amount, cash_tendered: Number(order.total_amount) + 10 });
     stalls[name] = { ...stall, owner, sales };
   }

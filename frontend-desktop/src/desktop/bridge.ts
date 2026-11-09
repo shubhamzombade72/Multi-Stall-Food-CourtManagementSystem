@@ -39,6 +39,54 @@ export interface DesktopAppInfo {
   dataDir: string | null;
 }
 
+export interface UpdatePolicy {
+  mode: 'idle' | 'silent' | 'approve_once' | 'ask';
+  window: { start: string; end: string };
+}
+
+export interface UpdateState {
+  enabled: boolean;
+  /** why online updates cannot run on this installation */
+  blocked: string | null;
+  /** a pen-drive update needs only this */
+  hasKeys: boolean;
+  policy: UpdatePolicy;
+  /** one fixed rule for every PC, so there is nothing to choose */
+  policyLocked?: boolean;
+  /** downloaded and verified, waiting for its install time */
+  pending: { version: string; source: 'online' | 'file'; readyAt: string; approved: boolean; installAt: string | null } | null;
+  /** why the idle gate last said no */
+  waitingFor: string[];
+  paused: boolean;
+  enrolled: boolean;
+  channel: string | null;
+  currentVersion: string;
+  mode: 'embedded' | 'remote';
+  phase: 'idle' | 'downloading' | 'verifying' | 'installing';
+  progress: { received: number; total: number } | null;
+  error: string | null;
+  message: string | null;
+  checkedAt: string | null;
+  serverBlocked: string | null;
+  update: {
+    version: string;
+    channel: string;
+    required: boolean;
+    releaseDate: string | null;
+    packageType: 'incremental' | 'full';
+    packageSize: number;
+    notes: Record<string, unknown>;
+  } | null;
+  snoozed: boolean;
+  /**
+   * A mandatory release, from signed release data only: the verified offer, or the downloaded package's description checked
+   * again. failedBefore: it was installed, failed and was rolled back, so it must not lock the PC in a loop.
+   */
+  required?: { version: string; notes: Record<string, unknown>; downloaded: boolean; failedBefore: boolean } | null;
+  lastResult: { outcome: 'completed' | 'installed' | 'recovered' | 'needs_developer'; version: string; failure?: string | null; restored_database?: boolean; running_version?: string | null; at: string } | null;
+  recoveryPoints: number;
+}
+
 export interface BackupEntry {
   name: string;
   bytes: number;
@@ -79,7 +127,31 @@ export interface DesktopPrinter {
   status: number;
 }
 
+/** The account a device sign-in belongs to: what the PIN screen may show before anything is unlocked. */
+export interface VaultAccount {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export type VaultStatus =
+  | { state: 'none' | 'corrupt' | 'unavailable' | 'disabled' }
+  | { state: 'ready'; account: VaultAccount; pinLength: number; locked: boolean; retryAfterMs: number; attemptsLeft: number };
+
+export type VaultUnlockResult =
+  | { ok: true; token: string; account: VaultAccount }
+  | { ok: false; code: 'wrong_pin' | 'locked' | 'wait' | 'invalid_pin' | 'wiped' | 'no_vault' | 'corrupt' | 'unavailable'; retryAfterMs?: number; attemptsLeft?: number };
+
+export type VaultSetupResult =
+  | { ok: true; account: VaultAccount; pinLength: number }
+  | { ok: false; code: 'invalid_pin' | 'weak_pin' | 'invalid_session' | 'unavailable' };
+
 interface DesktopBridge {
+  authVaultStatus(): Promise<VaultStatus>;
+  authVaultSetup(request: { pin: string; token: string; account: VaultAccount }): Promise<VaultSetupResult>;
+  authVaultUnlock(pin: string): Promise<VaultUnlockResult>;
+  authVaultClear(): Promise<{ ok: boolean }>;
   getConfig(): Promise<DesktopConfig>;
   getStartupStatus(): Promise<StartupStatus>;
   retryStart(): Promise<DesktopConfig>;
@@ -87,6 +159,18 @@ interface DesktopBridge {
   connectToHost(pairingString: string): Promise<{ ok: boolean; error?: string; foodCourtName?: string }>;
   getAppInfo(): Promise<DesktopAppInfo>;
   getDiagnostics(): Promise<DesktopDiagnostics>;
+  updateGetState(): Promise<UpdateState>;
+  updateCheck(): Promise<UpdateState>;
+  updateEnroll(code: string): Promise<{ ok: boolean; error?: string }>;
+  updateNow(token: string): Promise<{ ok: boolean; error?: string; code?: string }>;
+  /** Only for a mandatory release; needs no owner sign-in. */
+  updateInstallRequired(): Promise<{ ok: boolean; error?: string; code?: string; reasons?: string[] }>;
+  updateRemindLater(): Promise<UpdateState>;
+  updateSetPolicy(token: string, policy: UpdatePolicy): Promise<UpdateState & { ok?: boolean; error?: string }>;
+  updateApprove(token: string): Promise<UpdateState & { ok?: boolean; error?: string }>;
+  updatePauseDownload(token: string, paused: boolean): Promise<UpdateState & { ok?: boolean; error?: string }>;
+  updateInstallFromFolder(token: string): Promise<{ ok: boolean; version?: string; error?: string; cancelled?: boolean }>;
+  updateReportActivity(unsaved: string[]): Promise<boolean>;
   getBackupStatus(): Promise<BackupStatus>;
   backupNow(): Promise<BackupResult>;
   chooseBackupFolder(): Promise<BackupResult>;

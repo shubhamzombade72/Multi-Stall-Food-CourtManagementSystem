@@ -5,11 +5,11 @@
  *   cd frontend-desktop && pnpm build        (pnpm prepare:server only if the backend changed)
  *   node e2e/theme.e2e.mjs
  *
- * For light and dark: Welcome, Dashboard, POS (new order, pending bills, settle/payment modal), Kitchen (tickets in New,
- * Preparing incl. one LATE, Ready at the warning ring; ticket history), Orders & Table Tracking (expanded card, LATE label),
+ * For light and dark: Welcome, Dashboard, POS (new order, pending bills, settle/payment modal), Orders & Table Tracking
+ * (expanded card: only Mark Served and Served, no Mark Ready step; no LATE label),
  * Orders (+ detail modal), Daily Closing (+ payout details when the day is reported closed), Reports, Food Court
- * Settings, Device Settings, Payment History, Floor & Tables, Waiter Station, Cashier Closing, Menu, Staff, Stalls,
- * Inventory, Purchases, Customers (+ order history with a cancelled order) and Login are screenshotted to
+ * Settings, Device Settings, Payment History, Floor & Tables, Menu, Staff, Stalls,
+ * Central Store (raw materials, purchases), Customers (+ order history with a cancelled order) and Login are screenshotted to
  * qa/desktop/results/theme/,
  * <html data-theme> is asserted, and in dark mode no visible element (WHITE_SCAN below) may have a white or
  * near-white background. A contrast audit (text colour vs. its effective background) runs on every screen.
@@ -18,7 +18,7 @@
  * mode and checked under print media (white page, black text).
  *
  * Design-system checks (final review): heading hierarchy, compact rows + tabular figures, struck grey cancelled chips,
- * neutral channel tag, KDS column/ring/button colours, 24px/900 POS totals.
+ * neutral channel tag, tracking item actions, 24px/900 POS totals.
  *
  * The OS colour scheme is emulated as light, so a dark theme after restart can only come from fc_theme.
  * Test data only.
@@ -61,7 +61,7 @@ const contrastLog = [];
 const launch = () =>
   electron.launch({
     args: [APP_DIR],
-    env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: '' },
+    env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_PIN_LOCK: 'off', FOODCOURT_API_URL: '' },
     colorScheme: 'light',
     timeout: 60000,
   });
@@ -263,20 +263,20 @@ try {
   await api(ownerToken, 'POST', '/staff', { name: 'Theme Cashier', email: `cashier.${tag}@example.com`, password: STAFF_PW, role: 'cashier' });
   await api(ownerToken, 'POST', '/staff', { name: 'Pizza Kitchen', email: `kitchen.${tag}@example.com`, password: STAFF_PW, role: 'kitchen_staff', stall_id: stallA.id });
   const cashierToken = (await api(null, 'POST', '/auth/login', { email: `cashier.${tag}@example.com`, password: STAFF_PW })).data.token;
-  const kitchenToken = (await api(null, 'POST', '/auth/login', { email: `kitchen.${tag}@example.com`, password: STAFF_PW })).data.token;
   const placeOrder = async (tableId, names) => {
     const res = await api(cashierToken, 'POST', '/orders', { table_id: tableId, order_type: 'dine_in', items: names.map((n) => ({ menu_item_id: menu[n].id, quantity: 1 })) });
     return res.data.order_number ? res.data : res.data.order;
   };
   const order1 = await placeOrder(table1.id, ['Margherita', 'Garlic Bread', 'Veg Burger', 'Fries']);
   const order2 = await placeOrder(table2.id, ['Fries']);
-  const ticketA = (await api(kitchenToken, 'GET', '/kitchen/tickets')).data.find((t) => t.order_id === order1.id);
-  await api(kitchenToken, 'PUT', `/kitchen/tickets/${ticketA.id}/status`, { status: 'ready' });
-  check('T-02', 'Owner created on Welcome; 2 stalls, 4 items, 2 tables, 2 orders (one ticket ready) seeded via API', Boolean(ownerToken && order1.id && order2.id && order1.order_number), `${order1.order_number}, ${order2.order_number}`);
+  // The Kitchen screen is gone: food is marked served on the tracking board. Serve the Pizza stall's two items of order 1.
+  const boardOrder = (await api(ownerToken, 'GET', '/orders/board')).data.orders.find((o) => o.id === order1.id);
+  const servedNow = boardOrder.items.filter((i) => i.stall_id === stallA.id || i.stall?.id === stallA.id);
+  for (const it of servedNow) await api(ownerToken, 'PATCH', `/ticket-items/${it.id}/status`, { status: 'served' });
+  check('T-02', 'Owner created on Welcome; 2 stalls, 4 items, 2 tables, 2 orders (2 of order 1 served) seeded via API', Boolean(ownerToken && order1.id && order2.id && order1.order_number && servedNow.length === 2), `${order1.order_number}, ${order2.order_number}, served ${servedNow.length}`);
 
   // More data so every screen has content in both themes (final review I5): a customer with a cancelled order, cash
-  // payments, a low-stock inventory item, a supplier + purchase order, a closed day with settlement records, and KDS
-  // tickets in New (pending + accepted), Preparing (two; one shown LATE) and Ready (shown at the 15-minute warning).
+  // payments, a low-stock inventory item, a supplier + purchase order and a closed day with settlement records.
   const phone = `9${Date.now().toString().slice(-9)}`;
   const customer = (await api(cashierToken, 'POST', '/customers', { name: 'Theme Guest', phone, notes: 'Prefers the window table' })).data;
   const takeaway = async (names, extra = {}) => {
@@ -286,6 +286,16 @@ try {
   const order3 = await takeaway(['Fries'], { customer_name: 'Theme Guest', customer_phone: phone });
   await api(ownerToken, 'POST', `/orders/${order3.id}/cancel`, { reason: 'Theme test: guest left' });
   const order3b = await takeaway(['Veg Burger'], { customer_name: 'Theme Guest', customer_phone: phone });
+  // Billing needs every item Served or Cancelled first (billing eligibility rule): serve them as staff would on the board
+  const serveAll = async (orderId) => {
+    const o = (await api(ownerToken, 'GET', '/orders/board')).data.orders.find((x) => x.id === orderId);
+    for (const it of o?.items ?? []) if (it.status !== 'served' && it.status !== 'cancelled') await api(ownerToken, 'PATCH', `/ticket-items/${it.id}/status`, { status: 'served' });
+  };
+  await serveAll(order2.id);
+  await serveAll(order3b.id);
+  // One fully served, unpaid order, so Pending Bills has a bill to show and settle
+  const billable = await takeaway(['Garlic Bread']);
+  await serveAll(billable.id);
   await api(cashierToken, 'POST', '/billing/pay', { order_id: order2.id, payment_method: 'cash', amount: Number(order2.total_amount), cash_tendered: 500 });
   await api(cashierToken, 'POST', '/billing/pay', { order_id: order3b.id, payment_method: 'cash', amount: Number(order3b.total_amount), cash_tendered: 500 });
   const flour = (await api(ownerToken, 'POST', '/inventory', { stall_id: stallA.id, name: 'Flour', unit: 'kg', current_stock: 2, minimum_alert_stock: 5, unit_cost: 40 })).data;
@@ -295,32 +305,11 @@ try {
   await api(ownerToken, 'POST', '/purchases', { stall_id: stallA.id, supplier_id: supplier.id, order_date: today, items: [{ inventory_item_id: flour.id, quantity: 10, unit_price: 38 }] });
   await api(ownerToken, 'POST', '/settlements/close-day', { date: today, notes: 'Theme test closing' });
   dayClosedReported = (await api(ownerToken, 'GET', '/settlements/daily-summary')).data.is_closed;
-  const kNew = await takeaway(['Margherita']);
-  const kAccepted = await takeaway(['Margherita']);
-  const kLate = await takeaway(['Garlic Bread']);
-  const kPrep = await takeaway(['Garlic Bread']);
-  const tickets = (await api(kitchenToken, 'GET', '/kitchen/tickets')).data;
-  const ticketOf = (o) => tickets.find((t) => t.order_id === o.id);
-  for (const [o, steps] of [[kAccepted, ['accepted']], [kLate, ['accepted', 'preparing']], [kPrep, ['accepted', 'preparing']]]) {
-    for (const st of steps) await api(kitchenToken, 'PUT', `/kitchen/tickets/${ticketOf(o).id}/status`, { status: st });
-  }
-  const lateTicket = ticketOf(kLate);
-  check('T-03', 'Extra data seeded: customer + cancelled order, 2 payments, inventory (1 low), supplier + purchase, day closed, KDS tickets new/accepted/preparing x2/ready', Boolean(customer.id && flour.id && supplier.id && lateTicket && ticketOf(kNew) && ticketA), `customer=${customer.id} late=${lateTicket?.ticket_number} new=${ticketOf(kNew)?.ticket_number}`);
+  check('T-03', 'Extra data seeded: customer + cancelled order, 2 payments, inventory (1 low), supplier + purchase, day closed', Boolean(customer.id && flour.id && supplier.id), `customer=${customer.id}`);
 
-  // Ageing for the screenshots without touching the server clock: the live responses are rewritten in the renderer only
-  // (created_at of one preparing ticket 30 min ago -> LATE; of the ready ticket 17 min ago -> warning ring; order1 on the
-  // tracking board 40 min ago -> LATE label). The server still owns all state; this only changes what "elapsed" shows.
+  // Ageing without touching the server clock: the board response is rewritten in the renderer only (order1 40 min ago),
+  // to check that an overdue order shows no LATE label. The server still owns all state.
   const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
-  await page.route('**/api/kitchen/tickets**', async (route) => {
-    const res = await route.fetch();
-    const json = await res.json().catch(() => null);
-    if (!json || !Array.isArray(json.data)) return route.fulfill({ response: res });
-    for (const t of json.data) {
-      if (t.id === lateTicket.id) t.created_at = ago(30);
-      if (t.id === ticketA.id) t.created_at = ago(17);
-    }
-    return route.fulfill({ response: res, json });
-  });
   await page.route('**/api/orders/board**', async (route) => {
     const res = await route.fetch();
     const json = await res.json().catch(() => null);
@@ -332,7 +321,10 @@ try {
   // ------------------------------------------------------------------ app screens in both themes
   const screens = [
     ['dashboard', 'Dashboard', '#/dashboard', () => page.getByRole('heading', { name: /Dashboard/i }).first().waitFor({ timeout: 15000 })],
-    ['pos', 'Cashier POS', '#/pos', () => page.getByText('Margherita').first().waitFor({ timeout: 15000 })],
+    ['pos', 'Cashier POS', '#/pos', async () => {
+      await page.locator('[data-testid="pos-category-select"]').selectOption('all');
+      await page.getByText('Margherita').first().waitFor({ timeout: 15000 });
+    }],
     ['tracking', 'Orders & Table Tracking (expanded card)', '#/tracking', async () => {
       const c = page.getByTestId(`order-card-${order1.id}`);
       await c.waitFor({ timeout: 20000 });
@@ -346,27 +338,14 @@ try {
     ['device-settings', 'Device Settings', '#/settings', () => page.getByText('Backup & recovery').waitFor({ timeout: 15000 })],
     ['payments', 'Payment History', '#/payments', () => page.getByText(order2.order_number).first().waitFor({ timeout: 15000 })],
     ['tables', 'Floor & Tables', '#/tables', () => page.getByText(table1.table_number).first().waitFor({ timeout: 15000 })],
-    ['cashier-closing', 'Cashier Closing', '#/cashier-closing', () => page.getByText('Cashier Closing').first().waitFor({ timeout: 15000 })],
     ['menu', 'Menu', '#/menu', () => page.getByText('Garlic Bread').first().waitFor({ timeout: 15000 })],
     ['staff', 'Staff', '#/staff', () => page.getByText('Theme Cashier').first().waitFor({ timeout: 15000 })],
     ['stalls', 'Stalls', '#/stalls', () => page.getByText(stallA.name).first().waitFor({ timeout: 15000 })],
-    ['inventory', 'Inventory', '#/inventory', () => page.getByText('Flour').first().waitFor({ timeout: 15000 })],
-    ['purchases', 'Purchases', '#/purchases', () => page.getByText('Theme Mills').first().waitFor({ timeout: 15000 })],
+    // The per-stall Inventory and Purchases screens became the Central Store
+    ['store', 'Central Store: raw materials', '#/store', () => page.getByRole('heading', { name: /Raw Materials/i }).first().waitFor({ timeout: 15000 })],
+    ['store-purchases', 'Central Store: purchases & suppliers', '#/store/purchases', () => page.getByRole('heading', { name: /Purchases/i }).first().waitFor({ timeout: 15000 })],
     ['customers', 'Customers', '#/customers', () => page.getByText('Theme Guest').first().waitFor({ timeout: 15000 })],
   ];
-  const kdsColumns = () =>
-    page.evaluate(() =>
-      [...document.querySelectorAll('section')]
-        .filter((s) => s.querySelector('h3'))
-        .map((s) => {
-          const cards = [...s.querySelectorAll('article[data-ticket]')].map((a) => {
-            const cs = getComputedStyle(a);
-            const btn = a.querySelector('button');
-            return { ticket: a.dataset.ticket, late: /LATE/.test(a.innerText), ring: cs.boxShadow, borderLeft: cs.borderLeftColor, btn: btn ? `${btn.innerText.trim()}|${getComputedStyle(btn).backgroundColor}` : null };
-          });
-          return { title: (s.querySelector('h3 span') || s.querySelector('h3')).innerText, cards };
-        }),
-    );
   const tokenRgb = (name) => page.evaluate((n) => `rgb(${getComputedStyle(document.documentElement).getPropertyValue(n).trim().split(/\s+/).join(', ')})`, name);
   extraScreens = async (theme, key) => {
     if (key === 'dashboard') {
@@ -398,26 +377,17 @@ try {
       check(`${theme}-orders-cancelled`, `Orders (${theme}): a cancelled order shows a struck-through grey chip, not the red cooking colour`, Boolean(o.cancelled) && /line-through/.test(o.cancelled.deco) && o.cancelled.bg !== cooking, `${JSON.stringify(o.cancelled)} cooking-soft=${cooking}`);
       check(`${theme}-orders-channel`, `Orders (${theme}): the channel label is a neutral outlined tag (no status fill, not a pill)`, Boolean(o.channel) && !/st-|rounded-full/.test(o.channel) && /rgba\(0, 0, 0, 0\)/.test(o.channel), o.channel);
     }
-    if (key === 'kitchen') {
-      const cols = await kdsColumns();
-      const byTitle = (re) => cols.find((c) => re.test(c.title.trim())) || { cards: [] };
-      const nw = byTitle(/^New/i);
-      const prep = byTitle(/^Preparing/i);
-      const ready = byTitle(/^Ready/i);
-      const blue = await tokenRgb('--c-st-running');
-      check(`${theme}-kds-columns`, `KDS (${theme}): New has 2 tickets with the blue attention border, Preparing 2 (exactly one LATE), Ready 1`, nw.cards.length === 2 && nw.cards.every((c) => c.borderLeft === blue) && prep.cards.length === 2 && prep.cards.filter((c) => c.late).length === 1 && ready.cards.length === 1, JSON.stringify(cols.map((c) => ({ t: c.title, n: c.cards.length, late: c.cards.filter((x) => x.late).length, bl: c.cards[0]?.borderLeft }))) + ` blue=${blue}`);
-      check(`${theme}-kds-ready-warning`, `KDS (${theme}): the Ready ticket at the 15-minute warning shows a visible ring (box-shadow)`, ready.cards.length === 1 && Boolean(ready.cards[0].ring) && ready.cards[0].ring !== 'none', ready.cards[0]?.ring);
-      const btnBg = (c) => c?.btn?.split('|')[1];
-      const bgs = [btnBg(nw.cards.find((c) => /^Accept/.test(c.btn || ''))), btnBg(nw.cards.find((c) => /^Start/.test(c.btn || ''))), btnBg(prep.cards[0])];
-      check(`${theme}-kds-action-colour`, `KDS (${theme}): advance buttons are coloured by their target (Accept / Start Preparing / Mark Ready all differ)`, bgs.every(Boolean) && new Set(bgs).size === 3, JSON.stringify([...nw.cards, ...prep.cards].map((c) => c.btn)));
-      await page.getByRole('button', { name: 'Ticket history' }).click();
-      await page.locator('table').first().waitFor({ timeout: 15000 }).catch(() => undefined);
-      await settle(600);
-      await verifyScreen(theme, 'kitchen-history', 'Kitchen ticket history');
-    }
     if (key === 'tracking') {
       const late = await page.getByTestId(`order-card-${order1.id}`).getByText('LATE', { exact: true }).isVisible().catch(() => false);
       check(`${theme}-tracking-late`, `Tracking (${theme}): an overdue order does NOT show the LATE label (late indicators removed)`, !late);
+      const card = page.getByTestId(`order-card-${order1.id}`);
+      const acts = {
+        markReady: await card.getByRole('button', { name: 'Mark Ready' }).count(),
+        markServed: await card.getByRole('button', { name: 'Mark Served' }).count(),
+        served: await card.locator('[data-testid^="item-status-"]', { hasText: 'Served' }).count(),
+        cookingOrReady: await card.locator('[data-testid^="item-status-"]', { hasText: /Cooking|Ready/ }).count(),
+      };
+      check(`${theme}-tracking-actions`, `Tracking (${theme}): items show only Mark Served (2 still to serve) or Served (2); no Mark Ready, no Cooking/Ready chip`, acts.markReady === 0 && acts.markServed === 2 && acts.served === 2 && acts.cookingOrReady === 0, JSON.stringify(acts));
     }
     if (key === 'pos') {
       await page.getByRole('button', { name: /Pending Table Bills/ }).click();
@@ -481,7 +451,7 @@ try {
       await extraScreens(theme, key);
       if (key === 'orders') {
         // The Orders detail modal (the only dialog this run opens; it is also where the receipt is printed from)
-        await page.getByRole('button', { name: `Open ${order1.order_number}` }).click();
+        await page.getByRole('button', { name: `Open ${billable.order_number}` }).click(); // fully served: its bill can be printed
         const dialog = page.getByRole('dialog');
         await dialog.waitFor({ timeout: 15000 });
         await dialog.getByRole('button', { name: /Print (bill|receipt)/ }).waitFor({ timeout: 15000 });
@@ -547,7 +517,7 @@ try {
       });
     });
   });
-  await page.getByRole('button', { name: `Open ${order1.order_number}` }).click();
+  await page.getByRole('button', { name: `Open ${billable.order_number}` }).click(); // fully served: its bill can be printed
   await page.getByRole('button', { name: /Print (bill|receipt)/ }).click();
   await page.waitForFunction(() => (document.getElementById('print-root')?.innerText || '').trim().length > 20, null, { timeout: 15000 });
   const printCalls = await app.evaluate(() => globalThis.__printCalls);

@@ -12,7 +12,7 @@ const ROLES = [
   { value: 'waiter', label: 'Waiter' },
   { value: 'store_staff', label: 'Store Staff' },
 ];
-const STALL_ROLES = ['stall_manager', 'kitchen_staff', 'store_staff'];
+const STALL_ROLES = ['stall_manager', 'kitchen_staff'];
 const roleLabel = (r: string) => ROLES.find((x) => x.value === r)?.label || r;
 
 interface Staff {
@@ -215,7 +215,7 @@ export const StaffPage: React.FC = () => {
 
 const RoleStallFields: React.FC<{ role: string; stallId: string | number; stalls: any[]; onChange: (role: string, stallId: string | number) => void }> = ({ role, stallId, stalls, onChange }) => (
   <>
-    <select aria-label="Role" className="w-full px-3 py-2 rounded-lg border border-line text-sm" value={role} onChange={(e) => onChange(e.target.value, stallId)}>
+    <select aria-label="Role" className="w-full px-3 py-2 rounded-lg border border-line text-sm" value={role} onChange={(e) => onChange(e.target.value, e.target.value === 'store_staff' ? '' : stallId)}>
       {ROLES.map((r) => (
         <option key={r.value} value={r.value}>
           {r.label}
@@ -227,9 +227,10 @@ const RoleStallFields: React.FC<{ role: string; stallId: string | number; stalls
       className="w-full px-3 py-2 rounded-lg border border-line text-sm"
       value={stallId}
       required={STALL_ROLES.includes(role)}
+      disabled={role === 'store_staff'}
       onChange={(e) => onChange(role, e.target.value)}
     >
-      <option value="">{STALL_ROLES.includes(role) ? 'Select stall (required)' : 'No stall (food court wide)'}</option>
+      <option value="">{role === 'store_staff' ? 'Central store (no stall)' : STALL_ROLES.includes(role) ? 'Select stall (required)' : 'No stall (food court wide)'}</option>
       {stalls.map((s) => (
         <option key={s.id} value={s.id}>
           {s.name}
@@ -248,7 +249,7 @@ const Modal: React.FC<{ title: string; onClose: () => void; onSubmit: (e: React.
   children,
 }) => (
   <div className="fixed inset-0 !m-0 bg-black/50 flex items-center justify-center z-50 p-4">
-    <form onSubmit={onSubmit} className="bg-surface rounded-lg max-w-md w-full p-4 shadow-2xl space-y-3">
+    <form onSubmit={onSubmit} className="bg-surface rounded-lg max-w-md w-full p-4 shadow-2xl space-y-3 max-h-[calc(100vh-2rem)] overflow-y-auto">
       <h3 className="font-semibold text-base text-fg">{title}</h3>
       {children}
       {error && <div role="alert" className="p-2 rounded-lg bg-danger/10 border border-danger/30 text-danger-fg text-xs">{error}</div>}

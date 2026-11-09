@@ -50,6 +50,7 @@ class SettlementController extends Controller
             ->join('stalls', 'order_items.stall_id', '=', 'stalls.id')
             ->whereDate('orders.created_at', $date)
             ->where('orders.payment_status', 'paid')
+            ->where('order_items.status', '!=', 'cancelled')
             ->select(
                 'stalls.id as stall_id',
                 'stalls.name as stall_name',
@@ -121,7 +122,8 @@ class SettlementController extends Controller
         $itemsQuery = OrderItem::with(['order.table', 'order.payments', 'stall'])
             ->join('orders', 'order_items.order_id', '=', 'orders.id')
             ->whereDate('orders.created_at', $date)
-            ->where('orders.payment_status', 'paid');
+            ->where('orders.payment_status', 'paid')
+            ->where('order_items.status', '!=', 'cancelled');
 
         if ($stallId) {
             $itemsQuery->where('order_items.stall_id', $stallId);
@@ -244,6 +246,7 @@ class SettlementController extends Controller
                     ->where('order_items.stall_id', $stall->id)
                     ->whereDate('orders.created_at', $date)
                     ->where('orders.payment_status', 'paid')
+                    ->where('order_items.status', '!=', 'cancelled')
                     ->select('order_items.*')
                     ->get();
 

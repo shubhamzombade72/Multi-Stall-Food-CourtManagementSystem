@@ -146,9 +146,10 @@ export function upiSection(receipt: { upi_enabled?: boolean; upi?: UpiRequestDat
     return null; // invalid payment data never becomes a QR
   }
   return {
-    title: paid ? 'PAID VIA UPI - MANUALLY VERIFIED' : 'SCAN & PAY USING UPI',
+    // A paid receipt prints neither of these two lines (owner's decision); the unpaid bill keeps both so a customer can pay
+    title: paid ? '' : 'SCAN & PAY USING UPI',
     qrText,
-    vpaLine: `UPI ID: ${upi.vpa}`,
+    vpaLine: paid ? '' : `UPI ID: ${upi.vpa}`,
     amountLine: `Amount: ${money(upi.amount)}`,
     referenceLine: `Ref: ${upi.reference}`,
     // A paid receipt prints no extra note under the title (who verified it and when is kept on the server, not printed)

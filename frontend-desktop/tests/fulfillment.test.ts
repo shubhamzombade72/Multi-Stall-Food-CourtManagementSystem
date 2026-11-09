@@ -59,12 +59,11 @@ test('elapsedMinutes floors and never goes negative', () => {
   assert.equal(elapsedMinutes('2026-11-03T10:00:00Z', T0 - 5000), 0);
 });
 
-test('nextItemAction', () => {
-  assert.equal(nextItemAction('pending', true), 'ready');
-  assert.equal(nextItemAction('preparing', true), 'ready');
-  assert.equal(nextItemAction('pending', false), null);
-  assert.equal(nextItemAction('ready', false), 'served');
-  assert.equal(nextItemAction('ready', true), 'served');
+test('nextItemAction: only Mark Served, straight from any unserved state, and only for roles that may serve', () => {
+  for (const st of ['pending', 'preparing', 'ready'] as const) {
+    assert.equal(nextItemAction(st, true), 'served');
+    assert.equal(nextItemAction(st, false), null);
+  }
   assert.equal(nextItemAction('served', true), null);
   assert.equal(nextItemAction('cancelled', true), null);
 });

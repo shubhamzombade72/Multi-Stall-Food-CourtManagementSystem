@@ -13,7 +13,7 @@
  *  - Navigation away from the app, new windows and web permission requests (camera, mic, geolocation...)
  *    are refused.
  */
-const { app, BrowserWindow, dialog, ipcMain, Menu, net, safeStorage, session, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, net, powerMonitor, safeStorage, session, shell } = require('electron');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -21,7 +21,9 @@ const { normalizeApiUrl, classifyNetworkError, parseBundledConfig, shouldUseSave
 const { artisanFor, locateRuntime, startEmbeddedServer, FAILURE } = require('./embedded-server.cjs');
 const backup = require('./backup.cjs');
 const pairing = require('./pairing.cjs');
+const { createAuthVault } = require('./auth-vault.cjs');
 const { createPrinting } = require('./printing/index.cjs');
+const { createUpdates } = require('./update/wiring.cjs');
 
 const DEV_URL = process.env.ELECTRON_START_URL || ''; // e.g. http://localhost:3000 for `pnpm dev`
 
@@ -94,6 +96,29 @@ function readConfig() {
   return { apiBaseUrl: null, source: 'none' };
 }
 
+// ------------------------------------------------------------------ device sign-in (PIN)
+let authVaultInstance = null;
+
+const authVault = () => {
+  if (!authVaultInstance) {
+    authVaultInstance = createAuthVault({
+      file: path.join(app.getPath('userData'), 'auth-vault.json'),
+      isAvailable: () => safeStorage.isEncryptionAvailable(),
+      seal: (text) => safeStorage.encryptString(text),
+      unseal: (data) => safeStorage.decryptString(data),
+      log: (level, message) => log(level, message, 'auth'),
+    });
+  }
+  return authVaultInstance;
+};
+
+// Older automated journeys sign in directly. Honoured only in an unpackaged run, so an installed app cannot be
+// started without the PIN lock. It also never releases a saved session: it only leaves the vault unused.
+const pinLockOff = () => !app.isPackaged && process.env.FOODCOURT_PIN_LOCK === 'off';
+
+/** The data this PC talks to changed, so a saved session is meaningless now. Sign in again. */
+const forgetSavedSignIn = () => authVault().clear().catch((err) => log('ERROR', `Could not remove the saved sign-in: ${err.code || 'unknown error'}`));
+
 // ------------------------------------------------------------------ pairing (multi-PC)
 let pairingCache; // undefined = not read yet; null = not paired
 
@@ -159,6 +184,7 @@ async function pairWithHost(pairingString) {
   });
   writeJsonAtomic(configPath(), { apiBaseUrl: decoded.url });
   pairingCache = undefined;
+  await forgetSavedSignIn();
   await shutdownServer(); // this PC now uses the shared host; the built-in server is not needed
   log('INFO', `This computer was connected to the food court host "${body.data.food_court_name}"`);
   return { ok: true, foodCourtName: body.data.food_court_name || '' };
@@ -272,6 +298,7 @@ const saveSettings = (patch) => writeJsonAtomic(settingsPath(), { ...readSetting
 const backupDir = () => readSettings().backupDir || path.join(dataDir(), 'backups');
 
 let backupBusy = false;
+let restoreBusy = false;
 
 async function runBackup(kind) {
   if (!embedded) return { ok: false, error: 'The application is not running.' };
@@ -361,6 +388,10 @@ async function restoreBackup(win, name) {
     await startBuiltInServer();
     return { ok: false, error: 'The restored data would not start, so the previous data was put back.' };
   }
+  // Same person on the same PC: the PIN keeps working. Done now because the server has upgraded the restored data.
+  const vault = pinLockOff() ? null : await authVault().status().catch(() => null);
+  const kept = await backup.keepSession({ artisan: started.artisan, previous: safety, account: vault && vault.account, log });
+  if (!kept) await forgetSavedSignIn();
   return { ok: true };
 }
 
@@ -406,8 +437,9 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
-    minWidth: 1100,
-    minHeight: 700,
+    // Small enough for a 1366x768 laptop at 125% scaling and for a half-screen window; every screen is laid out for it
+    minWidth: 800,
+    minHeight: 560,
     show: false,
     title: 'मंगलमूर्ती POS',
     backgroundColor: '#0f172a',
@@ -577,11 +609,26 @@ function buildMenu() {
 // ------------------------------------------------------------------ IPC (allowlist)
 // Keep in sync with preload.cjs and the smoke test: this is the renderer's entire reach into the main process.
 const BRIDGE_KEYS = [
-  'backupNow', 'chooseBackupFolder', 'connectToHost', 'enqueuePrintJob', 'getAppInfo', 'getBackupStatus', 'getConfig', 'getDiagnostics', 'getPrintConfig',
+  'authVaultClear', 'authVaultSetup', 'authVaultStatus', 'authVaultUnlock', 'backupNow', 'chooseBackupFolder', 'connectToHost', 'enqueuePrintJob', 'getAppInfo', 'getBackupStatus', 'getConfig', 'getDiagnostics', 'getPrintConfig',
   'getPrinterStatus', 'getStartupStatus', 'listPrintJobs', 'listPrinters', 'log', 'onPrintJobsChanged', 'previewPrintDocument', 'print', 'reprintPrintJob',
-  'restoreBackup', 'retryPrintJob', 'retryStart', 'sendTestPrint', 'setPrintConfig', 'useBuiltInServer',
+  'restoreBackup', 'retryPrintJob', 'retryStart', 'sendTestPrint', 'setPrintConfig', 'updateApprove', 'updateCheck', 'updateEnroll', 'updateGetState', 'updateInstallFromFolder', 'updateInstallRequired', 'updateNow', 'updatePauseDownload', 'updateRemindLater', 'updateReportActivity', 'updateSetPolicy', 'useBuiltInServer',
 ].sort();
 
+/** Installing and changing update rules are owner tasks. The server says who holds this token, not the renderer. */
+async function isOwnerToken(token) {
+  if (typeof token !== 'string' || !token || token.length > 500) return false;
+  try {
+    const cfg = await resolveConfig();
+    if (!cfg.apiBaseUrl) return false;
+    const res = await net.fetch(`${cfg.apiBaseUrl}/auth/me`, { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }, redirect: 'error' });
+    if (!res.ok) return false;
+    return (await res.json())?.data?.user?.role === 'owner';
+  } catch {
+    return false;
+  }
+}
+
+let updates = null; // software updates (electron/update), created once the app is ready
 let printing = null; // thermal printing service (electron/printing), created once the app is ready
 
 function fromApp(event) {
@@ -612,11 +659,18 @@ function registerIpc() {
   // Back to this computer's own database (an administrator task: the UI offers it under Support only)
   handle('desktop:use-builtin-server', async () => {
     clearPairing();
+    await forgetSavedSignIn();
     log('INFO', 'Connection to the shared host removed; using this computer\'s own database');
     return resolveConfig();
   });
 
   handle('desktop:connect-to-host', (_e, pairingString) => pairWithHost(String(pairingString || '')));
+
+  // Device sign-in. Arguments are never logged: they carry the PIN and the session token.
+  handle('auth:status', () => (pinLockOff() ? { state: 'disabled' } : authVault().status()));
+  handle('auth:setup', (_e, request) => (pinLockOff() ? { ok: false, code: 'unavailable' } : authVault().setup(request)));
+  handle('auth:unlock', (_e, pin) => (pinLockOff() ? { ok: false, code: 'unavailable' } : authVault().unlock(pin)));
+  handle('auth:clear', () => authVault().clear());
 
   handle('desktop:get-app-info', () => ({
     name: app.getName(),
@@ -630,6 +684,31 @@ function registerIpc() {
 
   handle('desktop:get-diagnostics', () => collectDiagnostics());
 
+  handle('update:get-state', () => updates.agent.publicState());
+  handle('update:check', () => updates.agent.check());
+  handle('update:enroll', (_e, code) => updates.agent.enroll(code, os.hostname()));
+  const ownerOnly = (fn) => async (event, token, ...args) => {
+    if (await isOwnerToken(token)) return fn(event, ...args);
+    log('WARN', 'An update action was refused: the signed-in account is not the owner');
+    return { ok: false, code: 'not_owner', error: 'Only the owner can do this.' };
+  };
+  handle('update:now', ownerOnly(() => updates.agent.updateNow()));
+  // No owner token: the required-update screen also covers the sign-in page. The agent refuses unless the signed release is mandatory
+  handle('update:install-required', () => updates.agent.installRequired());
+  handle('update:remind-later', () => updates.agent.remindLater());
+  handle('update:set-policy', ownerOnly((_e, next) => updates.agent.setPolicy(next)));
+  handle('update:approve', ownerOnly(() => updates.agent.approvePending()));
+  handle('update:pause-download', ownerOnly((_e, paused) => updates.agent.pauseDownload(paused === true)));
+  handle('update:install-from-folder', ownerOnly(async (event) => {
+    const picked = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), { title: 'Choose the update folder (on the pen drive)', properties: ['openDirectory'] });
+    if (picked.canceled || !picked.filePaths[0]) return { ok: false, cancelled: true };
+    return updates.agent.prepareFromFolder(picked.filePaths[0]);
+  }));
+  handle('update:report-activity', (_e, unsaved) => {
+    updates.activity.rendererReport(unsaved);
+    return true;
+  });
+
   handle('desktop:get-backup-status', () => backupStatus());
   handle('desktop:backup-now', () => runBackup('manual'));
   handle('desktop:choose-backup-folder', async (event) => {
@@ -642,7 +721,14 @@ function registerIpc() {
     log('INFO', 'Backup folder changed');
     return { ok: true };
   });
-  handle('desktop:restore-backup', (event, name) => restoreBackup(BrowserWindow.fromWebContents(event.sender), typeof name === 'string' ? name : null));
+  handle('desktop:restore-backup', async (event, name) => {
+    restoreBusy = true;
+    try {
+      return await restoreBackup(BrowserWindow.fromWebContents(event.sender), typeof name === 'string' ? name : null);
+    } finally {
+      restoreBusy = false;
+    }
+  });
 
   handle('desktop:log', (_e, level, message) => {
     const lvl = ['INFO', 'WARN', 'ERROR'].includes(level) ? level : 'INFO';
@@ -722,11 +808,41 @@ if (diagnoseArg) {
       log,
       listPrinters: async () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents.getPrintersAsync() : []),
     });
+    updates = createUpdates({
+      powerMonitor,
+      app,
+      net,
+      safeStorage,
+      log,
+      shutdownServer,
+      dataDir,
+      readConfig,
+      resolveConfig,
+      probe,
+      getStartup: () => startup,
+      printBusy: async () => (await printing.service.list(200)).some((j) => j.status === 'queued' || j.status === 'processing'),
+      maintenanceBusy: () => backupBusy || restoreBusy,
+      hasWindow: () => Boolean(mainWindow && !mainWindow.isDestroyed()),
+      // A paired terminal has no payments of its own: the host holds them, and each of its screens reports its own work
+      openUpiCount: async () => {
+        if (readConfig().apiBaseUrl) return 0;
+        const report = backup.parseReport(await embedded.artisan(['foodcourt:update-db', 'activity']));
+        if (!report || !report.ok) throw new Error('no answer');
+        return report.open_upi;
+      },
+    });
+    session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
+      updates.activity.requestStarted(details.id, details.method);
+      callback({});
+    });
+    session.defaultSession.webRequest.onCompleted({ urls: ['http://*/*', 'https://*/*'] }, (details) => updates.activity.requestFinished(details.id));
+    session.defaultSession.webRequest.onErrorOccurred({ urls: ['http://*/*', 'https://*/*'] }, (details) => updates.activity.requestFinished(details.id));
     registerIpc();
     printing.registerIpc();
     buildMenu();
     if (!readConfig().apiBaseUrl) startBuiltInServer(); // start services while the window loads
     createWindow();
+    updates.afterWindow(mainWindow);
     printing.start(); // resumes queued jobs; jobs that were mid-print at the last shutdown are marked failed, never re-sent
     log('INFO', `Started v${app.getVersion()} (electron ${process.versions.electron})`);
   });

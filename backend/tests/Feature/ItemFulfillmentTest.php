@@ -908,6 +908,43 @@ class ItemFulfillmentTest extends TestCase
         $this->assertNull($res->json('data.orders.1.guest_count'));
     }
 
+    public function test_kitchen_staff_watch_only_their_own_stall_on_the_board(): void
+    {
+        $this->quietBoard();
+        $both = $this->makeBoardOrder(['pending', 'preparing'], now()->subMinutes(5)); // pizza + burger
+        $burgerOnly = $this->makeBoardOrder([['served', now()->subHours(2)], 'pending'], now()->subHours(3)); // pizza served long ago, burger still to serve
+        $pizza = $this->byEmail('kitchen.pizza@foodcourt.com');
+
+        $res = $this->actingAs($pizza, 'sanctum')->getJson('/api/orders/board')->assertOk();
+        $ids = array_column($res->json('data.orders'), 'id');
+        $this->assertContains($both->id, $ids);
+        $this->assertNotContains($burgerOnly->id, $ids, 'an order whose pizza part is finished is not on the pizza kitchen board');
+        foreach ($res->json('data.orders') as $o) {
+            foreach ($o['items'] as $it) {
+                $this->assertSame($this->pizzaStall(), $it['stall']['id'], 'only the own stall\'s dishes are shown');
+            }
+        }
+        $res->assertJsonPath('data.total_active', 1);
+
+        // Watching is all they can do: marking served stays with the owner, cashier and waiter
+        $item = collect($res->json('data.orders'))->firstWhere('id', $both->id)['items'][0];
+        $this->patchItem($pizza, $item['id'], 'served')->assertStatus(403);
+
+        // The other roles still see every stall
+        $all = $this->actingAs($this->byEmail('waiter1@foodcourt.com'), 'sanctum')->getJson('/api/orders/board')->assertOk();
+        $this->assertSame([$both->id, $burgerOnly->id], array_column($all->json('data.orders'), 'id')); // newest first
+        $all->assertJsonPath('data.total_active', 2);
+
+        $store = User::create([
+            'name' => 'Store Staff Board Test',
+            'email' => 'store.staff.board.' . uniqid() . '@foodcourt.test',
+            'password' => 'not-used-in-test',
+            'role' => 'store_staff',
+            'is_active' => true,
+        ]);
+        $this->actingAs($store, 'sanctum')->getJson('/api/orders/board')->assertStatus(403);
+    }
+
     public function test_board_keeps_completed_and_paid_orders_with_unserved_items(): void
     {
         $this->quietBoard();
@@ -1028,9 +1065,10 @@ class ItemFulfillmentTest extends TestCase
         foreach (['owner@foodcourt.com', 'cashier@foodcourt.com', 'waiter1@foodcourt.com'] as $email) {
             $this->actingAs($this->byEmail($email), 'sanctum')->getJson('/api/orders/board')->assertOk();
         }
+        // Kitchen staff and stall managers may watch the board, scoped to their own stall (read-only)
         foreach (['kitchen.pizza@foodcourt.com', 'manager.pizza@foodcourt.com'] as $email) {
             $this->actingAs($this->byEmail($email), 'sanctum')->getJson('/api/orders/board')
-                ->assertStatus(403)->assertJsonPath('success', false);
+                ->assertOk()->assertJsonPath('success', true);
         }
 
         // Kitchen cannot Serve All, and the refused call does not consume the key

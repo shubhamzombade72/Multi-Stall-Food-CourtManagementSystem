@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
+  useWindowDimensions,
   View,
   Text,
   StyleSheet,
@@ -12,6 +13,7 @@ import { DiningTable } from '../../types';
 import { getApiClient } from '../../api/client';
 import { offlineStore } from '../../storage/offlineStore';
 import { formatTableLabel } from '../../utils/tableFormatter';
+import { tableColumns } from '../../utils/layout';
 
 interface Props {
   onSelectTable: (table: DiningTable) => void;
@@ -50,6 +52,10 @@ export const TableListScreen: React.FC<Props> = ({
       setIsRefreshing(false);
     }
   };
+
+  // 2 tables per row on a phone, up to 6 on a tablet in landscape; recalculated when the device turns
+  const { width } = useWindowDimensions();
+  const columns = tableColumns(width);
 
   const renderTableCard = ({ item }: { item: DiningTable }) => {
     const isOccupied = item.status === 'occupied';
@@ -90,12 +96,12 @@ export const TableListScreen: React.FC<Props> = ({
       {/* Ready Items Banner if any */}
       {readyCount > 0 && (
         <TouchableOpacity style={styles.alertBanner} onPress={onOpenReadyAlerts}>
-          <Text style={styles.alertBannerIcon}>🔔</Text>
+          <Text style={styles.alertBannerIcon}>🍽️</Text>
           <View style={{ flex: 1 }}>
             <Text style={styles.alertBannerTitle}>
-              {readyCount} Kitchen Dish{readyCount > 1 ? 'es' : ''} Ready for Pickup!
+              {readyCount} Dish{readyCount > 1 ? 'es' : ''} to Serve
             </Text>
-            <Text style={styles.alertBannerSubtitle}>Tap to inspect and serve to tables</Text>
+            <Text style={styles.alertBannerSubtitle}>Tap to see them and mark each one served</Text>
           </View>
           <Text style={styles.alertBannerArrow}>➔</Text>
         </TouchableOpacity>
@@ -113,8 +119,9 @@ export const TableListScreen: React.FC<Props> = ({
         <FlatList
           data={tables}
           keyExtractor={(item) => item.id.toString()}
-          renderItem={renderTableCard}
-          numColumns={2}
+          renderItem={(info) => <View style={[styles.cell, { width: `${100 / columns}%` }]}>{renderTableCard(info)}</View>}
+          key={`cols-${columns}`}
+          numColumns={columns}
           columnWrapperStyle={styles.row}
           refreshControl={
             <RefreshControl
@@ -188,11 +195,15 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   row: {
-    justifyContent: 'space-between',
+    marginHorizontal: -6,
     marginBottom: 12,
   },
+  cell: {
+    paddingHorizontal: 6,
+  },
   tableCard: {
-    width: '48%',
+    width: '100%',
+    flex: 1,
     backgroundColor: '#1e293b',
     borderRadius: 16,
     padding: 14,

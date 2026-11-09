@@ -4,6 +4,7 @@ import { ClipboardList, Eye, Search } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { PrintReceiptButton, ReceiptPreviewButton } from '../components/Receipt';
 import { PrintOrderKotButton } from '../components/PrintKotButtons';
+import { OutstandingItems } from '../components/OutstandingItems';
 import { taxLines } from '../lib/tax';
 import { apiError, dateTime, humanize, isoDate, money } from '../lib/format';
 import { Badge, buttonClass, Card, EmptyState, ErrorBanner, Field, inputClass, Loading, Modal, PageHeader, Pagination, statusTone, Tag } from '../components/ui';
@@ -90,11 +91,13 @@ export const OrdersPage: React.FC = () => {
   };
 
   const set = (k: keyof Filters) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setFilters((f) => ({ ...f, [k]: e.target.value }));
-  const canCancel = detail && detail.status !== 'cancelled' && detail.payment_status !== 'paid' && !detail.kitchen_tickets?.some((t: any) => ['preparing', 'ready', 'picked_up'].includes(t.status));
+  // The server decides; an unpaid order that is not fully served or cancelled has no final bill yet
+  const billBlocked = !!detail && detail.payment_status === 'unpaid' && detail.status !== 'cancelled' && detail.billing?.eligible === false;
+  const canCancel = detail &&detail.status !== 'cancelled' && detail.payment_status !== 'paid' && !detail.kitchen_tickets?.some((t: any) => ['preparing', 'ready', 'picked_up'].includes(t.status));
 
   return (
     <div className="p-4 max-w-7xl mx-auto space-y-4">
-      <PageHeader title="Orders & Receipts" icon={ClipboardList} subtitle="Parent orders from every channel with their stall kitchen tickets" />
+      <PageHeader title="Orders" icon={ClipboardList} subtitle="Parent orders from every channel with their stall kitchen tickets" />
 
       <Card className="p-4">
         <form
@@ -291,13 +294,20 @@ export const OrdersPage: React.FC = () => {
           </div>
           {detail.notes && <p className="text-xs whitespace-pre-line bg-warning/10 border border-warning/40 rounded-lg p-2">{detail.notes}</p>}
 
+          {billBlocked && (
+            <div data-testid="order-billing-blocked" role="status" className="text-xs rounded-lg border border-warning/40 bg-warning/10 p-2 space-y-1">
+              <p className="font-semibold text-fg">{detail.billing.message}</p>
+              {detail.billing.outstanding_items.length > 0 && <OutstandingItems items={detail.billing.outstanding_items} />}
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2">
-            <ReceiptPreviewButton orderId={detail.id} className={buttonClass.secondary} label="Preview" />
-            <PrintReceiptButton orderId={detail.id} className={buttonClass.secondary} label={detail.payment_status === 'paid' ? 'Print receipt' : 'Print bill'} />
+            {!billBlocked && <ReceiptPreviewButton orderId={detail.id} className={buttonClass.secondary} label="Preview" />}
+            {!billBlocked && <PrintReceiptButton orderId={detail.id} className={buttonClass.secondary} label={detail.payment_status === 'paid' ? 'Print receipt' : 'Print bill'} />}
             {detail.status !== 'cancelled' && <PrintOrderKotButton orderId={detail.id} className={buttonClass.secondary} label="Print KOTs" />}
-            {detail.payment_status === 'unpaid' && detail.status !== 'cancelled' && (
-              <button onClick={() => navigate('/pos')} className={buttonClass.primary}>
-                Settle at POS
+            {['unpaid', 'partially_paid'].includes(detail.payment_status) && detail.status !== 'cancelled' && detail.billing?.eligible && (
+              <button onClick={() => navigate('/pos?mode=pending_bills')} className={buttonClass.primary}>
+                Settle in Pending Bills
               </button>
             )}
             {canCancel && !showCancel && (

@@ -17,7 +17,7 @@ class StaffController extends Controller
     public const ROLES = ['owner', 'cashier', 'stall_manager', 'kitchen_staff', 'waiter', 'store_staff'];
 
     /** Roles whose work is confined to one stall and therefore need a stall assignment */
-    public const STALL_ROLES = ['stall_manager', 'kitchen_staff', 'store_staff'];
+    public const STALL_ROLES = ['stall_manager', 'kitchen_staff'];
 
     private function denyUnlessOwner(Request $request)
     {
@@ -83,6 +83,10 @@ class StaffController extends Controller
         if ($error = $this->stallRuleError($validated['role'], $validated['stall_id'] ?? null)) {
             return $error;
         }
+        // Store Staff run the one central store, so they belong to no stall
+        if ($validated['role'] === 'store_staff') {
+            $validated['stall_id'] = null;
+        }
 
         $user = User::create($validated + ['is_active' => true]);
         AuditService::log('staff_created', 'User', $user->id, $user->stall_id, null, [
@@ -118,6 +122,9 @@ class StaffController extends Controller
         $stallId = array_key_exists('stall_id', $validated) ? $validated['stall_id'] : $staff->stall_id;
         if ($error = $this->stallRuleError($role, $stallId)) {
             return $error;
+        }
+        if ($role === 'store_staff') {
+            $validated['stall_id'] = null;
         }
 
         $old = $staff->only(['name', 'role', 'stall_id', 'phone', 'is_active']);

@@ -2,6 +2,7 @@ import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 import { API_BASE_URL } from '../api/client';
 import { logError } from '../desktop/bridge';
+import { getAuthToken } from '../lib/authToken';
 
 /**
  * Optional Reverb connection for private channels (private-stall.{id}, private-cashier, private-waiters).
@@ -28,13 +29,23 @@ export const getEcho = (): Echo<'reverb'> | null => {
       forceTLS: (import.meta.env.VITE_REVERB_SCHEME || 'http') === 'https',
       enabledTransports: ['ws', 'wss'],
       authEndpoint: `${API_BASE_URL}/broadcasting/auth`,
-      auth: { headers: { Authorization: `Bearer ${localStorage.getItem('fc_auth_token') || ''}`, Accept: 'application/json' } },
+      auth: { headers: { Authorization: `Bearer ${getAuthToken() || ''}`, Accept: 'application/json' } },
     });
   } catch (err: any) {
     logError(`Realtime init failed: ${err?.message || err}`);
     echo = null;
   }
   return echo;
+};
+
+/** Lock or sign-out: drop the connection and the token it was built with. The next session builds a new one. */
+export const resetEcho = (): void => {
+  try {
+    echo?.disconnect();
+  } catch {
+    // already gone
+  }
+  echo = null;
 };
 
 /** Subscribe to a private channel; returns an unsubscribe function (no-op when realtime is off). */

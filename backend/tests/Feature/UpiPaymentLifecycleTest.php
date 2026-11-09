@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AuditLog;
+use App\Models\MenuItem;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Setting;
@@ -37,11 +38,18 @@ class UpiPaymentLifecycleTest extends TestCase
 
     private function makeOrder(float|string $total): Order
     {
-        return Order::create([
+        $order = Order::create([
             'order_type' => 'takeaway', 'order_channel' => 'cashier_pos', 'status' => 'confirmed',
             'subtotal' => $total, 'tax_amount' => 0, 'discount_amount' => 0, 'total_amount' => $total,
             'payment_status' => 'unpaid', 'idempotency_key' => 'upi-life-' . uniqid('', true),
         ]);
+        $menu = MenuItem::firstOrFail();
+        $order->items()->create([
+            'stall_id' => $menu->stall_id, 'menu_item_id' => $menu->id, 'item_name' => $menu->name,
+            'unit_price' => $total, 'quantity' => 1, 'subtotal' => $total, 'status' => 'served',
+        ]);
+
+        return $order;
     }
 
     private function qr(Order $order)

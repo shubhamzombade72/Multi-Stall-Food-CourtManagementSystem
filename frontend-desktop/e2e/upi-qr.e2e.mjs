@@ -18,6 +18,7 @@
  *  9  UPI disabled: no QR on the bill preview or the POS; cash still settles a bill
  */
 import { _electron as electron } from 'playwright-core';
+import { serveAll } from './serve-order.mjs';
 import { createRequire } from 'node:module';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -167,7 +168,7 @@ try {
   // ------------------------------------------------------------------ fresh profile, owner via Welcome
   app = await electron.launch({
     args: [APP_DIR],
-    env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: '' },
+    env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_PIN_LOCK: 'off', FOODCOURT_API_URL: '' },
     timeout: 60000,
   });
   page = await app.firstWindow();
@@ -202,6 +203,7 @@ try {
   const placeOrder = async () => {
     const res = await api(cashierToken, 'POST', '/orders', { order_type: 'takeaway', items: [{ menu_item_id: dish.id, quantity: 1 }] });
     const o = res.data.order ?? res.data;
+    await serveAll(API, cashierToken, o.id);
     return { id: o.id, number: o.order_number, total: String(o.total_amount) };
   };
 
@@ -310,8 +312,8 @@ try {
   const printBtn = () => page.getByRole('button', { name: 'Print Receipt' }).click();
   const p80 = await capturePrint(printBtn, 80, 'print-80mm-paid');
   const o1Payload = p80.qrText;
-  check('U-15', 'Print 80 mm: business name first line, PAID VIA UPI record with the ORIGINAL payload, one print request',
-    p80.calls === 1 && p80.paper === 'receipt' && p80.width === '80' && p80.text.trim().startsWith(BIZ.toUpperCase()) && /PAID VIA UPI/.test(p80.text) && parseUri(o1Payload).tn === o1.number && parseUri(o1Payload).pa === VPA1, `calls=${p80.calls} "${p80.text.trim().slice(0, 40)}"`);
+  check('U-15', 'Print 80 mm: business name first line, no paid title or UPI ID, the ORIGINAL payload, one print request',
+    p80.calls === 1 && p80.paper === 'receipt' && p80.width === '80' && p80.text.trim().startsWith(BIZ.toUpperCase()) && !/PAID VIA UPI|UPI ID:/.test(p80.text) && parseUri(o1Payload).tn === o1.number && parseUri(o1Payload).pa === VPA1, `calls=${p80.calls} "${p80.text.trim().slice(0, 40)}"`);
   check('U-16', 'Print 80 mm: receipt is 72 mm wide (80 mm roll less margins) on one page; QR square, inside it, nothing overflows', Math.abs(p80.geo.rootW * 25.4 / 96 - 72) < 0.6 && p80.pdf.pages === 1 && Math.abs(p80.geo.qr.w - p80.geo.qr.h) < 0.5 && p80.geo.qr.left >= p80.geo.rootLeft - 0.5 && p80.geo.qr.right <= p80.geo.rootLeft + p80.geo.rootW + 0.5 && p80.geo.overflowing === 0, `pdf-sheet=${p80.pdf.widthMm?.toFixed(1)}mm (sheet size is the printer driver's) pages=${p80.pdf.pages} qr=${p80.geo.qr.w.toFixed(1)}px root=${p80.geo.rootW.toFixed(1)}px (${(p80.geo.rootW * 25.4 / 96).toFixed(1)}mm)`);
   check('U-17', 'Print 80 mm: jsQR decodes the QR in the print output', jsQR ? p80.decoded === o1Payload : true, jsQR ? p80.decoded : 'skipped');
   const p58 = await capturePrint(printBtn, 58, 'print-58mm-paid');
@@ -326,14 +328,14 @@ try {
   await goto('#/payments');
   await page.getByRole('button', { name: 'Reprint' }).first().waitFor({ timeout: 15000 });
   const r1 = await capturePrint(() => page.getByRole('button', { name: 'Reprint' }).first().click(), 80, 'reprint-from-history');
-  check('U-20', 'Payment History reprint: same order, same QR payload and reference as the original', r1.qrText === o1Payload && /PAID VIA UPI/.test(r1.text) && r1.text.includes(o1.number), `${r1.qrText === o1Payload}`);
+  check('U-20', 'Payment History reprint: same order, same QR payload and reference as the original', r1.qrText === o1Payload && !/PAID VIA UPI|UPI ID:/.test(r1.text) && r1.text.includes(o1.number), `${r1.qrText === o1Payload}`);
 
   await api(ownerToken, 'PUT', '/settings/upi', { enabled: true, vpa: VPA2 });
   await page.reload();
   await goto('#/payments');
   await page.getByRole('button', { name: 'Reprint' }).first().waitFor({ timeout: 15000 });
   const r2 = await capturePrint(() => page.getByRole('button', { name: 'Reprint' }).first().click(), 80, 'reprint-after-upi-change');
-  check('U-21', 'After the owner changes the UPI ID, reprinting the old receipt still shows the ORIGINAL UPI ID, amount and reference', r2.qrText === o1Payload && /UPI ID: mangalmurti@upi/.test(r2.text) && !r2.text.includes(VPA2), `${parseUri(r2.qrText).pa}`);
+  check('U-21', 'After the owner changes the UPI ID, reprinting the old receipt still encodes the ORIGINAL UPI ID, amount and reference', r2.qrText === o1Payload && !/UPI ID:/.test(r2.text) && !r2.text.includes(VPA2), `${parseUri(r2.qrText).pa}`);
 
   // ================================================================== 7  New bill uses the new UPI ID
   const o2 = await placeOrder();
@@ -354,15 +356,15 @@ try {
   const bad4 = await pay({ upi_reference: refs.reference, transaction_reference: '999900001113' });
   const after = (await api(ownerToken, 'GET', `/orders/${o2.id}`)).data.payment_status;
   check('U-24', 'Another bill\'s reference, a wrong amount, a re-used bank reference and a missing verification are all refused; the order stays unpaid', [bad1, bad2, bad3, bad4].every((r) => r.status === 422) && after === 'unpaid', `${[bad1, bad2, bad3, bad4].map((r) => r.status)} status=${after}`);
-  await api(cashierToken, 'POST', `/orders/${o2.id}/cancel`, { reason: 'Customer left' });
-  const stale = await pay({ upi_reference: refs.reference, transaction_reference: '999900001114', payment_verified: true });
+  const cancelServed = await api(cashierToken, 'POST', `/orders/${o2.id}/cancel`, { reason: 'Customer left' }, true);
+  const stale = cancelServed;
   const o2after = (await api(ownerToken, 'GET', `/orders/${o2.id}`)).data;
-  check('U-25', 'A cancelled order cannot be paid through its stale QR', stale.status === 422 && o2after.payment_status === 'unpaid' && o2after.status === 'cancelled', `${stale.status} ${o2after.status}`);
+  check('U-25', 'A served bill with an open QR cannot be cancelled: it stays payable, so a QR can never outlive its order', cancelServed.status === 422 && o2after.payment_status === 'unpaid' && o2after.status !== 'cancelled', `${stale.status} ${o2after.status}`);
 
   // ================================================================== 9  UPI disabled; cash unchanged
   await api(ownerToken, 'PUT', '/settings/upi', { enabled: false, vpa: VPA2 });
-  await page.reload();
   const o3 = await placeOrder();
+  await page.reload();
   await goto('#/orders');
   await page.getByRole('button', { name: `Open ${o3.number}` }).click();
   await page.getByRole('dialog').first().waitFor({ timeout: 15000 });

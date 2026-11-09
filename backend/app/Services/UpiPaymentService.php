@@ -208,7 +208,11 @@ class UpiPaymentService
                 abort(422, 'This order has already been paid in full.');
             }
 
-            $alreadyPaid = $locked->payments()->where('status', 'success')->sum('amount');
+            // A QR asks the customer for the final amount, so it follows the same rule as the bill itself
+            $eligibility = app(BillingEligibility::class);
+            $eligibility->persistRepricing($locked, $eligibility->assertBillable($locked), $by->id);
+
+            $alreadyPaid =$locked->payments()->where('status', 'success')->sum('amount');
             $remaining = bcsub((string) $locked->total_amount, (string) $alreadyPaid, 2);
             $amount = bccomp($remaining, '0.00', 2) > 0 ? $remaining : bcadd((string) $locked->total_amount, '0', 2);
             $query = UpiPaymentRequest::where('order_id', $locked->id)->whereNull('order_split_id');

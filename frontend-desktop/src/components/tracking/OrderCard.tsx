@@ -23,7 +23,7 @@ interface Props {
   nowMs?: number;
   delayMinutes?: number;
   expanded: boolean;
-  canMarkReady: boolean;
+  canServe: boolean;
   busyItems: ReadonlySet<number>;
   serving: boolean;
   onToggle: (orderId: number) => void;
@@ -42,7 +42,7 @@ export const OrderCard = memo(function OrderCard({
   nowMs: _nowMs,
   delayMinutes: _delayMinutes,
   expanded,
-  canMarkReady,
+  canServe,
   busyItems,
   serving,
   onToggle,
@@ -113,7 +113,7 @@ export const OrderCard = memo(function OrderCard({
                 <ItemRow
                   key={item.id}
                   item={item}
-                  canMarkReady={canMarkReady}
+                  canServe={canServe}
                   busy={busyItems.has(item.id)}
                   onAction={onAction}
                   onQuantityChange={onQtyChange}

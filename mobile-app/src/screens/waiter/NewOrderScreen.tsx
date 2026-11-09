@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
+  useWindowDimensions,
   View,
   Text,
   StyleSheet,
@@ -16,6 +17,7 @@ import { classifyStatus, newIdempotencyKey } from '../../offline/syncEngine';
 import { offlineStore } from '../../storage/offlineStore';
 import { useAuth } from '../../context/AuthContext';
 import { formatTableLabel } from '../../utils/tableFormatter';
+import { menuColumns } from '../../utils/layout';
 
 interface Props {
   table: DiningTable | null;
@@ -24,6 +26,9 @@ interface Props {
 }
 
 export const NewOrderScreen: React.FC<Props> = ({ table, onBack, onOrderPlaced }) => {
+  // One dish per row on a phone; 2-4 side by side on wider screens, so price and + ADD stay close together
+  const { width } = useWindowDimensions();
+  const columns = menuColumns(width);
   const { checkOfflineQueue } = useAuth();
   const [stalls, setStalls] = useState<Stall[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -219,11 +224,15 @@ export const NewOrderScreen: React.FC<Props> = ({ table, onBack, onOrderPlaced }
         <FlatList
           data={filteredItems}
           keyExtractor={(item) => item.id.toString()}
+          key={`menu-cols-${columns}`}
+          numColumns={columns}
+          columnWrapperStyle={columns > 1 ? styles.menuRow : undefined}
           contentContainerStyle={styles.menuList}
           renderItem={({ item }) => {
             const inCart = cart[item.id]?.quantity || 0;
             return (
-              <View style={styles.menuItemCard}>
+              <View style={columns > 1 ? [styles.menuCell, { width: `${100 / columns}%` }] : undefined}>
+              <View style={[styles.menuItemCard, columns > 1 && styles.menuItemCardInGrid]}>
                 <View style={{ flex: 1, paddingRight: 8 }}>
                   <View style={styles.itemTitleRow}>
                     <View
@@ -272,6 +281,7 @@ export const NewOrderScreen: React.FC<Props> = ({ table, onBack, onOrderPlaced }
                     <Text style={styles.addButtonText}>+ ADD</Text>
                   </TouchableOpacity>
                 )}
+              </View>
               </View>
             );
           }}
@@ -385,6 +395,15 @@ const styles = StyleSheet.create({
   menuList: {
     padding: 16,
     paddingBottom: 160,
+  },
+  menuRow: {
+    marginHorizontal: -5,
+  },
+  menuCell: {
+    paddingHorizontal: 5,
+  },
+  menuItemCardInGrid: {
+    flex: 1,
   },
   menuItemCard: {
     backgroundColor: '#1e293b',

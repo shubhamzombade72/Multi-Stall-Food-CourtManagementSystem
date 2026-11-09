@@ -1,5 +1,6 @@
 import electronPath from 'electron';
 import { _electron as electron } from 'playwright-core';
+import { serveAll } from './serve-order.mjs';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -47,7 +48,7 @@ try {
   const launchEnv = {
     ...process.env,
     FOODCOURT_USER_DATA_DIR: profile,
-    FOODCOURT_SMOKE_TEST: '',
+    FOODCOURT_SMOKE_TEST: '', FOODCOURT_PIN_LOCK: 'off',
     FOODCOURT_API_URL: '',
   };
   delete launchEnv.ELECTRON_RUN_AS_NODE;
@@ -111,6 +112,7 @@ try {
     order_type: 'dine_in',
     items: [{ menu_item_id: curry.id, quantity: 2 }],
   })).data;
+  await serveAll(API, cashierToken, o1.id ?? o1.order?.id);
   await api(cashierToken, 'POST', '/billing/pay', {
     order_id: o1.id ?? o1.order?.id,
     payment_method: 'cash',
@@ -126,6 +128,7 @@ try {
       { menu_item_id: noodles.id, quantity: 2 },
     ],
   })).data;
+  await serveAll(API, cashierToken, o2.id ?? o2.order?.id);
   await api(cashierToken, 'POST', '/billing/pay', {
     order_id: o2.id ?? o2.order?.id,
     payment_method: 'upi_qr',

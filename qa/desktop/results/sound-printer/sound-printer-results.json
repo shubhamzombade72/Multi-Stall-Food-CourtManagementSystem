@@ -1,11 +1,11 @@
 {
-  "ranAt": "2026-11-04T18:10:57.001Z",
+  "ranAt": "2026-11-05T17:44:26.155Z",
   "results": [
     {
       "id": "E-00",
       "desc": "Fresh profile: built-in server started and owner signed in",
       "result": "PASS",
-      "evidence": "http://127.0.0.1:57945/api"
+      "evidence": "http://127.0.0.1:57292/api"
     },
     {
       "id": "S1",
@@ -29,7 +29,7 @@
       "id": "P1a",
       "desc": "Printer settings saved and reloaded from the main process",
       "result": "PASS",
-      "evidence": "{\"transport\":\"network\",\"printerName\":\"\",\"host\":\"127.0.0.1\",\"port\":59920,\"paperWidthMm\":58,\"codepage\":\"CP858\",\"columns\":null,\"cut\":true}"
+      "evidence": "{\"transport\":\"network\",\"printerName\":\"\",\"host\":\"127.0.0.1\",\"port\":57287,\"paperWidthMm\":58,\"codepage\":\"CP858\",\"columns\":null,\"cut\":true}"
     },
     {
       "id": "P1b",
@@ -71,7 +71,7 @@
       "id": "P2d",
       "desc": "Accepting prints a copy stamped COPY #1",
       "result": "PASS",
-      "evidence": "Already printed at 11:40:18 PM. Print another copy marked COPY?"
+      "evidence": "Already printed at 11:13:07 PM. Print another copy marked COPY?"
     },
     {
       "id": "P3a",
@@ -83,13 +83,13 @@
       "id": "P3b",
       "desc": "Dosa stall's KOT lists only dosa lines, with quantity, instruction and order note; no prices",
       "result": "PASS",
-      "evidence": "\"\\u001b@\\u001bt\\u0013\\u001bM\\u0000\\u001ba\\u0001\\u001bE\\u0001KITCHEN ORDER\\n\\u001d!\\u0011DOSA MA4M\\n\\u001ba\\u0000\\u001bE\\u0000\\u001d!\\u0000================================\\n\\u001bE\\u0001Order: ORD-20261104-QQZP6\\n\\u001bE\\u0000Ticket: KKT-20261104-OVPF\\nTakeaway (takeaway)\""
+      "evidence": "\"\\u001b@\\u001bt\\u0013\\u001bM\\u0000\\u001ba\\u0001\\u001bE\\u0001KITCHEN ORDER\\n\\u001d!\\u0011DOSA 3AKM\\n\\u001ba\\u0000\\u001bE\\u0000\\u001d!\\u0000================================\\n\\u001bE\\u0001Order: ORD-20261105-HQWAK\\n\\u001bE\\u0000Ticket: KKT-20261105-0JMG\\nTakeaway (takeaway)\""
     },
     {
       "id": "P3c",
       "desc": "Juice stall's KOT lists only juice lines",
       "result": "PASS",
-      "evidence": "\"\\u001b@\\u001bt\\u0013\\u001bM\\u0000\\u001ba\\u0001\\u001bE\\u0001KITCHEN ORDER\\n\\u001d!\\u0011JUICE MA4M\\n\\u001ba\\u0000\\u001bE\\u0000\\u001d!\\u0000================================\\n\\u001bE\\u0001Order: ORD-20261104-QQZP6\\n\\u001bE\\u0000Ticket: KKT-20261104-LOHX\\nTakeaway (takeaway\""
+      "evidence": "\"\\u001b@\\u001bt\\u0013\\u001bM\\u0000\\u001ba\\u0001\\u001bE\\u0001KITCHEN ORDER\\n\\u001d!\\u0011JUICE 3AKM\\n\\u001ba\\u0000\\u001bE\\u0000\\u001d!\\u0000================================\\n\\u001bE\\u0001Order: ORD-20261105-HQWAK\\n\\u001bE\\u0000Ticket: KKT-20261105-XDNF\\nTakeaway (takeaway\""
     },
     {
       "id": "P3d",
@@ -106,14 +106,14 @@
     {
       "id": "S3b",
       "desc": "A new ticket sounds once and does not repeat on later polls (and not once per stall twice)",
-      "result": "PASS",
-      "evidence": "plays=1"
+      "result": "FAIL",
+      "evidence": "plays=0"
     },
     {
       "id": "P4",
       "desc": "Auto-print: the displayed stall new ticket printed exactly once, only its own items, no repeats on later polls",
-      "result": "PASS",
-      "evidence": "newKots=1 \"\\u0011DOSA MA4M\\n\\u001ba\\u0000\\u001bE\\u0000\\u001d!\\u0000==============================\""
+      "result": "FAIL",
+      "evidence": "newKots=0 \"\""
     },
     {
       "id": "S4",
@@ -125,7 +125,7 @@
       "id": "P5a",
       "desc": "Unreachable printer: the job is FAILED with the reason, not completed",
       "result": "PASS",
-      "evidence": "{\"code\":\"UNREACHABLE\",\"message\":\"The printer at 127.0.0.1:59919 refused the connection (is raw/9100 printing enabled on it?)\",\"ambiguous\":false,\"at\":\"2026-11-04T18:10:54.128Z\"}"
+      "evidence": "{\"code\":\"UNREACHABLE\",\"message\":\"The printer at 127.0.0.1:57286 refused the connection (is raw/9100 printing enabled on it?)\",\"ambiguous\":false,\"at\":\"2026-11-05T17:44:22.663Z\"}"
     },
     {
       "id": "P5b",
@@ -149,13 +149,13 @@
       "id": "P6a",
       "desc": "Job history is persisted on disk",
       "result": "PASS",
-      "evidence": "C:\\Users\\shubh\\AppData\\Local\\Temp\\foodcourt-sp-vb4ICl\\printing\\jobs.json"
+      "evidence": "C:\\Users\\shubh\\AppData\\Local\\Temp\\foodcourt-sp-0IWuMQ\\printing\\jobs.json"
     },
     {
       "id": "P6b",
       "desc": "After an app restart the same jobs, with the same statuses, are listed",
       "result": "PASS",
-      "evidence": "9 jobs"
+      "evidence": "7 jobs"
     },
     {
       "id": "P6c",

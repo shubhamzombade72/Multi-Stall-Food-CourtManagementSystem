@@ -1,5 +1,6 @@
 import electronPath from 'electron';
 import { _electron as electron } from 'playwright-core';
+import { serveAll } from './serve-order.mjs';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -60,7 +61,7 @@ try {
   const launchEnv = {
     ...process.env,
     FOODCOURT_USER_DATA_DIR: profile,
-    FOODCOURT_SMOKE_TEST: '',
+    FOODCOURT_SMOKE_TEST: '', FOODCOURT_PIN_LOCK: 'off',
     FOODCOURT_API_URL: '',
   };
   delete launchEnv.ELECTRON_RUN_AS_NODE;
@@ -202,6 +203,7 @@ try {
   // 5. Verify payment records remain functional
   const currentOrder = (await api(ownerToken, 'GET', `/orders/${orderId}`)).data;
   const payAmount = Number(currentOrder.total_amount || currentOrder.order?.total_amount || 500);
+  await serveAll(API, cashierToken, orderId);
   const payRes = await api(cashierToken, 'POST', '/billing/pay', {
     order_id: orderId,
     payment_method: 'cash',

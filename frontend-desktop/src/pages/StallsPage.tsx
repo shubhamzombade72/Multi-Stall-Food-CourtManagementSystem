@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Store, Plus, Phone, Pencil, Power, Search } from 'lucide-react';
+import { Store, Plus, Phone, Pencil, Power, Search, Trash2 } from 'lucide-react';
 import { statusChip } from '../lib/status';
 import { Pagination, inputClass } from '../components/ui';
 import { OwnerPicker } from '../components/OwnerPicker';
@@ -94,7 +94,20 @@ export const StallsPage: React.FC = () => {
     setSelected((prev) => new Set([...prev].filter((id) => !gone.has(id))));
     fetchStalls();
   }, []);
-  const bulk = useBulkDelete('/stalls/bulk-delete', onBulkFinished);
+  // Single and multi-stall delete share one dialog: the server first says which stalls can be deleted for good; the rest can be deactivated from it
+  const refresh = useRef(fetchStalls);
+  refresh.current = fetchStalls;
+  const deleteOptions = useMemo(
+    () => ({
+      previewEndpoint: '/stalls/deletion-preview',
+      deactivate: async (id: number) => {
+        await apiClient.put(`/stalls/${id}`, { is_active: false });
+      },
+      onDeactivated: () => void refresh.current(),
+    }),
+    [],
+  );
+  const bulk = useBulkDelete('/stalls/bulk-delete', onBulkFinished, deleteOptions);
 
   // Rows that disappeared (deleted elsewhere / filtered data refresh) cannot stay selected
   useEffect(() => {
@@ -237,6 +250,12 @@ export const StallsPage: React.FC = () => {
                   {stall.is_active ? 'Deactivate' : 'Activate'}
                 </button>
               )}
+              {isOwner && (
+                <button onClick={() => bulk.open([stall.id])} className="text-danger-fg inline-flex items-center" data-testid="stall-delete" aria-label={`Delete ${stall.name}`}>
+                  <Trash2 className="w-3 h-3 mr-1" />
+                  Delete
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -251,15 +270,17 @@ export const StallsPage: React.FC = () => {
           state={bulk.state}
           noun="Stalls"
           confirmLabel="Delete Selected Stalls"
-          warning="Stalls with orders, kitchen tickets, settlements, staff, suppliers or inventory are never deleted - they stay and are listed with the reason. A stall that is deleted takes its own menu categories and dishes with it. This cannot be undone."
+          warning="Permanent deletion removes the stall together with its menu categories and dishes and cannot be undone. Stalls with orders, kitchen tickets, settlements, payouts, stock, purchases, staff, suppliers or inventory are never deleted; they are listed with the reason."
           onCancel={bulk.close}
           onConfirm={bulk.confirm}
+          onDeactivate={bulk.deactivate}
+          onRetry={bulk.retryPreview}
         />
       )}
 
       {editing && (
         <div className="fixed inset-0 !m-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <form onSubmit={saveEdit} className="bg-surface rounded-lg max-w-md w-full p-4 shadow-2xl space-y-3">
+          <form onSubmit={saveEdit} className="bg-surface rounded-lg max-w-md w-full p-4 shadow-2xl space-y-3 max-h-[calc(100vh-2rem)] overflow-y-auto">
             <h3 className="font-semibold text-base text-fg">Edit {editing.code}</h3>
             <input required aria-label="Stall name" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-line text-sm" />
             <input aria-label="Contact phone" value={editing.contact_phone || ''} onChange={(e) => setEditing({ ...editing, contact_phone: e.target.value })} placeholder="Contact phone" className="w-full px-3 py-2 rounded-lg border border-line text-sm" />
@@ -275,7 +296,7 @@ export const StallsPage: React.FC = () => {
 
       {showAddModal && (
         <div className="fixed inset-0 !m-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <form onSubmit={handleCreateStall} className="bg-surface rounded-lg max-w-md w-full p-4 shadow-2xl space-y-4">
+          <form onSubmit={handleCreateStall} className="bg-surface rounded-lg max-w-md w-full p-4 shadow-2xl space-y-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
             <h3 className="font-semibold text-base text-fg">Add New Stall to Food Court</h3>
             <div>
               <label className="block text-xs font-semibold text-fg mb-1">Stall Name</label>

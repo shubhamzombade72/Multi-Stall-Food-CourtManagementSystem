@@ -141,6 +141,30 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
+      <div className="bg-surface rounded-lg border border-line p-3 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="font-semibold text-base text-fg">Low Stock in Central Store</h3>
+            <p className="text-xs text-muted">Store purchases today: {data?.purchases_today?.count ?? 0} (₹{Number(data?.purchases_today?.total || 0).toFixed(2)})</p>
+          </div>
+          <Link to="/store" className="text-xs font-semibold text-primary">Raw Materials</Link>
+        </div>
+        {(data?.low_stock_items || []).length === 0 ? (
+          <p className="text-sm text-muted">Nothing is low right now.</p>
+        ) : (
+          <ul className="text-sm grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
+            {data.low_stock_items.map((i: any) => (
+              <li key={i.id} className="flex justify-between">
+                <span className="text-fg">{i.name}</span>
+                <span className="text-danger-fg font-semibold">
+                  {Number(i.current_stock)} / {Number(i.minimum_alert_stock)} {i.unit}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-surface rounded-lg border border-line p-3 shadow-sm">
           <div className="flex items-center justify-between mb-3">

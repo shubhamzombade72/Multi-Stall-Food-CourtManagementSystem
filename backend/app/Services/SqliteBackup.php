@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\User;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 
@@ -34,6 +35,58 @@ class SqliteBackup
         }
 
         return $report;
+    }
+
+    /**
+     * After a restore: lets the PIN saved on this PC keep working. That PIN opens a session token the restored data has
+     * never seen, so this PC's session rows are copied in from $from (the data as it was just before the restore).
+     * Only for the same active account with the same role; anything else reports kept=false and the password is needed.
+     * Rows are copied with their ids because a token names its row by id. The token's own hash is never reported.
+     */
+    public static function keepSession(string $from, int $userId, string $email, string $role, ?string $connection = null): array
+    {
+        $target = DB::connection($connection);
+        if ($target->getDriverName() !== 'sqlite') {
+            throw new \RuntimeException('Only the built-in database is restored this way.');
+        }
+
+        $user = $target->table('users')->where('id', $userId)->first();
+        if (!$user || strcasecmp((string) $user->email, $email) !== 0) {
+            return ['ok' => true, 'kept' => false, 'reason' => 'account_not_in_backup'];
+        }
+        if (!$user->is_active) {
+            return ['ok' => true, 'kept' => false, 'reason' => 'account_inactive'];
+        }
+        if ($user->role !== $role) {
+            return ['ok' => true, 'kept' => false, 'reason' => 'role_changed'];
+        }
+
+        $type = (new User())->getMorphClass();
+        $rows = [];
+        if (is_file($from) && filesize($from) > 0) {
+            $name = 'fc_backup_previous';
+            Config::set("database.connections.{$name}", ['driver' => 'sqlite', 'database' => $from, 'prefix' => '', 'foreign_key_constraints' => false]);
+            DB::purge($name);
+            try {
+                $rows = DB::connection($name)->table('personal_access_tokens')->where('tokenable_type', $type)->where('tokenable_id', $userId)->get()
+                    ->map(fn ($row) => (array) $row)->all();
+            } finally {
+                DB::purge($name);
+            }
+        }
+
+        if ($rows !== []) {
+            $target->transaction(function () use ($target, $rows, $type, $userId) {
+                // This account's older tokens were revoked by its later login, so they must not come back with the backup.
+                $target->table('personal_access_tokens')->where('tokenable_type', $type)->where('tokenable_id', $userId)->delete();
+                $target->table('personal_access_tokens')->whereIn('id', array_column($rows, 'id'))->delete();
+                $target->table('personal_access_tokens')->insert($rows);
+            });
+        }
+
+        $kept = $target->table('personal_access_tokens')->where('tokenable_type', $type)->where('tokenable_id', $userId)->exists();
+
+        return ['ok' => true, 'kept' => $kept, 'reason' => $kept ? null : 'no_session'];
     }
 
     /**

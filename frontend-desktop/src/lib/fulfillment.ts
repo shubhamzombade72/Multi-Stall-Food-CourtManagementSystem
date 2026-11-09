@@ -82,10 +82,13 @@ export function isDelayed(_order: BoardOrder, _nowMs?: number, _delayMinutes?: n
   return false;
 }
 
-export function nextItemAction(status: ItemStatus, canMarkReady: boolean): 'ready' | 'served' | null {
-  if (status === 'ready') return 'served';
-  if ((status === 'pending' || status === 'preparing') && canMarkReady) return 'ready';
-  return null;
+/**
+ * The one action on an item: Mark Served, straight from any unserved state. There is no Mark Ready step on the board any
+ * more; the server accepts pending/preparing/ready -> served for the owner, cashier and waiter.
+ */
+export function nextItemAction(status: ItemStatus, canServe: boolean): 'served' | null {
+  if (!canServe) return null;
+  return status === 'pending' || status === 'preparing' || status === 'ready' ? 'served' : null;
 }
 
 export function applyOptimistic(order: BoardOrder, itemId: number, to: ItemStatus): BoardOrder {

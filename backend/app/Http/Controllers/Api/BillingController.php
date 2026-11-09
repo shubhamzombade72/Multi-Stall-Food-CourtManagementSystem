@@ -8,6 +8,8 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\UpiPaymentRequest;
 use App\Services\AuditService;
+use App\Services\BillingEligibility;
+use App\Services\FulfillmentService;
 use App\Services\UpiPaymentService;
 use App\Support\Sql;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -17,6 +19,12 @@ use Illuminate\Validation\ValidationException;
 
 class BillingController extends Controller
 {
+    public function __construct(
+        private readonly BillingEligibility $eligibility,
+        private readonly FulfillmentService $fulfillment,
+    ) {
+    }
+
     public function getPendingBills(Request $request)
     {
         $user = $request->user();
@@ -24,14 +32,13 @@ class BillingController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized. Only Cashier or Owner can view pending bills.'], 403);
         }
 
-        $query = Order::with([
+        // Only bills whose every item is served or cancelled reach the cashier (BillingEligibility is the one rule)
+        $query = $this->eligibility->pendingBillsQuery()->with([
             'table',
             'items.stall:id,name,code',
             'kitchenTickets.stall:id,name,code',
             'payments.cashier:id,name',
-        ])
-            ->whereIn('payment_status', ['unpaid', 'partially_paid'])
-            ->where('status', '!=', 'cancelled');
+        ]);
 
         if ($request->filled('search')) {
             $search = $request->query('search');
@@ -48,20 +55,39 @@ class BillingController extends Controller
             $query->where('table_id', $request->query('table_id'));
         }
 
-        $orders = $query->orderByDesc('id')->get()->map(function ($order) {
-            $order->total_paid = $order->totalPaid();
-            $order->remaining_balance = $order->remainingBalance();
-            return $order;
-        })->filter(function ($order) {
-            return in_array($order->payment_status, ['unpaid', 'partially_paid'], true)
-                && bccomp((string) $order->remaining_balance, '0.00', 2) > 0;
-        })->values();
+        $orders = $this->eligibility->presentPendingBills($query->orderByDesc('id')->get());
 
         return response()->json([
             'success' => true,
             'data' => $orders,
             'count' => $orders->count(),
+            'awaiting_fulfilment_count' => $this->eligibility->awaitingFulfilmentCount(),
         ]);
+    }
+
+    /** GET /billing/orders/{id}/open — the cashier opens a bill: refuses with the outstanding items, or returns the current bill. */
+    public function openBill(Request $request, $orderId)
+    {
+        $user = $request->user();
+        if (!$user->isOwner() && !$user->isCashier()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Only Cashier or Owner can open a bill.'], 403);
+        }
+
+        $order = Order::with(['table', 'items.stall:id,name,code', 'kitchenTickets.stall:id,name,code', 'payments.cashier:id,name'])->findOrFail($orderId);
+        if ($order->payment_status === 'paid') {
+            abort(422, 'This order has already been paid in full.');
+        }
+        if ($order->status === 'cancelled') {
+            abort(422, 'Cannot bill a cancelled order.');
+        }
+
+        $this->eligibility->assertBillable($order);
+        $bill = $this->eligibility->presentPendingBills(collect([$order]));
+        if ($bill->isEmpty()) {
+            abort(422, 'This order has already been paid in full.');
+        }
+
+        return response()->json(['success' => true, 'data' => $bill->first()]);
     }
 
     public function processPayment(Request $request)
@@ -86,6 +112,7 @@ class BillingController extends Controller
             'amount' => 'required|numeric|min:0.01',
             'cash_tendered' => 'nullable|numeric|min:0',
             'transaction_reference' => 'nullable|string|max:100',
+            'expected_balance' => 'nullable|numeric|min:0',
         ], $upiRules), [
             'payment_verified.accepted' => 'Confirm that you have verified the payment in the merchant UPI app or bank statement.',
             'transaction_reference.regex' => 'Enter the UPI transaction / bank reference (UTR): 6-40 letters or digits.',
@@ -102,7 +129,9 @@ class BillingController extends Controller
     private function settle(array $validated, $cashier, bool $upiVerified)
     {
         return DB::transaction(function () use ($validated, $cashier, $upiVerified) {
-            $order = Order::where('id', $validated['order_id'])->lockForUpdate()->firstOrFail();
+            // Same lock order as every fulfilment writer (order → tickets → items): a kitchen change either committed
+            // before this point and is seen below, or waits until this payment has finished.
+            [$order] = $this->fulfillment->lockOrder((int) $validated['order_id'], null);
 
             if ($order->payment_status === 'paid') {
                 abort(422, 'This order has already been paid in full.');
@@ -112,11 +141,24 @@ class BillingController extends Controller
                 abort(422, 'Cannot take payment for a cancelled order.');
             }
 
+            $evaluation = $this->eligibility->assertBillable($order);
+            $this->eligibility->persistRepricing($order, $evaluation, $cashier->id);
+
             $amount = bcadd((string) $validated['amount'], '0', 2);
             $remaining = $order->remainingBalance();
 
             if (bccomp($remaining, '0.00', 2) <= 0) {
                 abort(422, 'This order has already been paid in full.');
+            }
+
+            // The cashier confirmed a figure on screen: if the bill changed since, show the new figure instead of part-paying it
+            if (isset($validated['expected_balance']) && bccomp(bcadd((string) $validated['expected_balance'], '0', 2), $remaining, 2) !== 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "The bill changed while it was open. The amount due is now {$remaining}. Please review it and confirm again.",
+                    'error' => 'balance_changed',
+                    'data' => ['remaining_balance' => $remaining],
+                ], 409);
             }
 
             if (bccomp($amount, '0.00', 2) <= 0) {
@@ -259,6 +301,17 @@ class BillingController extends Controller
             'waiter:id,name',
             'cashier:id,name'
         ])->findOrFail($orderId);
+
+        // A printed bill for an unpaid order is the final bill, so the same rule applies. Anything with a payment on it,
+        // and any cancelled order, is history and stays readable.
+        if ($order->status !== 'cancelled') {
+            $evaluation = $this->eligibility->evaluate($order);
+            if ($order->payment_status === 'unpaid') {
+                $this->eligibility->assertBillable($order);
+                $this->eligibility->applyRepricing($order, $evaluation);
+            }
+            $order->setRelation('items', $order->items->reject(fn ($item) => in_array((int) $item->id, $evaluation['cancelled_order_item_ids'], true))->values());
+        }
 
         $itemsByStall = $order->items->groupBy('stall.name');
 

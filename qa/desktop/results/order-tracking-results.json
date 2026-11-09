@@ -3,7 +3,7 @@
     "id": "T-00",
     "desc": "Fresh profile: built-in server started and owner created on the Welcome screen",
     "result": "PASS",
-    "evidence": "http://127.0.0.1:53268/api"
+    "evidence": "http://127.0.0.1:64380/api"
   },
   {
     "id": "T-01",
@@ -21,19 +21,19 @@
     "id": "S1-02",
     "desc": "New order shows a red card with 0/4 Served",
     "result": "PASS",
-    "evidence": "red | T-H5UD · 0m · 0/4 Served"
+    "evidence": "red | T-F3BQ · 0/4 Served"
   },
   {
     "id": "S1-02b",
     "desc": "Card details: \"Table : <table no>\" and \"Stalls : <both stall names>\", card open by default",
     "result": "PASS",
-    "evidence": "Table : T-H5UD | Stalls : Pizza H5UD, Burger H5UD"
+    "evidence": "Table : T-F3BQ | Stalls : Pizza F3BQ, Burger F3BQ"
   },
   {
     "id": "S1-02c",
     "desc": "Item rows show the stall name next to the dish, not the stall code",
     "result": "PASS",
-    "evidence": "(Pizza H5UD) (Pizza H5UD) (Burger H5UD) (Burger H5UD)"
+    "evidence": "(Pizza F3BQ) (Pizza F3BQ) (Burger F3BQ) (Burger F3BQ)"
   },
   {
     "id": "T-ERR",

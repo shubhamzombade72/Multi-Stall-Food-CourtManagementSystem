@@ -29,8 +29,9 @@ const newKey = (): string =>
 export const OrderTrackingPage: React.FC = () => {
   const navigate = useNavigate();
   const pendingCount = usePendingBillsCount();
-  const { isOwner } = useAuth();
-  const canMarkReady = Boolean(isOwner);
+  const { user } = useAuth();
+  // Mark Served: the roles the server allows (owner, cashier, waiter). Kitchen and stall staff only watch the board.
+  const canServe = user?.role === 'owner' || user?.role === 'cashier' || user?.role === 'waiter';
 
   const [orders, setOrders] = useState<BoardOrder[]>([]);
   const [totalActive, setTotalActive] = useState(0);
@@ -162,6 +163,7 @@ export const OrderTrackingPage: React.FC = () => {
       track(order.id, -1);
       busyRef.current.delete(item.id);
       mutationSeq.current += 1;
+      window.dispatchEvent(new Event('pending-bills-updated')); // the item may have made this bill ready: recount now
       if (mounted.current) {
         setBusyItems((s) => {
           const n = new Set(s);
@@ -261,6 +263,7 @@ export const OrderTrackingPage: React.FC = () => {
     } finally {
       track(order.id, -1);
       mutationSeq.current += 1;
+      window.dispatchEvent(new Event('pending-bills-updated')); // the bill may be ready now: recount immediately
       if (mounted.current) {
         setServingOrders((s) => {
           const n = new Set(s);
@@ -334,7 +337,7 @@ export const OrderTrackingPage: React.FC = () => {
         <EmptyState title="No active orders" hint="Orders appear here as soon as they are placed." />
       ) : (
         <>
-          <div data-testid="board-grid" className="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 items-start">
+          <div data-testid="board-grid" className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,24rem),1fr))] items-start">
             {orders.map((order) => (
               <OrderCard
                 key={order.id}
@@ -342,7 +345,7 @@ export const OrderTrackingPage: React.FC = () => {
                 nowMs={cardNow(order.created_at, now)}
                 delayMinutes={delayMinutes}
                 expanded={!collapsedIds.has(order.id)}
-                canMarkReady={canMarkReady}
+                canServe={canServe}
                 busyItems={order.items.some((i) => busyItems.has(i.id)) ? busyItems : NO_BUSY}
                 serving={servingOrders.has(order.id)}
                 onToggle={onToggle}

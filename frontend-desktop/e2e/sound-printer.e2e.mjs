@@ -18,6 +18,7 @@
  *  P6  Restart: history is on disk and reloaded; duplicate protection survives
  */
 import { _electron as electron } from 'playwright-core';
+import { serveAll } from './serve-order.mjs';
 import { createServer } from 'node:net';
 import { mkdtempSync, mkdirSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -91,7 +92,7 @@ const waitFor = async (fn, ms = 20000, step = 250) => {
 const launch = async () => {
   // PACKAGED_EXE=<path to win-unpacked\Multi-Stall Food Court Management System.exe> runs the installed build instead of the sources
   const launchOptions = process.env.PACKAGED_EXE ? { executablePath: process.env.PACKAGED_EXE, args: [] } : { args: [APP_DIR] };
-  app = await electron.launch({ ...launchOptions, env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_API_URL: '' }, timeout: 60000 });
+  app = await electron.launch({ ...launchOptions, env: { ...process.env, FOODCOURT_USER_DATA_DIR: profile, FOODCOURT_SMOKE_TEST: '', FOODCOURT_PIN_LOCK: 'off', FOODCOURT_API_URL: '' }, timeout: 60000 });
   page = await app.firstWindow();
   page.on('pageerror', (e) => pageErrors.push(String(e?.message || e)));
   page.on('console', (m) => {
@@ -211,6 +212,7 @@ try {
 
   // ================================================================== P2 receipt through the UI, duplicate protection
   const order1 = await place();
+  await serveAll(API, cashierToken, order1.id);
   await goto('#/orders');
   await page.getByLabel(`Open ${order1.number}`).click();
   await page.getByRole('button', { name: /Print bill/ }).waitFor({ timeout: 15000 });
@@ -281,6 +283,7 @@ try {
   // ================================================================== P5 printer unreachable -> failed -> retry
   await receiptP.stop();
   const order4 = await place();
+  await serveAll(API, cashierToken, order4.id);
   await goto('#/orders');
   await page.getByLabel(`Open ${order4.number}`).click();
   await page.getByRole('button', { name: /Print bill/ }).waitFor({ timeout: 15000 });

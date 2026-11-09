@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-05T10:26:06.779Z",
+  "ranAt": "2026-11-05T14:08:29.851Z",
   "total": 33,
   "passed": 33,
   "failed": 0,
@@ -8,7 +8,7 @@
       "id": "P-00",
       "desc": "Fresh profile: built-in server (SQLite) started and the owner created",
       "result": "PASS",
-      "evidence": "http://127.0.0.1:58553/api"
+      "evidence": "http://127.0.0.1:56319/api"
     },
     {
       "id": "P-01",
@@ -44,7 +44,7 @@
       "id": "P-06",
       "desc": "Payout receipt generated: PAY-000001, ₹5,000.00 cash, balance ₹0.00, manual-record disclaimer",
       "result": "PASS",
-      "evidence": "Urban Food Court STALL PAYOUT RECEIPT Receipt PAY-000001 Business date 05-11-2026 Paid at 05/11/2026, 03:55 pm Stall Pizza Corner Owner Rajesh Patil Net payable ₹5,000.00 Amount paid now ₹5,000.00 Paid so far ₹5,000.00 Balance remaining ₹0.00 Method "
+      "evidence": "Urban Food Court STALL PAYOUT RECEIPT Receipt PAY-000001 Business date 05-11-2026 Paid at 05/11/2026, 07:38 pm Stall Pizza Corner Owner Rajesh Patil Net payable ₹5,000.00 Amount paid now ₹5,000.00 Paid so far ₹5,000.00 Balance remaining ₹0.00 Method "
     },
     {
       "id": "P-07",
@@ -98,7 +98,7 @@
       "id": "P-12b",
       "desc": "Stall payout history lists the 3 transactions in order with methods/references, plus the audit trail",
       "result": "PASS",
-      "evidence": "3 rows | Payout recorded · 05/11/2026, 03:55 pm · Payout Owner ₹3,000.00 · UPI · ref UPI123456789 · balance after ₹5,000.00 Payout recorded · 05/11/2026, 03:55 pm · Payo"
+      "evidence": "3 rows | Payout recorded · 05/11/2026, 07:38 pm · Payout Owner ₹3,000.00 · UPI · ref UPI123456789 · balance after ₹5,000.00 Payout recorded · 05/11/2026, 07:38 pm · Payo"
     },
     {
       "id": "P-13",
@@ -110,7 +110,7 @@
       "id": "P-14",
       "desc": "Reversal keeps the original payout (marked Reversed) and adds a reversal entry; both stay in the ledger",
       "result": "PASS",
-      "evidence": "PAY-000001 05/11/2026, 03:55 pm Cash ₹5,000.00 ₹0.00 Payout Owner Reversed Receipt || PAY-000006 05/11/2026, 03:55 pm Cash −₹5,000.00 ₹5,000.00 Payout Owner Reversal Receipt"
+      "evidence": "PAY-000001 05/11/2026, 07:38 pm Cash ₹5,000.00 ₹0.00 Payout Owner Reversed Receipt || PAY-000006 05/11/2026, 07:38 pm Cash −₹5,000.00 ₹5,000.00 Payout Owner Reversal Receipt"
     },
     {
       "id": "P-15",
@@ -134,7 +134,7 @@
       "id": "P-17",
       "desc": "Payout History filters by status (Reversed shows only the reversed payout)",
       "result": "PASS",
-      "evidence": "PAY-000001 05-11-2026 Pizza Corner Rajesh Patil ₹5,000.00 ₹5,000.00 Cash — 05/11/2026, 03:55 pm Payo"
+      "evidence": "PAY-000001 05-11-2026 Pizza Corner Rajesh Patil ₹5,000.00 ₹5,000.00 Cash — 05/11/2026, 07:38 pm Payo"
     },
     {
       "id": "P-17b",
@@ -146,7 +146,7 @@
       "id": "P-18",
       "desc": "Opening a payout shows every field and its complete audit history",
       "result": "PASS",
-      "evidence": "Payout recorded · 05/11/2026, 03:55 pm · Payout Owner ₹5,000.00 · UPI · ref UPI-REPAID-0001 · balance after ₹0.00"
+      "evidence": "Payout recorded · 05/11/2026, 07:38 pm · Payout Owner ₹5,000.00 · UPI · ref UPI-REPAID-0001 · balance after ₹0.00"
     },
     {
       "id": "P-19",
