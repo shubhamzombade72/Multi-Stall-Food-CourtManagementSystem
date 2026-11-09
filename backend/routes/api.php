@@ -117,6 +117,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     // Stalls
     Route::get('/stalls', [StallController::class, 'index']);
     Route::post('/stalls', [StallController::class, 'store']);
+    Route::post('/stalls/deletion-preview', [BulkDeleteController::class, 'stallPreview'])->middleware('throttle:60,1');
     Route::post('/stalls/bulk-delete', [BulkDeleteController::class, 'stalls'])->middleware('throttle:60,1');
     Route::get('/stalls/{id}', [StallController::class, 'show']);
     Route::put('/stalls/{id}', [StallController::class, 'update']);

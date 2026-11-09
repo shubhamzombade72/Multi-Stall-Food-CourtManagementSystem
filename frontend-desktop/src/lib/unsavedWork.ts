@@ -30,6 +30,9 @@ export const setUnsavedWork = (key: string, active: boolean): void => {
   if (before !== active) report();
 };
 
+/** Work a screen marked as open (cart, payment), not counting half-typed forms. */
+export const openWork = (): string[] => [...marks];
+
 /** Begins reporting. Safe to call more than once, and does nothing outside the desktop app. */
 export const startUnsavedWorkReporting = (): void => {
   if (started || !desktop()) return;

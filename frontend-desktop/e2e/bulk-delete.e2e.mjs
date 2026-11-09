@@ -165,19 +165,23 @@ try {
 
   await page.getByTestId('bulk-select-filtered').click();
   await page.getByTestId('bulk-delete-open').click();
+  // Stalls now go through a server check first: the dialog groups deletable and blocked stalls before anything can be confirmed
+  await page.getByTestId('stall-deletable').waitFor({ timeout: 20000 });
   const sConfirm = await page.getByTestId('bulk-confirm-count').innerText();
   const sLabel = await page.getByTestId('bulk-confirm').innerText();
+  const sBlocked = await page.getByTestId('stall-blocked').innerText();
   await page.screenshot({ path: join(shots, 'stalls-confirm.png') });
-  check('B-13', 'Stall confirmation shows "Selected: 14 Stalls" and "Delete Selected Stalls"', sConfirm === 'Selected: 14 Stalls' && sLabel === 'Delete Selected Stalls', `${sConfirm} / ${sLabel}`);
+  check('B-13', 'Stall dialog shows "Selected: 14 Stalls", groups the order-history stall as blocked, offers "Delete 13 stalls permanently"', sConfirm === 'Selected: 14 Stalls' && sLabel === 'Delete 13 stalls permanently' && /BD Stall Ordered/.test(sBlocked), `${sConfirm} / ${sLabel}`);
   await page.getByTestId('bulk-confirm').click();
   await page.getByTestId('bulk-summary').waitFor({ timeout: 30000 });
   const sDeleted = await page.getByTestId('bulk-summary-deleted').innerText();
   const sFailed = await page.getByTestId('bulk-summary-failed').innerText();
-  const sReasons = await page.getByTestId('bulk-failures').innerText();
+  const sReasons = await page.getByTestId('bulk-outcomes').innerText();
   await page.screenshot({ path: join(shots, 'stalls-summary.png') });
   await page.getByTestId('bulk-done').click();
   const stallsLeft = (await api(ownerToken, 'GET', '/stalls?include_inactive=1')).data;
-  check('B-14', 'Summary: 13 stalls deleted; the stall with order history is refused with the reason and stays', sDeleted.endsWith('13') && sFailed.endsWith('1') && /order line/.test(sReasons) && stallsLeft.length === 1 && stallsLeft[0].id === ordStall.id, `${sDeleted} | ${sFailed} | ${sReasons.replace(/\s+/g, ' ').slice(0, 140)}`);
+  // The blocked stall was never sent for deletion (the preview already refused it), but it is still reported, with its reason
+  check('B-14', 'Summary: 13 stalls deleted; the stall with order history is reported as not deleted with the reason and stays', sDeleted.endsWith('13') && sFailed.endsWith('0') && /BD Stall Ordered: not deleted.*order line/s.test(sReasons) && stallsLeft.length === 1 && stallsLeft[0].id === ordStall.id, `${sDeleted} | ${sFailed} | ${sReasons.replace(/\s+/g, ' ').slice(0, 140)}`);
 
   const orderAfter = (await api(ownerToken, 'GET', `/orders/${orderId}`)).data;
   check('B-15', 'The historic order, its line and its dish are intact after both bulk deletes', orderAfter.items?.length === 1 && orderAfter.items[0].menu_item_id === ordDish.id, `items=${orderAfter.items?.length}`);

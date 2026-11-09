@@ -437,8 +437,9 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
-    minWidth: 1100,
-    minHeight: 700,
+    // Small enough for a 1366x768 laptop at 125% scaling and for a half-screen window; every screen is laid out for it
+    minWidth: 800,
+    minHeight: 560,
     show: false,
     title: 'मंगलमूर्ती POS',
     backgroundColor: '#0f172a',
@@ -610,7 +611,7 @@ function buildMenu() {
 const BRIDGE_KEYS = [
   'authVaultClear', 'authVaultSetup', 'authVaultStatus', 'authVaultUnlock', 'backupNow', 'chooseBackupFolder', 'connectToHost', 'enqueuePrintJob', 'getAppInfo', 'getBackupStatus', 'getConfig', 'getDiagnostics', 'getPrintConfig',
   'getPrinterStatus', 'getStartupStatus', 'listPrintJobs', 'listPrinters', 'log', 'onPrintJobsChanged', 'previewPrintDocument', 'print', 'reprintPrintJob',
-  'restoreBackup', 'retryPrintJob', 'retryStart', 'sendTestPrint', 'setPrintConfig', 'updateApprove', 'updateCheck', 'updateEnroll', 'updateGetState', 'updateInstallFromFolder', 'updateNow', 'updatePauseDownload', 'updateRemindLater', 'updateReportActivity', 'updateSetPolicy', 'useBuiltInServer',
+  'restoreBackup', 'retryPrintJob', 'retryStart', 'sendTestPrint', 'setPrintConfig', 'updateApprove', 'updateCheck', 'updateEnroll', 'updateGetState', 'updateInstallFromFolder', 'updateInstallRequired', 'updateNow', 'updatePauseDownload', 'updateRemindLater', 'updateReportActivity', 'updateSetPolicy', 'useBuiltInServer',
 ].sort();
 
 /** Installing and changing update rules are owner tasks. The server says who holds this token, not the renderer. */
@@ -692,6 +693,8 @@ function registerIpc() {
     return { ok: false, code: 'not_owner', error: 'Only the owner can do this.' };
   };
   handle('update:now', ownerOnly(() => updates.agent.updateNow()));
+  // No owner token: the required-update screen also covers the sign-in page. The agent refuses unless the signed release is mandatory
+  handle('update:install-required', () => updates.agent.installRequired());
   handle('update:remind-later', () => updates.agent.remindLater());
   handle('update:set-policy', ownerOnly((_e, next) => updates.agent.setPolicy(next)));
   handle('update:approve', ownerOnly(() => updates.agent.approvePending()));

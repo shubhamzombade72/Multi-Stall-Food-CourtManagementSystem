@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('desktop', {
   updateCheck: () => ipcRenderer.invoke('update:check'),
   updateEnroll: (code) => ipcRenderer.invoke('update:enroll', String(code).slice(0, 40)),
   updateNow: (token) => ipcRenderer.invoke('update:now', String(token)),
+  updateInstallRequired: () => ipcRenderer.invoke('update:install-required'),
   updateRemindLater: () => ipcRenderer.invoke('update:remind-later'),
   updateSetPolicy: (token, policy) => ipcRenderer.invoke('update:set-policy', String(token), policy),
   updateApprove: (token) => ipcRenderer.invoke('update:approve', String(token)),

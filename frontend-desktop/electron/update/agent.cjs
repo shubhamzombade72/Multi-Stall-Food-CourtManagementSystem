@@ -99,6 +99,45 @@ function createUpdateAgent(deps) {
     return pending;
   }
 
+  /**
+   * Owner's rule (2026-11-07): every update must be installed before the app can be used, so every newer release counts here,
+   * whether or not it was published with --required. It is read only from a signature-checked source: the verified offer or,
+   * when the package is already on this PC, its stored description checked again against the trusted keys. So a downloaded
+   * update is still enforced after a restart without internet, and a description edited on disk is not believed.
+   */
+  let requiredCache = null;
+  function requiredUpdate() {
+    const offer = state.offer;
+    const pending = usablePending();
+    if (offer && compareVersions(offer.version, getCurrentVersion()) > 0) {
+      return { version: offer.version, notes: offer.notes || {}, downloaded: pending?.version === offer.version };
+    }
+    if (!pending) return null;
+    const key = `${pending.version}|${pending.manifest_sha256}|${pending.manifest_file}`;
+    if (requiredCache?.key !== key) {
+      let value = null;
+      try {
+        const raw = fs.readFileSync(pending.manifest_file, 'utf8');
+        const signature = fs.readFileSync(pending.signature_file, 'utf8').trim();
+        let keyId;
+        try {
+          keyId = JSON.parse(raw).signing?.key_id;
+        } catch {
+          keyId = undefined;
+        }
+        const loaded = rel.loadManifest(raw, signature, keyId, trustedKeys());
+        const sha = crypto.createHash('sha256').update(raw).digest('hex');
+        if (loaded.ok && loaded.manifest.version === pending.version && sha === pending.manifest_sha256) {
+          value = { version: pending.version, notes: loaded.manifest.notes || {}, downloaded: true };
+        }
+      } catch {
+        value = null;
+      }
+      requiredCache = { key, value };
+    }
+    return requiredCache.value;
+  }
+
   const serverUrl = () => getServerUrl();
   // A feed needs no server and no registration: every install reads the same signed files, and the signature is what is trusted
   const feedBase = () => normalizeFeedUrl(getFeedUrl());
@@ -373,6 +412,11 @@ function createUpdateAgent(deps) {
       if (policy().mode === 'silent') await recordApproval(pending, 'silent policy').catch(() => undefined);
       return pending;
     } catch (err) {
+      // A dropped or missing connection is the shop's most common failure: say so plainly
+      if (err.code === undefined && /net::|fetch failed|ECONN|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket|network|aborted/i.test(String(err.message))) {
+        err.code = 'download';
+        err.message = `The update could not be downloaded because the internet connection failed (${String(err.message).slice(0, 60)}). Your software was not changed. Check the connection and press Retry.`;
+      }
       log('ERROR', `Update stopped before anything changed [${err.code || 'error'}]: ${err.message}`);
       state.downloadFailedAt = clock().getTime();
       state.error = err.code === undefined ? 'The update could not continue. Your software was not changed.' : err.message;
@@ -392,10 +436,11 @@ function createUpdateAgent(deps) {
   }
 
   /** The one way an install begins: gate first, then hand over to the separate process and close. */
-  async function install(pending, { ownerPressed = false } = {}) {
+  async function install(pending, { ownerPressed = false, ignore = [] } = {}) {
     const gate = await activity.evaluate({ ownerPressed });
-    state.waitingFor = gate.reasons;
-    if (!gate.idle) return { ok: false, code: 'busy', reasons: gate.reasons, error: 'Finish the open bill or unsaved work first. The update will wait.' };
+    const reasons = gate.reasons.filter((r) => !ignore.includes(r));
+    state.waitingFor = reasons;
+    if (reasons.length > 0) return { ok: false, code: 'busy', reasons, error: 'Finish the open bill or unsaved work first. The update will wait.' };
     state.phase = 'installing';
     try {
       const jobFile = writeJob(dirs, { ...pending, parent_pid: process.pid });
@@ -716,6 +761,39 @@ function createUpdateAgent(deps) {
     }
   }
 
+  /**
+   * "Update Now" in the required-update screen. Anyone at the PC may start it, because the screen also covers the sign-in page,
+   * but only for a release whose signed description makes it mandatory. Same download, checks, recovery point and install as
+   * every other update. A form left half typed behind that screen can no longer be finished, so it does not hold the update
+   * back; an open cart, payment, print job or request still does.
+   */
+  async function installRequired() {
+    const req = requiredUpdate();
+    if (!req) return { ok: false, code: 'not_required', error: 'There is no required update to install.' };
+    if (state.phase !== 'idle') return { ok: false, code: 'running', error: 'The update is already running.' };
+    const ignore = ['unsaved_form'];
+    const gate = await activity.evaluate({ ownerPressed: true });
+    const reasons = gate.reasons.filter((r) => !ignore.includes(r));
+    state.waitingFor = reasons;
+    if (reasons.length > 0) return { ok: false, code: 'busy', reasons, error: 'The update waits for the work in progress on this computer to finish.' };
+
+    state.error = null;
+    try {
+      let pending = usablePending();
+      if (!pending || pending.version !== req.version) {
+        if (state.offer?.version !== req.version) {
+          state.error = 'The update could not be downloaded. Check the internet connection and press Retry.';
+          return { ok: false, code: 'offline', error: state.error };
+        }
+        pending = await prepare(state.offer);
+      }
+      log('INFO', `Required update ${pending.version} started from the update screen`);
+      return await install(pending, { ownerPressed: true, ignore });
+    } catch (err) {
+      return { ok: false, code: err.code || 'error', error: state.error || 'The update could not continue. Your software was not changed.' };
+    }
+  }
+
   // ------------------------------------------------------------------ confirming a trial boot
   /**
    * Runs once the new version really started: window loaded and API answering. Only now is the update complete.
@@ -774,6 +852,7 @@ function createUpdateAgent(deps) {
     const currentPolicy = policy();
     const pending = usablePending();
     const isSnoozed = pending && snooze && snooze.version === pending.version && snooze.until > clock().getTime();
+    const req = requiredUpdate();
     const scheduled = pending && !isSnoozed && (currentPolicy.mode === 'silent' || currentPolicy.mode === 'idle' || (currentPolicy.mode === 'approve_once' && pending.approved)) && !schedule.previouslyFailed(lastResult(), pending.version);
     return {
       enabled: hasKeys() && !serviceProblem(),
@@ -796,6 +875,8 @@ function createUpdateAgent(deps) {
       serverBlocked: state.serverBlocked || null,
       update: offer ? { version: offer.version, channel: offer.channel, required: offer.required, releaseDate: offer.release_date, packageType: offer.package_type, packageSize: offer.package_size, notes: offer.notes || {} } : null,
       snoozed: Boolean(offer && snooze && snooze.version === offer.version && snooze.until > Date.now() && !offer.required),
+      // Set only from signed release data. failedBefore: it was tried and rolled back, so it must not lock this PC in a loop
+      required: req ? { ...req, failedBefore: schedule.previouslyFailed(lastResult(), req.version) } : null,
       lastResult: lastResult(),
       recoveryPoints: listRecoveryPoints(dirs.recovery).length,
     };
@@ -814,7 +895,7 @@ function createUpdateAgent(deps) {
     flushOutbox().catch(() => undefined);
   }
 
-  return { enroll, check, updateNow, remindLater, reject, confirmTrial, flushOutbox, publicState, start, downloadPayload, obtainPackage, completionProof, prepare, install, maintenanceTick, setPolicy, approvePending, pauseDownload, prepareFromFolder, usablePending };
+  return { enroll, check, updateNow, installRequired, remindLater, reject, confirmTrial, flushOutbox, publicState, start, downloadPayload, obtainPackage, completionProof, prepare, install, maintenanceTick, setPolicy, approvePending, pauseDownload, prepareFromFolder, usablePending };
 }
 
 module.exports = { createUpdateAgent, updateUrlProblem, normalizeFeedUrl, compatibilityProblem };

@@ -30,37 +30,37 @@ export const Navbar: React.FC = () => {
   };
 
   return (
-    <header className="h-12 bg-surface border-b border-line px-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
-      <div className="flex items-center space-x-3">
+    <header className="h-12 bg-surface border-b border-line px-3 lg:px-4 flex items-center justify-between gap-3 sticky top-0 z-30 shadow-sm">
+      <div className="flex items-center space-x-3 min-w-0">
         <div className="w-8 h-8 rounded-lg overflow-hidden border border-line flex items-center justify-center bg-canvas">
           <img src={logoImg} alt="Logo" className="w-full h-full object-cover" />
         </div>
         <div>
-          <h1 className="font-bold text-fg tracking-tight text-base leading-tight">{settings.business_profile.name}</h1>
-          <p className="text-xs text-muted">मंगलमूर्ती POS</p>
+          <h1 className="font-bold text-fg tracking-tight text-base leading-tight truncate">{settings.business_profile.name}</h1>
+          <p className="text-xs text-muted truncate">मंगलमूर्ती POS</p>
         </div>
       </div>
 
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-2 lg:space-x-4 shrink-0">
         <ThemeToggle />
         <NotificationBell />
         {user?.stall && (
-          <div className="text-right border-r border-line pr-4">
+          <div className="hidden md:block text-right border-r border-line pr-4 max-w-[12rem]">
             <span className="text-[11px] font-medium text-muted uppercase tracking-wider block">Stall</span>
-            <span className="text-sm font-semibold text-fg">{user.stall.name}</span>
+            <span className="text-sm font-semibold text-fg block truncate">{user.stall.name}</span>
           </div>
         )}
 
         <div className="flex items-center space-x-3 pl-2">
-          <div className="w-8 h-8 rounded-full bg-surface-2 border border-line flex items-center justify-center text-muted">
+          <div className="hidden lg:flex w-8 h-8 rounded-full bg-surface-2 border border-line items-center justify-center text-muted">
             <UserIcon className="w-4 h-4" />
           </div>
-          <div className="text-left">
+          <div className="text-left min-w-0" title={user?.email}>
             <div className="flex items-center space-x-2">
-              <span className="text-sm font-semibold text-fg">{user?.name}</span>
+              <span className="text-sm font-semibold text-fg truncate max-w-[10rem]">{user?.name}</span>
               {getRoleBadge(user?.role)}
             </div>
-            <span className="text-xs text-muted block">{user?.email}</span>
+            <span className="hidden lg:block text-xs text-muted truncate max-w-[14rem]">{user?.email}</span>
           </div>
         </div>
 

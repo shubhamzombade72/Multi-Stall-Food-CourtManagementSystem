@@ -118,6 +118,8 @@ export const UpdatesPage: React.FC = () => {
   };
 
   const update = state?.update;
+  // Updates download by themselves, so an offered version may already be on this PC: never present it as still to fetch
+  const downloaded = Boolean(update && state?.pending?.version === update.version);
   const running = state ? ['downloading', 'verifying', 'installing'].includes(state.phase) : false;
   const percent = state?.progress?.total ? Math.min(100, Math.round((state.progress.received / state.progress.total) * 100)) : 0;
   const last = state?.lastResult;
@@ -145,7 +147,7 @@ export const UpdatesPage: React.FC = () => {
           </p>
           {state.waitingFor.length > 0 && <p className="mt-1 text-sm text-muted" data-testid="update-waiting">Waiting for: {[...new Set(state.waitingFor.map(waitingText))].join(', ')}.</p>}
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" disabled={busy || running} onClick={() => setConfirming(true)} className={primary} data-testid="update-ready-now"><Download className="h-4 w-4" /> Update Now</button>
+            {!downloaded && <button type="button" disabled={busy || running} onClick={() => setConfirming(true)} className={primary} data-testid="update-ready-now"><Download className="h-4 w-4" /> Update Now</button>}
             {state.policy.mode === 'approve_once' && !state.pending.approved && <button type="button" disabled={busy} onClick={approve} className={secondary} data-testid="update-approve">Approve for tonight</button>}
           </div>
           {confirming && !update && (
@@ -217,7 +219,7 @@ export const UpdatesPage: React.FC = () => {
           <div className="flex items-center justify-between gap-4">
             <div>
               {update ? (
-                <p className="font-semibold text-fg" data-testid="update-available">Version <span data-testid="update-available-version">{update.version}</span> is available{update.required ? ' (required)' : ''}</p>
+                <p className="font-semibold text-fg" data-testid="update-available">Version <span data-testid="update-available-version">{update.version}</span> {downloaded ? 'is ready to install' : 'is available'}{update.required ? ' (required)' : ''}</p>
               ) : (
                 <p className="font-semibold text-fg" data-testid="update-none">This computer is up to date</p>
               )}
@@ -230,7 +232,7 @@ export const UpdatesPage: React.FC = () => {
             <>
               <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
                 <div><dt className="text-muted">Release date</dt><dd className="text-fg" data-testid="update-release-date">{update.releaseDate ? new Date(update.releaseDate).toLocaleDateString() : 'Not stated'}</dd></div>
-                <div><dt className="text-muted">Download size</dt><dd className="text-fg" data-testid="update-size">{megabytes(update.packageSize)}</dd></div>
+                <div><dt className="text-muted">{downloaded ? 'Size' : 'Download size'}</dt><dd className="text-fg" data-testid="update-size">{megabytes(update.packageSize)}</dd></div>
                 <div><dt className="text-muted">Type</dt><dd className="text-fg">{update.packageType === 'full' ? 'Complete package' : 'Changes only'}</dd></div>
               </dl>
 
@@ -267,7 +269,7 @@ export const UpdatesPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="mt-5 flex gap-2">
-                  <button type="button" disabled={busy} onClick={() => setConfirming(true)} className={primary} data-testid="update-now"><Download className="h-4 w-4" /> Update Now</button>
+                  <button type="button" disabled={busy} onClick={() => setConfirming(true)} className={primary} data-testid="update-now">{downloaded ? 'Install now' : <><Download className="h-4 w-4" /> Update Now</>}</button>
                   {!update.required && <button type="button" disabled={busy} onClick={() => run(() => api.updateRemindLater())} className={secondary} data-testid="update-later">Remind Me Later</button>}
                 </div>
               )}

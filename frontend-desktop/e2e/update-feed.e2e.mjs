@@ -238,9 +238,25 @@ const confirmedAt = (version, timeout) => waitFor(() => {
 
 const processes = [];
 // A person sitting at this PC must not be able to press anything in the test's windows, and any exit or stall must be on record
-const offScreen = (app) => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((w) => w.setPosition(-4000, -4000))).catch(() => undefined);
+const offScreen = (app) => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((w) => {
+  w.setPosition(-4000, -4000);
+  w.setFocusable(false); // or typing elsewhere on this PC, and Alt+F4, can reach it
+  w.blur();
+})).catch(() => undefined);
 const watch = (app, page, name) => {
   app.process().once('exit', (code, signal) => console.log(`[watch] ${new Date().toISOString()} ${name} process exit code=${code} signal=${signal}`));
+  app.process().stdout?.on('data', (d) => String(d).split('\n').filter((l) => l.includes('[inside]')).forEach((l) => console.log(`[watch] ${new Date().toISOString()} ${name} ${l.trim()}`)));
+  app.evaluate(({ app: a, BrowserWindow, powerMonitor }) => {
+    const say = (what) => console.log(`[inside] ${what}`);
+    a.on('before-quit', () => say(`before-quit ${new Error().stack.split('\n').slice(2, 5).join(' | ')}`));
+    a.on('window-all-closed', () => say('window-all-closed'));
+    BrowserWindow.getAllWindows().forEach((w) => {
+      w.on('close', () => say('window close event'));
+      w.on('session-end', () => say('windows session ending'));
+      w.webContents.on('render-process-gone', (_e, d) => say(`renderer gone ${d.reason}`));
+    });
+    ['suspend', 'resume', 'shutdown', 'lock-screen', 'unlock-screen'].forEach((e) => powerMonitor.on(e, () => say(`power ${e}`)));
+  }).catch(() => undefined);
   page.on('crash', () => console.log(`[watch] ${new Date().toISOString()} ${name} renderer crashed`));
   page.on('close', () => console.log(`[watch] ${new Date().toISOString()} ${name} page closed`));
 };
@@ -318,9 +334,10 @@ try {
   check('FEED-10', 'No login or device token is ever sent to the host', github.feedAuth === 0, github.feedAuth);
   // Ready to install, inside the 02:00 to 05:00 hours if run then, and the PC is in use: at least two install ticks must pass with no install
   await sleep(130000);
-  const stillOpen = app.process().exitCode === null && (await page.evaluate(() => window.desktop.updateGetState()).catch(() => null));
-  check('FEED-23', 'A ready update does not install while the PC is in use', Boolean(stillOpen) && existsSync(stateFile('pending.json')) && stillOpen.currentVersion === pkg.version, JSON.stringify({ local: new Date().toTimeString().slice(0, 8), exitCode: app.process().exitCode, version: stillOpen?.currentVersion, rule: stillOpen?.policy?.mode }));
+  const stillOpen = await page.evaluate(() => window.desktop.updateGetState()).catch(() => null);
+  check('FEED-23', 'A ready update does not install while the PC is in use', Boolean(stillOpen) && existsSync(stateFile('pending.json')) && stillOpen.currentVersion === pkg.version, JSON.stringify({ local: new Date().toTimeString().slice(0, 8), version: stillOpen?.currentVersion, rule: stillOpen?.policy?.mode }));
 
+  if (!stillOpen) throw new Error('The app closed while it should have been waiting');
   const exited = new Promise((r) => app.process().once('exit', r));
   await page.getByTestId('update-now').click();
   await page.getByTestId('update-confirm-yes').click();
@@ -400,7 +417,7 @@ try {
 
 if (failed || results.some((r) => !r.pass)) {
   for (const f of [logFile, join(profile, 'logs', 'desktop.log')]) {
-    if (existsSync(f)) console.log(`--- ${f}\n${readFileSync(f, 'utf8').split('\n').filter((l) => /update|Update|Program|bootstrap/.test(l)).slice(-25).join('\n')}`);
+    if (existsSync(f)) console.log(`--- ${f}\n${readFileSync(f, 'utf8').split('\n').filter((l) => !/renderer-console/.test(l)).slice(-40).join('\n')}`);
   }
 }
 stopRunning();
@@ -415,7 +432,8 @@ await sleep(2000);
 spawnSync('powershell.exe', ['-NoProfile', '-Command', `Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like '${T}*' -or $_.CommandLine -like '*${T}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`], { stdio: 'ignore' });
 await sleep(1000);
 try {
-  rmSync(T, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+  if (bad.length || failed) console.log(`Test folder kept: ${T}`);
+  else rmSync(T, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
 } catch (err) {
   console.log(`Temp folder left behind: ${err.message}`);
 }

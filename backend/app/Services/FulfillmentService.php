@@ -374,22 +374,24 @@ class FulfillmentService
      *
      * @return array{total_active: int, next_cursor: ?string, orders: array}
      */
-    public function board(?string $cursor): array
+    public function board(?string $cursor, ?int $stallId = null): array
     {
         $after = $cursor !== null && $cursor !== '' ? $this->decodeBoardCursor($cursor) : null;
         $cutoff = now()->subMinutes(self::BOARD_RECENT_SERVED_MINUTES);
 
+        // $stallId: one stall's view (kitchen staff / stall manager). Orders and items of other stalls are left out.
         $query = Order::query()
             ->where('orders.status', '!=', 'cancelled')
-            ->where(function (Builder $q) use ($cutoff) {
-                $q->whereExists($this->unservedItemsOf())
-                    ->orWhere(function (Builder $q) use ($cutoff) {
-                        $q->whereNotExists($this->unservedItemsOf())
-                            ->whereExists(function ($sub) use ($cutoff) {
+            ->where(function (Builder $q) use ($cutoff, $stallId) {
+                $q->whereExists($this->unservedItemsOf($stallId))
+                    ->orWhere(function (Builder $q) use ($cutoff, $stallId) {
+                        $q->whereNotExists($this->unservedItemsOf($stallId))
+                            ->whereExists(function ($sub) use ($cutoff, $stallId) {
                                 $sub->selectRaw('1')
                                     ->from('stall_ticket_items as bsi')
                                     ->join('stall_kitchen_tickets as bkt', 'bkt.id', '=', 'bsi.ticket_id')
                                     ->whereColumn('bkt.order_id', 'orders.id')
+                                    ->when($stallId !== null, fn ($s) => $s->where('bkt.stall_id', $stallId))
                                     ->whereIn('bsi.status', ['served', 'picked_up'])
                                     ->where('bsi.served_at', '>=', $cutoff);
                             });
@@ -419,10 +421,10 @@ class FulfillmentService
 
         $totalActive = Order::query()
             ->where('orders.status', '!=', 'cancelled')
-            ->whereExists($this->unservedItemsOf())
+            ->whereExists($this->unservedItemsOf($stallId))
             ->count();
 
-        $this->loadBoardRelations($orders);
+        $this->loadBoardRelations($orders, $stallId);
 
         return [
             'total_active' => $totalActive,
@@ -441,13 +443,14 @@ class FulfillmentService
     }
 
     /** Correlated subquery: ticket items of `orders` that are neither served nor cancelled. */
-    private function unservedItemsOf(): \Closure
+    private function unservedItemsOf(?int $stallId = null): \Closure
     {
-        return function ($sub) {
+        return function ($sub) use ($stallId) {
             $sub->selectRaw('1')
                 ->from('stall_ticket_items as asi')
                 ->join('stall_kitchen_tickets as akt', 'akt.id', '=', 'asi.ticket_id')
                 ->whereColumn('akt.order_id', 'orders.id')
+                ->when($stallId !== null, fn ($s) => $s->where('akt.stall_id', $stallId))
                 ->whereNotIn('asi.status', self::FINISHED_ITEM_STATUSES);
         };
     }
@@ -464,11 +467,13 @@ class FulfillmentService
     }
 
     /** Eager-load everything presentItem needs, then wire item->ticket so no lazy query runs. */
-    private function loadBoardRelations(\Illuminate\Database\Eloquent\Collection $orders): void
+    private function loadBoardRelations(\Illuminate\Database\Eloquent\Collection $orders, ?int $stallId = null): void
     {
         $orders->load([
             'table:id,table_number',
-            'kitchenTickets' => fn ($q) => $q->select('id', 'order_id', 'stall_id')->orderBy('id'),
+            'kitchenTickets' => fn ($q) => $q->select('id', 'order_id', 'stall_id')
+                ->when($stallId !== null, fn ($t) => $t->where('stall_id', $stallId))
+                ->orderBy('id'),
             'kitchenTickets.stall:id,name,code',
             'kitchenTickets.ticketItems' => fn ($q) => $q->orderBy('id'),
             'kitchenTickets.ticketItems.orderItem:id,item_name,special_instructions',
@@ -530,6 +535,12 @@ class FulfillmentService
     }
 
     // ------------------------------------------------------------------ authorization
+
+    /** The one stall a kitchen staff member or stall manager watches on the board; null for everyone else. */
+    public function boardStallScope(User $actor): ?int
+    {
+        return ($actor->isKitchenStaff() || $actor->isStallManager()) && $actor->stall_id ? (int) $actor->stall_id : null;
+    }
 
     public function canMarkServed(User $actor): bool
     {

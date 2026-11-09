@@ -303,7 +303,7 @@ test('boot: an interrupted update and a release on trial are still dealt with fi
   assert.equal(rel.decideBoot({ journal: { phase: 'TRIAL' }, active: { version: '1.3.1', state: 'trial', boot_attempts: 0 }, installedVersion: '1.4.0' }).trial, true);
 });
 
-async function signedRelease(root: string, version: string, signer: { pem: string }, compatibility: Record<string, unknown>, keyId = 'k1') {
+async function signedRelease(root: string, version: string, signer: { pem: string }, compatibility: Record<string, unknown>, keyId = 'k1', extra: Record<string, unknown> = {}) {
   const contents = Buffer.from('console.log("hello")');
   const staging = join(root, 'src');
   mkdirSync(staging, { recursive: true });
@@ -311,7 +311,7 @@ async function signedRelease(root: string, version: string, signer: { pem: strin
   writeFileSync(source, contents);
   const out = join(root, `payload-${version}.fcpkg`);
   const written = await format.writePayload([{ path: 'app/x.js', source }], out);
-  const manifest = { format: 1, release_id: `rel-${version}`, version, source_version: null, package_type: 'full', compatibility, deleted_files: [], database: {}, signing: { algorithm: 'ed25519', key_id: keyId }, payload_sha256: written.payload_sha256, payload_size: written.payload_size, files: written.entries, tree: written.entries.map(({ path, sha256, size }: { path: string; sha256: string; size: number }) => ({ path, sha256, size })) };
+  const manifest = { format: 1, release_id: `rel-${version}`, version, source_version: null, package_type: 'full', compatibility, deleted_files: [], database: {}, signing: { algorithm: 'ed25519', key_id: keyId }, payload_sha256: written.payload_sha256, payload_size: written.payload_size, files: written.entries, tree: written.entries.map(({ path, sha256, size }: { path: string; sha256: string; size: number }) => ({ path, sha256, size })), ...extra };
   const raw = JSON.stringify(manifest);
   return { raw, signature: format.signManifest(raw, signer.pem), payload: out, contents };
 }
@@ -363,8 +363,8 @@ function agentLab(over: Record<string, unknown> = {}) {
   return { root, dirs, key, agent, installs, setClock: (d: Date) => { clock = d; }, cleanup: () => rmSync(root, { recursive: true, force: true, maxRetries: 3 }) };
 }
 
-async function usbFolder(lab: ReturnType<typeof agentLab>, version = '1.3.0', signer = lab.key, compatibility: Record<string, unknown> = { platform: 'win32', electron_major: 44 }) {
-  const r = await signedRelease(lab.root, version, signer, compatibility);
+async function usbFolder(lab: ReturnType<typeof agentLab>, version = '1.3.0', signer = lab.key, compatibility: Record<string, unknown> = { platform: 'win32', electron_major: 44 }, extra: Record<string, unknown> = {}) {
+  const r = await signedRelease(lab.root, version, signer, compatibility, 'k1', extra);
   const folder = join(lab.root, `usb-${version}`);
   mkdirSync(folder, { recursive: true });
   writeFileSync(join(folder, 'manifest.json'), r.raw);

@@ -12,37 +12,33 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { TableListScreen } from './src/screens/waiter/TableListScreen';
 import { NewOrderScreen } from './src/screens/waiter/NewOrderScreen';
-import { ReadyDishesScreen } from './src/screens/waiter/ReadyDishesScreen';
-import { KdsScreen } from './src/screens/kitchen/KdsScreen';
+import { ServeScreen } from './src/screens/ServeScreen';
 import { SyncScreen } from './src/screens/offline/SyncScreen';
 import { DiningTable } from './src/types';
-import { getApiClient } from './src/api/client';
+import { fetchBoard } from './src/api/board';
+import { toServeCount } from './src/utils/serveBoard';
 
-type WaiterScreen = 'tables' | 'new_order' | 'ready_dishes' | 'sync';
+type WaiterScreen = 'tables' | 'new_order' | 'to_serve' | 'sync';
 
 const AppNavigator: React.FC = () => {
   const { user, token, isLoading, logout, offlineQueueCount, isOnline } = useAuth();
   const [waiterScreen, setWaiterScreen] = useState<WaiterScreen>('tables');
   const [selectedTable, setSelectedTable] = useState<DiningTable | null>(null);
-  const [readyCount, setReadyCount] = useState<number>(0);
+  // Dishes still to serve (same order board as the desktop's Orders & Table Tracking; no Ready step)
+  const [toServe, setToServe] = useState<number>(0);
 
-  // Poll ready dishes count for the waiter
   useEffect(() => {
-    if (user?.role === 'waiter') {
-      const checkReadyDishes = async () => {
+    if (user?.role === 'waiter' || user?.role === 'owner') {
+      const check = async () => {
         try {
-          const client = await getApiClient();
-          const res = await client.get('/waiter/ready-tickets');
-          if (res.data.success) {
-            setReadyCount(res.data.data.length);
-          }
+          setToServe(toServeCount(await fetchBoard()));
         } catch {
-          // Ignore polling errors
+          // Offline: keep the last count
         }
       };
 
-      checkReadyDishes();
-      const interval = setInterval(checkReadyDishes, 6000);
+      check();
+      const interval = setInterval(check, 8000);
       return () => clearInterval(interval);
     }
   }, [user]);
@@ -60,9 +56,17 @@ const AppNavigator: React.FC = () => {
     return <LoginScreen />;
   }
 
-  // Kitchen Staff / Stall Manager -> stall-isolated KDS (the server scopes tickets to their stall)
+  // Kitchen staff / stall manager: watch their own stall's dishes (the server scopes the list). Serving is done by
+  // the owner, cashier and waiters, as on the desktop.
   if (user.role === 'kitchen_staff' || user.role === 'stall_manager') {
-    return <KdsScreen />;
+    return (
+      <ServeScreen
+        canServe={false}
+        title={user.stall?.name || 'Kitchen'}
+        subtitle={`${user.name} · orders for this stall`}
+        leftAction={{ label: 'Log Out', onPress: logout }}
+      />
+    );
   }
 
   // Roles without a mobile interface yet (cashier, store staff) use the desktop application
@@ -86,7 +90,7 @@ const AppNavigator: React.FC = () => {
       {/* Waiter Navigation Bar */}
       <View style={styles.waiterHeader}>
         <View>
-          <Text style={styles.waiterName}>🧑‍🍳 {user.name}</Text>
+          <Text style={styles.waiterName}>{user.name}</Text>
           <View style={styles.statusRow}>
             <View
               style={[
@@ -109,13 +113,13 @@ const AppNavigator: React.FC = () => {
             </TouchableOpacity>
           )}
 
-          {/* Ready Alerts Pill */}
-          {readyCount > 0 && (
+          {/* Dishes still to serve */}
+          {toServe > 0 && (
             <TouchableOpacity
               style={styles.readyPill}
-              onPress={() => setWaiterScreen('ready_dishes')}
+              onPress={() => setWaiterScreen('to_serve')}
             >
-              <Text style={styles.readyPillText}>🔔 {readyCount} Ready</Text>
+              <Text style={styles.readyPillText}>🍽️ {toServe} to serve</Text>
             </TouchableOpacity>
           )}
 
@@ -129,8 +133,8 @@ const AppNavigator: React.FC = () => {
       <View style={styles.screenContainer}>
         {waiterScreen === 'tables' && (
           <TableListScreen
-            readyCount={readyCount}
-            onOpenReadyAlerts={() => setWaiterScreen('ready_dishes')}
+            readyCount={toServe}
+            onOpenReadyAlerts={() => setWaiterScreen('to_serve')}
             onSelectTable={(table) => {
               setSelectedTable(table);
               setWaiterScreen('new_order');
@@ -152,8 +156,13 @@ const AppNavigator: React.FC = () => {
           />
         )}
 
-        {waiterScreen === 'ready_dishes' && (
-          <ReadyDishesScreen onBack={() => setWaiterScreen('tables')} />
+        {waiterScreen === 'to_serve' && (
+          <ServeScreen
+            canServe
+            title="To Serve"
+            leftAction={{ label: '← Tables', onPress: () => setWaiterScreen('tables') }}
+            onCount={setToServe}
+          />
         )}
 
         {waiterScreen === 'sync' && (
@@ -197,17 +206,17 @@ const AppNavigator: React.FC = () => {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.bottomTab, waiterScreen === 'ready_dishes' && styles.bottomTabActive]}
-          onPress={() => setWaiterScreen('ready_dishes')}
+          style={[styles.bottomTab, waiterScreen === 'to_serve' && styles.bottomTabActive]}
+          onPress={() => setWaiterScreen('to_serve')}
         >
           <Text style={styles.bottomTabIcon}>🛎️</Text>
           <Text
             style={[
               styles.bottomTabText,
-              waiterScreen === 'ready_dishes' && styles.bottomTabTextActive,
+              waiterScreen === 'to_serve' && styles.bottomTabTextActive,
             ]}
           >
-            Ready ({readyCount})
+            To Serve ({toServe})
           </Text>
         </TouchableOpacity>
 

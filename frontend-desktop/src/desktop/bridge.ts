@@ -78,6 +78,11 @@ export interface UpdateState {
     notes: Record<string, unknown>;
   } | null;
   snoozed: boolean;
+  /**
+   * A mandatory release, from signed release data only: the verified offer, or the downloaded package's description checked
+   * again. failedBefore: it was installed, failed and was rolled back, so it must not lock the PC in a loop.
+   */
+  required?: { version: string; notes: Record<string, unknown>; downloaded: boolean; failedBefore: boolean } | null;
   lastResult: { outcome: 'completed' | 'installed' | 'recovered' | 'needs_developer'; version: string; failure?: string | null; restored_database?: boolean; running_version?: string | null; at: string } | null;
   recoveryPoints: number;
 }
@@ -158,6 +163,8 @@ interface DesktopBridge {
   updateCheck(): Promise<UpdateState>;
   updateEnroll(code: string): Promise<{ ok: boolean; error?: string }>;
   updateNow(token: string): Promise<{ ok: boolean; error?: string; code?: string }>;
+  /** Only for a mandatory release; needs no owner sign-in. */
+  updateInstallRequired(): Promise<{ ok: boolean; error?: string; code?: string; reasons?: string[] }>;
   updateRemindLater(): Promise<UpdateState>;
   updateSetPolicy(token: string, policy: UpdatePolicy): Promise<UpdateState & { ok?: boolean; error?: string }>;
   updateApprove(token: string): Promise<UpdateState & { ok?: boolean; error?: string }>;

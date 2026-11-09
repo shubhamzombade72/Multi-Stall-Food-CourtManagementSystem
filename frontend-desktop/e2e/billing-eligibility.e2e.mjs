@@ -164,7 +164,7 @@ try {
 
   // ------------------------------------------------------------------ 5 items, 2 stalls, placed at the POS
   await goto('#/pos');
-  await page.locator('[data-category-chip="All Categories"]').click(); // the POS opens on one category; these dishes span two
+  await page.locator('[data-testid="pos-category-select"]').selectOption('all'); // the POS opens on one category; these dishes span two
   const dishes = ['Naan', 'Kebab', 'Plain Dosa', 'Idli', 'Vada'];
   for (const name of dishes) await page.locator(`[data-menu-item="${name}"]`).first().click();
   await page.selectOption('select[aria-label="Dining table"]', String(table.id));

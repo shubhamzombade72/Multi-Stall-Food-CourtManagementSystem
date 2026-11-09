@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { offlineStore } from '../storage/offlineStore';
+import { FORM_MAX_WIDTH } from '../utils/layout';
 
 const DEMO_PASSWORD = 'password123'; // DatabaseSeeder default, dev builds only
 
@@ -196,6 +197,10 @@ const styles = StyleSheet.create({
     padding: 20,
     justifyContent: 'center',
     minHeight: '100%',
+    // On a tablet the sign-in form stays a readable width, centred
+    width: '100%',
+    maxWidth: FORM_MAX_WIDTH,
+    alignSelf: 'center',
   },
   brandHeader: {
     alignItems: 'center',

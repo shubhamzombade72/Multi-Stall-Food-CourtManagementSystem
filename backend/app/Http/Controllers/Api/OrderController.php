@@ -7,6 +7,7 @@ use App\Models\DiningTable;
 use App\Models\MenuItem;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Stall;
 use App\Models\StallKitchenTicket;
 use App\Models\StallTicketItem;
 use App\Services\BillingEligibility;
@@ -189,7 +190,11 @@ class OrderController extends Controller
         return DB::transaction(function () use ($validated, $tableId, $orderChannel, $waiterId, $cashierId, $authenticatedUser) {
             // Fetch all requested menu items for authoritative server-side pricing
             $itemIds = array_column($validated['items'], 'menu_item_id');
-            $menuItems = MenuItem::with('stall:id,is_active')->whereIn('id', $itemIds)->get()->keyBy('id');
+            $menuItems = MenuItem::whereIn('id', $itemIds)->get()->keyBy('id');
+            // Shared row lock (PostgreSQL; a no-op on SQLite, whose writes are already serialised) on every stall being ordered from,
+            // always in id order so two orders can never deadlock. A stall delete or deactivation in flight makes this wait, and the
+            // is_active check below then sees its committed result: no order is written for a stall that has just gone.
+            $stalls = Stall::whereIn('id', $menuItems->pluck('stall_id')->unique()->sort()->values())->orderBy('id')->sharedLock()->get(['id', 'is_active'])->keyBy('id');
 
             $subtotal = 0;
             $preparedItems = [];
@@ -198,11 +203,16 @@ class OrderController extends Controller
             foreach ($validated['items'] as $itemInput) {
                 $menuItem = $menuItems->get($itemInput['menu_item_id']);
 
+                // Validation saw the dish, but its stall may have been deleted (taking its menu) before this transaction read it
+                if (!$menuItem) {
+                    abort(422, 'An item in this order is no longer on the menu. Please refresh the menu and try again.');
+                }
+
                 if (!$menuItem->is_available) {
                     abort(422, "Item '{$menuItem->name}' is currently out of stock.");
                 }
 
-                if (!$menuItem->stall?->is_active) {
+                if (!$stalls->get($menuItem->stall_id)?->is_active) {
                     abort(422, "Item '{$menuItem->name}' belongs to a stall that is currently closed.");
                 }
 

@@ -379,7 +379,7 @@ export const MenuPage: React.FC = () => {
       {/* CREATE / EDIT DISH MODAL */}
       {showModal && (
         <div className="fixed inset-0 !m-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-lg max-w-md w-full p-4 shadow-2xl border border-line space-y-4">
+          <div className="bg-surface rounded-lg max-w-md w-full p-4 shadow-2xl border border-line space-y-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-line pb-3">
               <h3 className="font-semibold text-base text-fg">
                 {editingItem ? 'Edit Dish & Price' : 'Add New Menu Item'}

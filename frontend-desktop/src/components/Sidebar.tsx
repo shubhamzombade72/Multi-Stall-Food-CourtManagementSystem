@@ -109,14 +109,16 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="w-52 bg-sidebar text-fg border-r border-line flex flex-col shrink-0 min-h-[calc(100vh-3rem)]">
-      <nav className="p-2 flex-1 space-y-3 overflow-y-auto" aria-label="Main navigation">
+    <aside className="w-14 xl:w-52 bg-sidebar text-fg border-r border-line flex flex-col shrink-0 min-h-[calc(100vh-3rem)]">
+      <nav className="p-2 flex-1 space-y-3 overflow-y-auto overflow-x-hidden" aria-label="Main navigation">
         {groups.map((group) => {
           const links = group.links.filter((l) => l.show);
           if (links.length === 0) return null;
           return (
             <div key={group.title} className="space-y-0.5">
-              <p className="px-2 text-[11px] font-semibold uppercase tracking-wider text-muted mb-0.5">{group.title}</p>
+              {/* Below 1280px the sidebar is an icon rail: group titles become a thin divider, labels become tooltips */}
+              <p className="hidden xl:block px-2 text-[11px] font-semibold uppercase tracking-wider text-muted mb-0.5">{group.title}</p>
+              <hr className="xl:hidden mx-1 mb-1 border-line" aria-hidden />
               {links.map((link) => {
                 const Icon = link.icon;
                 const active = isLinkActive(link.to);
@@ -125,15 +127,16 @@ export const Sidebar: React.FC = () => {
                     key={link.to}
                     to={link.to}
                     title={link.label}
-                    className={`flex items-center space-x-2 px-2 py-1.5 rounded-lg font-medium text-[13px] transition ${
+                    aria-label={link.badge ? `${link.label} (${link.badge})` : link.label}
+                    className={`relative flex items-center justify-center xl:justify-start xl:space-x-2 px-2 py-2 xl:py-1.5 rounded-lg font-medium text-[13px] transition ${
                       active ? 'bg-primary text-primary-fg' : 'text-muted hover:text-fg hover:bg-surface-2'
                     }`}
                   >
                     <Icon className="w-4 h-4 shrink-0" />
-                    <span className="flex-1 min-w-0 leading-tight">{link.label}</span>
+                    <span className="hidden xl:inline flex-1 min-w-0 leading-tight">{link.label}</span>
                     {link.badge !== undefined && (
                       <span
-                        className={`ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-black tracking-tight ${
+                        className={`absolute -top-0.5 -right-0.5 xl:static xl:ml-auto px-1 xl:px-1.5 py-0 xl:py-0.5 rounded-full text-[9px] xl:text-[10px] font-black tracking-tight ${link.badge === 0 ? 'hidden xl:inline' : ''} ${
                           active
                             ? 'bg-primary-fg/20 text-primary-fg'
                             : link.badge > 0
@@ -153,10 +156,12 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       <div className="p-2 border-t border-line">
-        <div className="bg-surface-2 rounded-lg p-2 text-xs text-muted" role="status">
-          <p className="font-semibold text-fg">Food court system</p>
-          <p className={`mt-0.5 font-mono ${dot}`}>● {label}</p>
-          {lastChecked && <p className="mt-0.5 text-[10px] text-muted">checked {lastChecked.toLocaleTimeString()}</p>}
+        <div className="bg-surface-2 rounded-lg p-2 text-xs text-muted" role="status" title={label}>
+          <p className="hidden xl:block font-semibold text-fg">Food court system</p>
+          <p className={`mt-0.5 font-mono text-center xl:text-left ${dot}`}>
+            ● <span className="hidden xl:inline">{label}</span>
+          </p>
+          {lastChecked && <p className="hidden xl:block mt-0.5 text-[10px] text-muted">checked {lastChecked.toLocaleTimeString()}</p>}
         </div>
       </div>
     </aside>

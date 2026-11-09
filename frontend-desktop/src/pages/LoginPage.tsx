@@ -217,6 +217,12 @@ export const LoginPage: React.FC = () => {
             </Link>
           )}
         </div>
+        {builtIn && !recovery && (
+          // A PC that already has its own account can still join a food court's main computer
+          <p className="text-xs text-center mt-3">
+            <Link to="/connect-host" className="font-semibold text-primary hover:underline">Connect to an existing food court</Link>
+          </p>
+        )}
       </div>
     </div>
   );

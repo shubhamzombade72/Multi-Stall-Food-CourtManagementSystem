@@ -94,7 +94,7 @@ const staffToken = () => ownerTokenForServing;
 const posSale = async (itemName, method, extra = async () => {}) => {
   await page.reload();
   await goto('#/pos');
-  await page.locator('[data-category-chip="All Categories"]').click(); // the POS opens on one category
+  await page.locator('[data-testid="pos-category-select"]').selectOption('all'); // the POS opens on one category
   await page.locator(`[data-menu-item="${itemName}"]`).first().waitFor({ timeout: 20000 });
   await page.locator(`[data-menu-item="${itemName}"]`).first().click();
   await page.getByRole('button', { name: 'Takeaway' }).click();

@@ -26,6 +26,7 @@ import { FirstRunPage } from './pages/FirstRunPage';
 import { RecoverOwnerPage } from './pages/RecoverOwnerPage';
 import { ConnectHostPage } from './pages/ConnectHostPage';
 import { BackupNotice } from './components/BackupNotice';
+import { UpdateGate } from './components/UpdateGate';
 import { PrintFailureBanner } from './components/PrintFailureBanner';
 import { PinLoginPage } from './pages/PinLoginPage';
 import { PinSetupPage } from './pages/PinSetupPage';
@@ -146,6 +147,7 @@ export const App: React.FC = () => {
   React.useEffect(() => startUnsavedWorkReporting(), []);
   return (
     <AuthProvider>
+      <UpdateGate>
       <HashRouter>
         <AuthGate>
           <Routes>
@@ -159,6 +161,7 @@ export const App: React.FC = () => {
           </Routes>
         </AuthGate>
       </HashRouter>
+      </UpdateGate>
     </AuthProvider>
   );
 };

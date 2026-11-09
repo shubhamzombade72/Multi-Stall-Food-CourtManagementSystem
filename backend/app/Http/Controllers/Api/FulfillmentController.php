@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MenuItem;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Stall;
 use App\Models\StallKitchenTicket;
 use App\Models\StallTicketItem;
 use App\Services\AuditService;
@@ -23,12 +24,16 @@ class FulfillmentController extends Controller
     /** GET /orders/board?cursor= — tracking board feed (owner, cashier, waiter). */
     public function board(Request $request)
     {
-        if (!$this->fulfillment->canMarkServed($request->user())) {
-            return response()->json(['success' => false, 'message' => 'Only the owner, cashier or waiter can view the order board.'], 403);
+        // Owner, cashier and waiter see every stall. Kitchen staff and stall managers watch their own stall only
+        // (read-only: marking food served stays with the owner, cashier and waiter).
+        $user = $request->user();
+        $stallScope = $this->fulfillment->boardStallScope($user);
+        if (!$this->fulfillment->canMarkServed($user) && $stallScope === null) {
+            return response()->json(['success' => false, 'message' => 'Only the owner, cashier, waiter or stall staff can view the order board.'], 403);
         }
         $validated = $request->validate(['cursor' => 'nullable|string|max:200']);
 
-        $page = $this->fulfillment->board($validated['cursor'] ?? null);
+        $page = $this->fulfillment->board($validated['cursor'] ?? null, $stallScope);
 
         return response()->json([
             'success' => true,
@@ -254,6 +259,10 @@ class FulfillmentController extends Controller
             // A payment may have committed since the check above; a settled bill must never change underneath it
             if ($order->status === 'cancelled' || $order->payments()->exists()) {
                 abort(422, 'Order has existing payments and items cannot be added.');
+            }
+            // Shared row lock on the stall (PostgreSQL), so a stall delete or deactivation in flight cannot interleave with this add
+            if (!Stall::whereKey($menuItem->stall_id)->sharedLock()->value('is_active')) {
+                abort(422, "Stall '{$menuItem->stall?->name}' is currently inactive.");
             }
 
             // Check if there is an existing unserved line for the exact same dish and instructions

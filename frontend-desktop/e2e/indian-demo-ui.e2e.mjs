@@ -117,7 +117,7 @@ try {
   await visit('pos', '#/pos', async () => {
     await page.getByPlaceholder(/Search food, beverages, or stalls/).waitFor({ timeout: 30000 });
     await page.waitForFunction(() => /All Categories \(\d{3,4}\)/.test(document.body.innerText), null, { timeout: 45000 }); // chip shows the number of orderable dishes
-    await page.locator('[data-category-chip="All Categories"]').click();
+    await page.locator('[data-testid="pos-category-select"]').selectOption('all');
     await page.waitForTimeout(300);
   });
   const posNodesAll = metrics.pos.nodes;

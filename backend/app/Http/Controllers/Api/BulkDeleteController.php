@@ -19,21 +19,40 @@ class BulkDeleteController extends Controller
         return $this->run($request, fn (array $ids, int $uid) => $service->deleteMenuItems($ids, $uid), 'menu items');
     }
 
-    private function run(Request $request, \Closure $action, string $label)
+    /** Read-only: which of the selected stalls can be deleted for good, which cannot and why. Same owner rule and id validation as the delete. */
+    public function stallPreview(Request $request, BulkDeleteService $service)
     {
-        $user = $request->user();
-        if (!$user->isOwner()) {
+        $ids = $this->ownerIds($request, 'stalls');
+        if ($ids instanceof \Illuminate\Http\JsonResponse) {
+            return $ids;
+        }
+
+        return response()->json(['success' => true] + $service->previewStalls($ids));
+    }
+
+    /** @return array<int, int>|\Illuminate\Http\JsonResponse the validated ids, or the 403 for a non-owner */
+    private function ownerIds(Request $request, string $label)
+    {
+        if (!$request->user()->isOwner()) {
             return response()->json(['success' => false, 'message' => "Only the owner can bulk delete {$label}."], 403);
         }
 
-        $validated = $request->validate([
+        return $request->validate([
             'ids' => ['required', 'array', 'min:1', 'max:' . BulkDeleteService::MAX_IDS],
             'ids.*' => ['integer', 'min:1', 'distinct'],
         ], [
             'ids.max' => 'At most ' . BulkDeleteService::MAX_IDS . " {$label} can be deleted per request.",
-        ]);
+        ])['ids'];
+    }
 
-        $result = $action($validated['ids'], $user->id);
+    private function run(Request $request, \Closure $action, string $label)
+    {
+        $ids = $this->ownerIds($request, $label);
+        if ($ids instanceof \Illuminate\Http\JsonResponse) {
+            return $ids;
+        }
+
+        $result = $action($ids, $request->user()->id);
         $s = $result['summary'];
 
         return response()->json([
