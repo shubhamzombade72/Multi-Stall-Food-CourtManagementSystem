@@ -109,7 +109,7 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="w-14 xl:w-52 bg-sidebar text-fg border-r border-line flex flex-col shrink-0 min-h-[calc(100vh-3rem)]">
+    <aside className="w-14 xl:w-52 bg-sidebar text-fg border-r border-line flex flex-col shrink-0 min-h-0">
       <nav className="p-2 flex-1 space-y-3 overflow-y-auto overflow-x-hidden" aria-label="Main navigation">
         {groups.map((group) => {
           const links = group.links.filter((l) => l.show);

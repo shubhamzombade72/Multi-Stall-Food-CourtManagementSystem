@@ -1,0 +1,72 @@
+# Builds the normal Windows installer (MangalMurti-POS-Setup-<version>.exe) on a GitHub Windows machine.
+# Same steps as `pnpm dist:win` on the developer PC: frontend build, embedded PHP + Laravel server, electron-builder NSIS.
+# Download the installer from the run's "Artifacts" section. The installer is not code-signed.
+name: Build Windows installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [wip/update-licensing-baseline]
+    paths:
+      - '.github/workflows/build-windows-installer.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      # The embedded server ships a thread-safe PHP 8.3 (php8ts.dll), like the developer PC
+      - uses: shivammathur/setup-php@v2
+        env:
+          phpts: ts
+        with:
+          php-version: '8.3'
+          extensions: mbstring, openssl, pdo_sqlite, sqlite3, fileinfo, opcache, bcmath, intl, zip, gd, curl
+          tools: none
+          coverage: none
+
+      - name: Put composer.phar next to php.exe (prepare-embedded-server expects it there)
+        run: |
+          $phpDir = Split-Path (Get-Command php).Source
+          Invoke-WebRequest https://getcomposer.org/download/latest-stable/composer.phar -OutFile "$phpDir\composer.phar"
+          "FOODCOURT_PHP_DIR=$phpDir" >> $env:GITHUB_ENV
+          php -r "echo PHP_VERSION, ' ZTS=', PHP_ZTS, PHP_EOL;"
+          Get-ChildItem $phpDir -Filter *.dll | Select-Object -First 8 Name
+
+      - name: Backend dependencies
+        working-directory: backend
+        run: php "$env:FOODCOURT_PHP_DIR\composer.phar" install --no-interaction --no-progress --prefer-dist --no-scripts
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend-desktop/pnpm-lock.yaml
+
+      - name: Desktop dependencies
+        working-directory: frontend-desktop
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the installer
+        working-directory: frontend-desktop
+        run: pnpm dist:win
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: MangalMurti-POS-Setup
+          path: frontend-desktop/installers/*/MangalMurti-POS-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 30

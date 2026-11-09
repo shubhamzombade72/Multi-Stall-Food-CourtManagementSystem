@@ -103,14 +103,15 @@ const ProtectedLayout: React.FC = () => {
 
   return (
     <SettingsProvider>
-      <div className="min-h-screen flex flex-col bg-canvas">
+      {/* Fixed to the window height so the page itself never scrolls: the sidebar menu and the main content each scroll on their own */}
+      <div className="h-screen flex flex-col bg-canvas overflow-hidden">
         <Navbar />
         <ConnectionBanner />
         <BackupNotice />
         <PrintFailureBanner />
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 min-h-0 overflow-hidden">
           <Sidebar />
-          <main className="flex-1 overflow-y-auto">
+          <main className="flex-1 min-w-0 overflow-y-auto">
             <Routes>
               <Route path="/" element={<Navigate to={homeFor(user.role)} replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
