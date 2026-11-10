@@ -9,6 +9,7 @@ on:
     branches: [wip/update-licensing-baseline]
     paths:
       - '.github/workflows/build-windows-installer.yml'
+      - 'frontend-desktop/package.json' # a version bump builds that version's installer
 
 permissions:
   contents: read
